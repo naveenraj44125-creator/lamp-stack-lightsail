@@ -19,11 +19,13 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Updated Version!</h2>";
+                    echo "<h2>🚀 Hello Welcome - Latest Version!</h2>";
                     echo "<p>This is a simple LAMP stack application running on PHP.</p>";
                     echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
+                    echo "<p><strong>🔥 NEW FEATURE:</strong> Enhanced monitoring and status display!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
-                    echo "<p><em>Version: 2.4 - Testing workflow without conflicts at " . date('H:i:s') . "</em></p>";
+                    echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
+                    echo "<p><em>Version: 2.5 - Enhanced with server monitoring at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -35,6 +37,16 @@ require_once 'config/database.php';
                     <li><strong>Database:</strong> MySQL/MariaDB</li>
                     <li><strong>OS:</strong> Linux</li>
                     <li><strong>DB Status:</strong> <?php echo getDatabaseStatus(); ?></li>
+                </ul>
+            </div>
+            
+            <div class="info-section">
+                <h3>🆕 System Status (Version 2.5)</h3>
+                <ul>
+                    <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
+                    <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
+                    <li><strong>Deployment Status:</strong> ✅ Successfully deployed via GitHub Actions</li>
+                    <li><strong>Last Updated:</strong> <?php echo date('Y-m-d H:i:s T'); ?></li>
                 </ul>
             </div>
         </main>
