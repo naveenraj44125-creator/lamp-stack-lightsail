@@ -9,7 +9,7 @@ on:
 
 env:
   LIGHTSAIL_INSTANCE_NAME: lamp-stack-demo
-  LIGHTSAIL_STATIC_IP: 18.234.136.27
+  LIGHTSAIL_STATIC_IP: 98.91.3.69
   AWS_REGION: us-east-1
 
 jobs:
