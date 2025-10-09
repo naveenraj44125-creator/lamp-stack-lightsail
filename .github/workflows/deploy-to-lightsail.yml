@@ -13,7 +13,7 @@ on:
 
 env:
   LIGHTSAIL_INSTANCE_NAME: lamp-stack-demo
-  LIGHTSAIL_STATIC_IP: 44.194.47.34
+  LIGHTSAIL_STATIC_IP: 18.234.136.27
   AWS_REGION: us-east-1
 
 jobs:
@@ -59,26 +59,26 @@ jobs:
     - name: Setup Python environment
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install boto3 paramiko
+        python3 -m pip install boto3
 
-    - name: Setup SSH key
+    - name: Create deployment package
+      working-directory: ./lamp_stack_lightsail
       run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}" > ~/.ssh/lamp-stack-demo-key.pem
-        chmod 600 ~/.ssh/lamp-stack-demo-key.pem
-        ssh-keyscan -H ${{ env.LIGHTSAIL_STATIC_IP }} >> ~/.ssh/known_hosts
+        # Create application package
+        tar -czf app.tar.gz index.php css/ config/ || tar -czf app.tar.gz *
+        ls -la app.tar.gz
 
     - name: Deploy application to Lightsail
       working-directory: ./lamp_stack_lightsail
       run: |
-        python3 deploy-lamp-stack.py \
-          --instance-ip ${{ env.LIGHTSAIL_STATIC_IP }} \
-          --ssh-key ~/.ssh/lamp-stack-demo-key.pem \
-          --app-files "index.php,css/,config/" \
-          --github-sha ${{ github.sha }} \
-          --github-ref ${{ github.ref_name }} \
-          --github-actor ${{ github.actor }} \
-          --github-run-id ${{ github.run_id }}
+        python3 deploy-with-run-command.py \
+          ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
+          app.tar.gz \
+          --region ${{ env.AWS_REGION }} \
+          --env GITHUB_SHA=${{ github.sha }} \
+          --env GITHUB_REF=${{ github.ref_name }} \
+          --env GITHUB_ACTOR=${{ github.actor }} \
+          --env GITHUB_RUN_ID=${{ github.run_id }}
 
     - name: Verify deployment
       run: |

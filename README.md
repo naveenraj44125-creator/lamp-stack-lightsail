@@ -8,7 +8,7 @@ A simple LAMP (Linux, Apache, MySQL, PHP) stack application deployed to AWS Ligh
 - **Responsive Design**: Modern CSS with gradients and animations
 - **Database Integration**: MySQL database with sample data
 - **Automated Deployment**: GitHub Actions CI/CD pipeline
-- **SSH-based Deployment**: Direct code deployment to pre-existing infrastructure
+- **Run Command Deployment**: Uses AWS Lightsail get-instance-access-details API
 - **Health Monitoring**: Deployment verification and status checks
 
 ## 🏗️ Architecture
@@ -18,7 +18,7 @@ A simple LAMP (Linux, Apache, MySQL, PHP) stack application deployed to AWS Ligh
 - **Web Server**: Apache 2.4
 - **Database**: MySQL 8.0
 - **PHP**: Version 8.1
-- **Deployment**: SSH-based with GitHub Actions
+- **Deployment**: Run command API with GitHub Actions
 
 ## 🚀 Quick Start
 
@@ -48,7 +48,6 @@ python3 setup-github-secrets.py
 Required secrets:
 - `AWS_ACCESS_KEY_ID`: Your AWS access key
 - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
-- `LIGHTSAIL_SSH_PRIVATE_KEY`: Content of lamp-stack-demo-key.pem
 
 ### Deployment
 
@@ -58,10 +57,14 @@ Required secrets:
 
 ```bash
 # Local deployment (for testing)
-python3 deploy-lamp-stack.py \
-  --instance-ip 44.194.47.34 \
-  --ssh-key lamp-stack-demo-key.pem \
-  --app-files "index.php,css/,config/"
+# First create the package
+tar -czf app.tar.gz index.php css/ config/
+
+# Then deploy using run command API
+python3 deploy-with-run-command.py \
+  lamp-stack-demo \
+  app.tar.gz \
+  --region us-east-1
 ```
 
 ## 📁 Project Structure
@@ -76,7 +79,7 @@ lamp_stack_lightsail/
 ├── .github/
 │   └── workflows/
 │       └── deploy-to-lightsail.yml  # GitHub Actions workflow
-├── deploy-lamp-stack.py        # SSH-based deployment script
+├── deploy-with-run-command.py  # Run command API deployment script
 ├── setup-github-secrets.py    # GitHub secrets setup helper
 ├── requirements.txt            # Python dependencies
 ├── lamp-stack-demo-key.pem    # SSH private key (not in repo)

@@ -19,9 +19,11 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>Hello Welcome!</h2>";
+                    echo "<h2>🚀 Hello Welcome - Updated Version!</h2>";
                     echo "<p>This is a simple LAMP stack application running on PHP.</p>";
+                    echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
+                    echo "<p><em>Version: 2.0 - Auto-deployed from Git Push</em></p>";
                 ?>
             </div>
             
