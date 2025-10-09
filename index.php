@@ -23,7 +23,7 @@ require_once 'config/database.php';
                     echo "<p>This is a simple LAMP stack application running on PHP.</p>";
                     echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
-                    echo "<p><em>Version: 2.3 - Auto-deployed from Git Push at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 2.4 - Testing workflow without conflicts at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
