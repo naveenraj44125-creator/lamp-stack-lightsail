@@ -1,4 +1,4 @@
-name: Deploy LAMP Stack to Lightsail
+name: Deploy LAMP Stack Application
 
 on:
   push:
