@@ -1,150 +1,123 @@
 #!/usr/bin/env python3
 """
-GitHub Repository Secrets Configuration Script
-Configures AWS credentials as GitHub repository secrets for LAMP Stack deployment
+GitHub Secrets Setup Script for LAMP Stack Deployment
+Helps configure the required secrets for GitHub Actions deployment
 """
 
-import json
 import os
 import sys
-import subprocess
 
-def check_github_cli():
-    """Check if GitHub CLI is installed and authenticated"""
-    try:
-        result = subprocess.run(['gh', 'auth', 'status'], 
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            print("✅ GitHub CLI is authenticated")
-            return True
-        else:
-            print("❌ GitHub CLI not authenticated")
-            print("Please run: gh auth login")
-            return False
-    except FileNotFoundError:
-        print("❌ GitHub CLI not installed")
-        print("Please install GitHub CLI: https://cli.github.com/")
-        return False
+def print_header():
+    """Print script header"""
+    print("=" * 60)
+    print("🔐 GitHub Secrets Setup for LAMP Stack Deployment")
+    print("=" * 60)
+    print()
 
-def load_aws_credentials():
-    """Load AWS credentials from the generated file"""
-    try:
-        with open('aws-credentials.json', 'r') as f:
-            credentials = json.load(f)
-        print("✅ Loaded AWS credentials from aws-credentials.json")
-        return credentials
-    except FileNotFoundError:
-        print("❌ aws-credentials.json not found")
-        return None
-    except json.JSONDecodeError:
-        print("❌ Invalid JSON in aws-credentials.json")
-        return None
+def print_instructions():
+    """Print setup instructions"""
+    print("📋 Required GitHub Secrets:")
+    print()
+    
+    print("1. AWS_ACCESS_KEY_ID")
+    print("   - Your AWS access key ID")
+    print("   - Used for AWS API authentication")
+    print()
+    
+    print("2. AWS_SECRET_ACCESS_KEY")
+    print("   - Your AWS secret access key")
+    print("   - Used for AWS API authentication")
+    print()
+    
+    print("3. LIGHTSAIL_SSH_PRIVATE_KEY")
+    print("   - Content of the lamp-stack-demo-key.pem file")
+    print("   - Used for SSH access to the Lightsail instance")
+    print()
+    
+    print("🔧 How to add these secrets to GitHub:")
+    print()
+    print("1. Go to your GitHub repository")
+    print("2. Click on 'Settings' tab")
+    print("3. In the left sidebar, click 'Secrets and variables' > 'Actions'")
+    print("4. Click 'New repository secret'")
+    print("5. Add each secret with the exact name shown above")
+    print()
 
-def set_github_secret(repo, secret_name, secret_value):
-    """Set a GitHub repository secret using GitHub CLI"""
-    try:
-        cmd = ['gh', 'secret', 'set', secret_name, 
-               '--repo', repo, '--body', secret_value]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print(f"✅ Set secret: {secret_name}")
-            return True
-        else:
-            print(f"❌ Failed to set secret {secret_name}: {result.stderr}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Error setting secret {secret_name}: {str(e)}")
-        return False
-
-def configure_repository_secrets():
-    """Configure all required GitHub repository secrets"""
-    repo = "naveenraj44125-creator/lamp-stack-lightsail"
+def show_ssh_key_content():
+    """Show SSH private key content if file exists"""
+    key_file = "lamp-stack-demo-key.pem"
     
-    print(f"🔐 Configuring GitHub secrets for repository: {repo}")
-    print("-" * 60)
-    
-    # Check GitHub CLI
-    if not check_github_cli():
-        return False
-    
-    # Load AWS credentials
-    credentials = load_aws_credentials()
-    if not credentials:
-        return False
-    
-    # Set each secret
-    secrets_to_set = [
-        ('AWS_ACCESS_KEY_ID', credentials['AWS_ACCESS_KEY_ID']),
-        ('AWS_SECRET_ACCESS_KEY', credentials['AWS_SECRET_ACCESS_KEY']),
-        ('AWS_REGION', credentials['AWS_REGION'])
-    ]
-    
-    success_count = 0
-    for secret_name, secret_value in secrets_to_set:
-        if set_github_secret(repo, secret_name, secret_value):
-            success_count += 1
-    
-    if success_count == len(secrets_to_set):
-        print(f"\n🎉 Successfully configured all {success_count} GitHub secrets!")
-        return True
+    if os.path.exists(key_file):
+        print("🔑 SSH Private Key Content (for LIGHTSAIL_SSH_PRIVATE_KEY secret):")
+        print("-" * 60)
+        try:
+            with open(key_file, 'r') as f:
+                content = f.read()
+                print(content)
+        except Exception as e:
+            print(f"❌ Error reading SSH key file: {e}")
+        print("-" * 60)
+        print()
+        print("⚠️  Copy the entire content above (including BEGIN and END lines)")
+        print("   and paste it as the value for LIGHTSAIL_SSH_PRIVATE_KEY secret")
+        print()
     else:
-        print(f"\n⚠️  Configured {success_count}/{len(secrets_to_set)} secrets")
-        return False
+        print(f"❌ SSH key file '{key_file}' not found in current directory")
+        print("   Make sure you have the lamp-stack-demo-key.pem file")
+        print()
 
-def list_current_secrets():
-    """List current repository secrets"""
-    repo = "naveenraj44125-creator/lamp-stack-lightsail"
-    
-    try:
-        cmd = ['gh', 'secret', 'list', '--repo', repo]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print(f"\n📋 Current secrets in {repo}:")
-            print(result.stdout)
-        else:
-            print(f"❌ Could not list secrets: {result.stderr}")
-            
-    except Exception as e:
-        print(f"❌ Error listing secrets: {str(e)}")
+def show_aws_credentials_info():
+    """Show information about AWS credentials"""
+    print("🔐 AWS Credentials Information:")
+    print()
+    print("You need AWS credentials with the following permissions:")
+    print("- lightsail:GetInstance")
+    print("- lightsail:GetInstances")
+    print("- lightsail:GetStaticIp")
+    print("- lightsail:GetStaticIps")
+    print()
+    print("To get your AWS credentials:")
+    print("1. Go to AWS Console > IAM > Users")
+    print("2. Select your user or create a new one")
+    print("3. Go to 'Security credentials' tab")
+    print("4. Click 'Create access key'")
+    print("5. Choose 'Command Line Interface (CLI)'")
+    print("6. Copy the Access Key ID and Secret Access Key")
+    print()
+
+def show_deployment_info():
+    """Show deployment configuration information"""
+    print("📋 Deployment Configuration:")
+    print()
+    print("Current configuration:")
+    print("- Instance Name: lamp-stack-demo")
+    print("- Static IP: 18.209.153.215")
+    print("- Region: us-east-1")
+    print("- SSH User: ubuntu")
+    print()
+    print("The GitHub Actions workflow will:")
+    print("1. Test the PHP application")
+    print("2. Deploy code to the pre-existing Lightsail instance")
+    print("3. Verify the deployment is working")
+    print()
 
 def main():
-    print("🔐 GitHub Repository Secrets Configuration")
-    print("=" * 50)
+    """Main function"""
+    print_header()
+    print_instructions()
+    show_aws_credentials_info()
+    show_ssh_key_content()
+    show_deployment_info()
     
-    # Load and display credentials
-    credentials = load_aws_credentials()
-    if credentials:
-        print("\n📋 AWS Credentials to be configured:")
-        print(f"   AWS_ACCESS_KEY_ID: {credentials['AWS_ACCESS_KEY_ID']}")
-        print(f"   AWS_SECRET_ACCESS_KEY: {credentials['AWS_SECRET_ACCESS_KEY'][:8]}...")
-        print(f"   AWS_REGION: {credentials['AWS_REGION']}")
-    
-    # List current secrets first
-    list_current_secrets()
-    
-    # Configure secrets
-    success = configure_repository_secrets()
-    
-    if success:
-        print("\n✅ GitHub secrets configuration completed!")
-        print("\nNext steps:")
-        print("1. Push code to trigger GitHub Actions")
-        print("2. Monitor deployment: https://github.com/naveenraj44125-creator/lamp-stack-lightsail/actions")
-        print("3. Check Lightsail instance after deployment")
-    else:
-        print("\n❌ GitHub secrets configuration failed")
-        print("\nManual setup instructions:")
-        print("1. Go to: https://github.com/naveenraj44125-creator/lamp-stack-lightsail/settings/secrets/actions")
-        print("2. Click 'New repository secret'")
-        print("3. Add the following secrets:")
-        if credentials:
-            print(f"   - Name: AWS_ACCESS_KEY_ID, Value: {credentials['AWS_ACCESS_KEY_ID']}")
-            print(f"   - Name: AWS_SECRET_ACCESS_KEY, Value: {credentials['AWS_SECRET_ACCESS_KEY']}")
-            print(f"   - Name: AWS_REGION, Value: {credentials['AWS_REGION']}")
+    print("✅ Setup Complete!")
+    print()
+    print("Next steps:")
+    print("1. Add the three secrets to your GitHub repository")
+    print("2. Push your code to the main branch")
+    print("3. The GitHub Actions workflow will automatically deploy your application")
+    print("4. Check the Actions tab in GitHub to monitor the deployment")
+    print()
+    print(f"🌐 Your application will be available at: http://18.209.153.215/")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,145 +1,245 @@
-# LAMP Stack Application
+# LAMP Stack on AWS Lightsail
 
-A simple LAMP (Linux, Apache, MySQL, PHP) stack application that displays "Hello Welcome!" message.
+A simple LAMP (Linux, Apache, MySQL, PHP) stack application deployed to AWS Lightsail using GitHub Actions.
 
-## Features
+## 🌟 Features
 
-- **Welcome Message**: Displays "Hello Welcome!" with current date and time
-- **System Information**: Shows PHP version, server details, and database status
-- **Responsive Design**: Mobile-friendly CSS styling with animations
-- **Database Integration**: Ready for MySQL/MariaDB connection
-- **Modern UI**: Gradient backgrounds and clean design
+- **Simple LAMP Stack**: Linux, Apache, MySQL, PHP
+- **Responsive Design**: Modern CSS with gradients and animations
+- **Database Integration**: MySQL database with sample data
+- **Automated Deployment**: GitHub Actions CI/CD pipeline
+- **SSH-based Deployment**: Direct code deployment to pre-existing infrastructure
+- **Health Monitoring**: Deployment verification and status checks
 
-## File Structure
+## 🏗️ Architecture
+
+- **AWS Lightsail Instance**: Ubuntu 20.04 LTS
+- **Static IP**: 44.194.47.34
+- **Web Server**: Apache 2.4
+- **Database**: MySQL 8.0
+- **PHP**: Version 8.1
+- **Deployment**: SSH-based with GitHub Actions
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+1. AWS Account with Lightsail access
+2. GitHub repository
+3. Pre-created Lightsail instance (lamp-stack-demo)
+
+### Infrastructure Setup
+
+The infrastructure is manually pre-created and includes:
+- Lightsail instance: `lamp-stack-demo`
+- Static IP: `44.194.47.34`
+- SSH key pair: `lamp-stack-demo-key.pem`
+- Open ports: 80 (HTTP), 443 (HTTPS), 22 (SSH)
+
+### GitHub Secrets Configuration
+
+Run the setup script to get instructions for configuring GitHub secrets:
+
+```bash
+cd lamp_stack_lightsail
+python3 setup-github-secrets.py
+```
+
+Required secrets:
+- `AWS_ACCESS_KEY_ID`: Your AWS access key
+- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+- `LIGHTSAIL_SSH_PRIVATE_KEY`: Content of lamp-stack-demo-key.pem
+
+### Deployment
+
+1. **Push to main branch**: GitHub Actions automatically deploys
+2. **Manual deployment**: Use workflow_dispatch in GitHub Actions
+3. **Local testing**: Run the deployment script locally
+
+```bash
+# Local deployment (for testing)
+python3 deploy-lamp-stack.py \
+  --instance-ip 44.194.47.34 \
+  --ssh-key lamp-stack-demo-key.pem \
+  --app-files "index.php,css/,config/"
+```
+
+## 📁 Project Structure
 
 ```
 lamp_stack_lightsail/
-├── index.php              # Main application file
+├── index.php                    # Main application file
 ├── css/
-│   └── style.css         # Stylesheet with responsive design
+│   └── style.css               # Responsive CSS styles
 ├── config/
-│   └── database.php      # Database configuration and connection
-└── README.md             # This documentation file
+│   └── database.php            # Database configuration
+├── .github/
+│   └── workflows/
+│       └── deploy-to-lightsail.yml  # GitHub Actions workflow
+├── deploy-lamp-stack.py        # SSH-based deployment script
+├── setup-github-secrets.py    # GitHub secrets setup helper
+├── requirements.txt            # Python dependencies
+├── lamp-stack-demo-key.pem    # SSH private key (not in repo)
+└── README.md                   # This file
 ```
 
-## Requirements
+## 🔧 Application Features
 
-- **Linux** server (Ubuntu, CentOS, etc.)
-- **Apache** web server
-- **MySQL** or **MariaDB** database
-- **PHP** 7.4 or higher with PDO extension
+### Web Application
+- **Welcome Page**: Displays "Hello Welcome!" message
+- **System Information**: Shows PHP version, server info, and deployment details
+- **Database Test**: Connects to MySQL and displays sample data
+- **Responsive Design**: Works on desktop and mobile devices
 
-## Installation
-
-1. **Copy files to web server**:
-   ```bash
-   cp -r lamp_stack_lightsail/ /var/www/html/
-   ```
-
-2. **Set proper permissions**:
-   ```bash
-   sudo chown -R www-data:www-data /var/www/html/lamp_stack_lightsail/
-   sudo chmod -R 755 /var/www/html/lamp_stack_lightsail/
-   ```
-
-3. **Configure database** (optional):
-   - Edit `config/database.php` with your MySQL/MariaDB credentials
-   - Create database: `CREATE DATABASE lamp_app;`
-
-4. **Access the application**:
-   - Open browser and navigate to: `http://your-server-ip/lamp_stack_lightsail/`
-
-## Configuration
-
-### Database Settings
-
-Edit `config/database.php` to match your database setup:
-
-```php
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'lamp_app');
-define('DB_USER', 'your_username');
-define('DB_PASS', 'your_password');
+### Database Schema
+```sql
+CREATE DATABASE lamp_demo;
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
-### Apache Configuration
+## 🚀 GitHub Actions Workflow
 
-Ensure Apache is configured to serve PHP files:
+The deployment pipeline includes:
 
-```apache
-<Directory /var/www/html>
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Require all granted
-</Directory>
+1. **Test Phase**:
+   - PHP syntax validation
+   - Local application testing
+   - Code quality checks
+
+2. **Deploy Phase**:
+   - SSH connection to Lightsail instance
+   - LAMP stack installation (if needed)
+   - Application file deployment
+   - Service configuration and restart
+
+3. **Verify Phase**:
+   - Health checks for Apache and MySQL
+   - Application response verification
+   - Deployment status reporting
+
+## 🔍 Monitoring & Verification
+
+### Application URL
+- **Production**: http://44.194.47.34/
+
+### Health Checks
+The deployment script automatically verifies:
+- Apache service status
+- MySQL service status
+- Application file deployment
+- Web server response
+- Database connectivity
+
+### Deployment Information
+Each deployment includes metadata:
+- GitHub commit SHA
+- Branch name
+- Deployment timestamp
+- GitHub actor (who triggered deployment)
+
+## 🛠️ Local Development
+
+### Requirements
+- PHP 8.1+
+- MySQL 8.0+
+- Apache 2.4+
+
+### Setup
+```bash
+# Start local PHP server
+php -S localhost:8000 index.php
+
+# Access application
+open http://localhost:8000
 ```
 
-## Features Explained
+### Testing
+```bash
+# Validate PHP syntax
+find . -name "*.php" -exec php -l {} \;
 
-### Welcome Message
-The main page displays a prominent "Hello Welcome!" message along with:
-- Current date and time
-- PHP version information
-- Server details
+# Test application response
+curl -f http://localhost:8000/
+```
 
-### Database Status
-The application automatically checks database connectivity and displays:
-- ✅ Success message if connection works
-- ❌ Error message if connection fails
+## 📋 Deployment Process
 
-### Responsive Design
-The CSS includes:
-- Mobile-friendly responsive layout
-- Gradient backgrounds
-- Smooth animations
-- Clean typography
+### Manual Infrastructure (One-time Setup)
+1. Create Lightsail instance
+2. Assign static IP
+3. Configure security groups
+4. Generate SSH key pair
+5. Configure DNS (optional)
 
-## Troubleshooting
+### Automated Code Deployment
+1. Code changes pushed to main branch
+2. GitHub Actions triggers workflow
+3. Tests run automatically
+4. Code deployed via SSH
+5. Services restarted and verified
+6. Deployment status reported
+
+## 🔐 Security
+
+- SSH key-based authentication
+- Secure GitHub secrets management
+- Minimal required AWS permissions
+- Regular security updates via deployment
+
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **PHP not working**:
-   ```bash
-   sudo apt update
-   sudo apt install php libapache2-mod-php
-   sudo systemctl restart apache2
-   ```
+1. **SSH Connection Failed**
+   - Verify SSH key is correct
+   - Check instance is running
+   - Confirm security group allows SSH (port 22)
 
-2. **Database connection failed**:
-   - Check MySQL/MariaDB is running: `sudo systemctl status mysql`
-   - Verify credentials in `config/database.php`
-   - Ensure database exists: `CREATE DATABASE lamp_app;`
+2. **Application Not Loading**
+   - Check Apache service status
+   - Verify file permissions
+   - Review Apache error logs
 
-3. **Permission errors**:
-   ```bash
-   sudo chown -R www-data:www-data /var/www/html/lamp_stack_lightsail/
-   sudo chmod -R 755 /var/www/html/lamp_stack_lightsail/
-   ```
+3. **Database Connection Failed**
+   - Confirm MySQL service is running
+   - Check database credentials
+   - Verify database exists
 
-4. **CSS not loading**:
-   - Check file permissions
-   - Verify Apache can serve static files
-   - Check browser developer tools for 404 errors
+### Debug Commands
+```bash
+# Check service status
+sudo systemctl status apache2
+sudo systemctl status mysql
 
-## Development
+# View logs
+sudo tail -f /var/log/apache2/error.log
+sudo tail -f /var/log/mysql/error.log
 
-To modify the application:
+# Test application
+curl -v http://localhost/
+```
 
-1. **Update welcome message**: Edit the PHP echo statements in `index.php`
-2. **Change styling**: Modify `css/style.css`
-3. **Add database features**: Use functions in `config/database.php`
+## 📚 Additional Resources
 
-## Security Notes
+- [AWS Lightsail Documentation](https://docs.aws.amazon.com/lightsail/)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [PHP Documentation](https://www.php.net/docs.php)
+- [Apache Documentation](https://httpd.apache.org/docs/)
+- [MySQL Documentation](https://dev.mysql.com/doc/)
 
-- Change default database credentials
-- Use environment variables for sensitive data
-- Enable HTTPS in production
-- Keep PHP and Apache updated
-- Implement proper input validation for user data
+## 🤝 Contributing
 
-## License
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test locally
+5. Submit a pull request
 
-This is a simple demo application for educational purposes.
+## 📄 License
 
-<- Health monitoring and checks Trigger workflow run -->
-# Trigger new workflow run
+This project is open source and available under the [MIT License](LICENSE).
