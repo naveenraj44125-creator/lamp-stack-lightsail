@@ -19,13 +19,14 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Latest Version!</h2>";
+                    echo "<h2>🚀 Hello Welcome - Git Push Demo Version!</h2>";
                     echo "<p>This is a simple LAMP stack application running on PHP.</p>";
                     echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
                     echo "<p><strong>🔥 NEW FEATURE:</strong> Enhanced monitoring and status display!</p>";
+                    echo "<p><strong>✨ LATEST UPDATE:</strong> Demonstrating Git Push Integration!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 2.5 - Enhanced with server monitoring at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 2.6 - Git Push Demo at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -41,7 +42,7 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 2.5)</h3>
+                <h3>🆕 System Status (Version 2.6)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
