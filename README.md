@@ -140,3 +140,6 @@ To modify the application:
 ## License
 
 This is a simple demo application for educational purposes.
+
+<- Health monitoring and checks Trigger workflow run -->
+# Trigger new workflow run
