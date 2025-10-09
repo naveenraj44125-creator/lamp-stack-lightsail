@@ -1,0 +1,171 @@
+name: Deploy LAMP Stack to Lightsail
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  LIGHTSAIL_INSTANCE_NAME: lamp-stack-demo
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        extensions: pdo, pdo_mysql
+        
+    - name: Validate PHP syntax
+      working-directory: ./
+      run: |
+        find . -name "*.php" -exec php -l {} \;
+        
+    - name: Test PHP application
+      working-directory: ./
+      run: |
+        php -S localhost:8000 &
+        sleep 5
+        curl -f http://localhost:8000/index.php || exit 1
+
+  deploy-infrastructure:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    outputs:
+      instance_ip: ${{ steps.get-ip.outputs.instance_ip }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+        
+    - name: Terraform Init
+      working-directory: ./terraform
+      run: terraform init
+      
+    - name: Check if resources exist and clean them up
+      run: |
+        echo "Checking for existing resources..."
+        
+        # Delete existing key pair if it exists
+        aws lightsail delete-key-pair --key-pair-name "${{ env.LIGHTSAIL_INSTANCE_NAME }}-key" || echo "Key pair does not exist"
+        
+        # Delete existing static IP if it exists
+        aws lightsail release-static-ip --static-ip-name "${{ env.LIGHTSAIL_INSTANCE_NAME }}-static-ip" || echo "Static IP does not exist"
+        
+        # Delete existing instance if it exists
+        aws lightsail delete-instance --instance-name "${{ env.LIGHTSAIL_INSTANCE_NAME }}" || echo "Instance does not exist"
+        
+        # Wait a moment for resources to be fully deleted
+        sleep 30
+        
+    - name: Terraform Plan
+      working-directory: ./terraform
+      run: terraform plan -out=tfplan
+      
+    - name: Terraform Apply
+      working-directory: ./terraform
+      run: terraform apply -auto-approve tfplan
+      
+    - name: Get Lightsail instance IP
+      id: get-ip
+      run: |
+        IP=$(aws lightsail get-instance --instance-name ${{ env.LIGHTSAIL_INSTANCE_NAME }} --query 'instance.publicIpAddress' --output text)
+        echo "instance_ip=$IP" >> $GITHUB_OUTPUT
+        echo "Instance IP: $IP"
+        
+    - name: Wait for instance to be ready
+      run: |
+        echo "Waiting for instance to be ready..."
+        sleep 120
+        
+        # Wait for instance to be running and accessible
+        for i in {1..30}; do
+          INSTANCE_STATE=$(aws lightsail get-instance --instance-name ${{ env.LIGHTSAIL_INSTANCE_NAME }} --query 'instance.state.name' --output text)
+          echo "Instance state: $INSTANCE_STATE"
+          if [ "$INSTANCE_STATE" = "running" ]; then
+            echo "Instance is running!"
+            break
+          fi
+          echo "Waiting for instance to be running... ($i/30) Current state: $INSTANCE_STATE"
+          sleep 10
+        done
+        
+        # Wait for user_data script to complete using run command
+        echo "Waiting for user_data script to complete..."
+        for i in {1..20}; do
+          COMMAND_ID=$(aws lightsail send-instance-access-details --instance-name ${{ env.LIGHTSAIL_INSTANCE_NAME }} --protocol ssh --query 'accessDetails.instanceName' --output text 2>/dev/null || echo "")
+          if [ -n "$COMMAND_ID" ]; then
+            # Test if we can run a simple command
+            RESULT=$(aws lightsail get-instance-access-details --instance-name ${{ env.LIGHTSAIL_INSTANCE_NAME }} --protocol ssh --query 'accessDetails.instanceName' --output text 2>/dev/null || echo "")
+            if [ -n "$RESULT" ]; then
+              echo "Instance access is ready!"
+              break
+            fi
+          fi
+          echo "Waiting for user_data script to complete... ($i/20)"
+          sleep 30
+        done
+        
+        echo "Instance is ready for deployment"
+
+  deploy-application:
+    needs: [test, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+        
+    - name: Prepare deployment variables
+      run: |
+        # Create environment variables for deployment
+        ENV_VARS=$(cat << 'ENVJSON'
+        {
+          "DEPLOY_TIME": "$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")",
+          "GITHUB_SHA": "${{ github.sha }}",
+          "GITHUB_REF_NAME": "${{ github.ref_name }}",
+          "GITHUB_WORKFLOW": "${{ github.workflow }}",
+          "GITHUB_RUN_ID": "${{ github.run_id }}",
+          "GITHUB_ACTOR": "${{ github.actor }}"
+        }
+        ENVJSON
+        )
+        
+        # Create deployment package
+        tar -czf lamp-app.tar.gz index.php css/ config/ README.md
+        
+        # Deploy using Python script with run commands
+        python3 deploy-with-run-command.py "${{ env.LIGHTSAIL_INSTANCE_NAME }}" "lamp-app.tar.gz" "$ENV_VARS"
