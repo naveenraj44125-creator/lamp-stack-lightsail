@@ -1,0 +1,112 @@
+LAMP Stack Software Requirements
+=====================================
+
+This document outlines the software components and system requirements for the LAMP stack deployment.
+
+## Core Components
+
+### Linux (Operating System)
+- Ubuntu 20.04 LTS or later
+- Debian 10 or later
+- Minimum 1GB RAM, 1 CPU core
+- At least 10GB available disk space
+
+### Apache (Web Server)
+- Apache HTTP Server 2.4+
+- Modules required:
+  - mod_rewrite (for URL rewriting)
+  - mod_ssl (for HTTPS support)
+  - mod_headers (for HTTP header manipulation)
+
+### MySQL/MariaDB (Database Server)
+- MariaDB 10.3+ (recommended lightweight alternative)
+- OR MySQL 8.0+
+- Default configuration suitable for small to medium applications
+- Root access required for initial setup
+
+### PHP (Server-side Scripting)
+- PHP 7.4+ (PHP 8.1+ recommended)
+- Required PHP extensions:
+  - php-mysql (MySQL/MariaDB connectivity)
+  - php-cli (command line interface)
+  - php-curl (HTTP client functionality)
+  - php-json (JSON processing)
+  - php-mbstring (multibyte string handling)
+  - php-xml (XML processing)
+  - php-zip (archive handling)
+
+## System Dependencies
+
+### Package Management
+- apt-get (Debian/Ubuntu package manager)
+- dpkg (Debian package management system)
+
+### System Services
+- systemctl (systemd service management)
+- SSH server (for remote deployment)
+
+### Security Requirements
+- sudo access for installation and configuration
+- Firewall configuration (ports 80, 443, 22)
+- SSL/TLS certificates (for production HTTPS)
+
+## Network Requirements
+
+### Ports
+- Port 22: SSH access
+- Port 80: HTTP traffic
+- Port 443: HTTPS traffic (optional)
+- Port 3306: MySQL/MariaDB (internal only)
+
+### DNS/IP Configuration
+- Static IP address recommended
+- Domain name (optional, for production)
+
+## Deployment Environment
+
+### AWS Lightsail Specifications
+- Instance type: Minimum 1GB RAM
+- Operating System: Ubuntu 20.04 LTS
+- Storage: 20GB SSD minimum
+- Network: Static IP attached
+
+### Development Tools
+- Git (version control)
+- Python 3.8+ with boto3 (for deployment automation)
+- SSH client (for remote access)
+
+## Application Requirements
+
+### File Permissions
+- Web directory: /var/www/html
+- Owner: www-data:www-data
+- Permissions: 755 for directories, 644 for files
+
+### Database Setup
+- Database name: configurable
+- Database user: application-specific
+- Character set: UTF-8 (utf8mb4)
+- Collation: utf8mb4_unicode_ci
+
+## Monitoring and Maintenance
+
+### Log Files
+- Apache: /var/log/apache2/
+- MySQL: /var/log/mysql/
+- PHP: /var/log/php/
+- System: /var/log/syslog
+
+### Backup Requirements
+- Database backup strategy
+- Application file backup
+- Configuration backup
+
+## Performance Considerations
+
+### Optimization
+- PHP OPcache enabled
+- Apache mod_deflate for compression
+- MySQL query cache configuration
+- Regular system updates and security patches
+
+This LAMP stack configuration provides a robust foundation for web application deployment with proper security, performance, and maintainability considerations.

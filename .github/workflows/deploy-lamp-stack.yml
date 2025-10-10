@@ -1,4 +1,4 @@
-name: Deploy LAMP Stack to Lightsail
+name: Deploy LAMP Stack to Lightsail (Modular)
 
 on:
   push:
@@ -55,14 +55,20 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3
 
+    - name: Install LAMP Stack
+      run: |
+        echo "🔧 Installing LAMP stack on Lightsail instance..."
+        python3 install-lamp-on-lightsail.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
+
     - name: Create deployment package
       run: |
-        # Create application package
+        echo "📦 Creating application package..."
         tar -czf app.tar.gz index.php css/ config/ || tar -czf app.tar.gz *
         ls -la app.tar.gz
 
     - name: Deploy application to Lightsail
       run: |
+        echo "🚀 Deploying application to Lightsail..."
         python3 deploy-with-run-command.py \
           ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
           app.tar.gz \
@@ -74,6 +80,7 @@ jobs:
 
     - name: Verify deployment
       run: |
+        echo "🔍 Verifying deployment..."
         echo "Waiting for application to be ready..."
         sleep 30
         
@@ -94,10 +101,11 @@ jobs:
     - name: Deployment Summary
       if: always()
       run: |
-        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## 🚀 Modular LAMP Stack Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Instance**: ${{ env.LIGHTSAIL_INSTANCE_NAME }}" >> $GITHUB_STEP_SUMMARY
         echo "- **IP Address**: ${{ env.LIGHTSAIL_STATIC_IP }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Application URL**: http://${{ env.LIGHTSAIL_STATIC_IP }}/" >> $GITHUB_STEP_SUMMARY
+        echo "- **LAMP Stack**: ✅ Installed via modular script" >> $GITHUB_STEP_SUMMARY
         echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
