@@ -38,12 +38,7 @@ The infrastructure is manually pre-created and includes:
 
 ### GitHub Secrets Configuration
 
-Run the setup script to get instructions for configuring GitHub secrets:
-
-```bash
-cd lamp_stack_lightsail
-python3 setup-github-secrets.py
-```
+Configure the following GitHub secrets in your repository settings:
 
 Required secrets:
 - `AWS_ACCESS_KEY_ID`: Your AWS access key
@@ -71,19 +66,19 @@ python3 deploy-with-run-command.py \
 
 ```
 lamp_stack_lightsail/
-├── index.php                    # Main application file
+├── index.php                         # Main application file
 ├── css/
-│   └── style.css               # Responsive CSS styles
+│   └── style.css                     # Responsive CSS styles
 ├── config/
-│   └── database.php            # Database configuration
+│   └── database.php                  # Database configuration
 ├── .github/
 │   └── workflows/
-│       └── deploy-to-lightsail.yml  # GitHub Actions workflow
-├── deploy-with-run-command.py  # Run command API deployment script
-├── setup-github-secrets.py    # GitHub secrets setup helper
-├── requirements.txt            # Python dependencies
-├── lamp-stack-demo-key.pem    # SSH private key (not in repo)
-└── README.md                   # This file
+│       └── deploy-lamp-stack.yml     # GitHub Actions workflow
+├── deploy-with-run-command.py        # Application deployment script
+├── install-lamp-on-lightsail-enhanced.py  # LAMP stack installation script
+├── install-lamp-stack.sh             # Shell script for LAMP installation
+├── requirements.txt                  # Python dependencies
+└── README.md                         # This file
 ```
 
 ## 🔧 Application Features
