@@ -1,2 +1,22 @@
 aws-credentials.json
 lamp-stack-demo-key.pem
+
+# Ignore temporary files
+*.tmp
+*.log
+*.backup
+*.bak
+app.tar.gz
+
+# Ignore SSH keys
+*.pem
+*.key
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore build artifacts
+terraform/
+terraform.tfstate*
+.terraform/
