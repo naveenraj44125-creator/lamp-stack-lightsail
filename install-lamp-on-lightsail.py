@@ -58,7 +58,10 @@ class LightsailLAMPInstaller:
                 ssh_cmd = [
                     'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
                     '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
-                    '-o', 'ConnectTimeout=15', '-o', 'IdentitiesOnly=yes',
+                    '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=60', 
+                    '-o', 'ServerAliveCountMax=3', '-o', 'IdentitiesOnly=yes',
+                    '-o', 'TCPKeepAlive=yes', '-o', 'ExitOnForwardFailure=yes',
+                    '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
                     f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
                 ]
                 
@@ -92,12 +95,26 @@ class LightsailLAMPInstaller:
             print(f"   ❌ Error: {str(e)}")
             return False, str(e)
 
-    def run_command_with_retry(self, command, timeout=300, max_retries=3):
-        """Execute command with retry logic for better reliability"""
+    def test_ssh_connection(self):
+        """Test SSH connection with a simple command"""
+        print("🔍 Testing SSH connection...")
+        success, output = self.run_command("echo 'SSH connection test successful'", timeout=30)
+        if success:
+            print("✅ SSH connection test passed")
+            return True
+        else:
+            print(f"❌ SSH connection test failed: {output}")
+            return False
+
+    def run_command_with_retry(self, command, timeout=300, max_retries=5):
+        """Execute command with enhanced retry logic for better reliability"""
         for attempt in range(max_retries):
             if attempt > 0:
                 print(f"🔄 Retrying command (attempt {attempt + 1}/{max_retries})...")
-                time.sleep(10)  # Longer wait before retry for connection issues
+                # Progressive backoff: longer waits for later attempts
+                wait_time = min(10 + (attempt * 5), 30)
+                print(f"   ⏳ Waiting {wait_time} seconds before retry...")
+                time.sleep(wait_time)
             
             success, output = self.run_command(command, timeout)
             
@@ -108,15 +125,14 @@ class LightsailLAMPInstaller:
             connection_errors = [
                 "Broken pipe", "Connection reset", "Connection timed out", 
                 "Connection refused", "Network is unreachable", "Host is down",
-                "ssh_exchange_identification", "Connection closed by remote host"
+                "ssh_exchange_identification", "Connection closed by remote host",
+                "Connection lost", "Connection aborted", "No route to host"
             ]
             
-            if any(error in output for error in connection_errors):
+            is_connection_error = any(error in output.lower() for error in [e.lower() for e in connection_errors])
+            
+            if is_connection_error:
                 print(f"   🔄 Connection issue detected, will retry...")
-                # Wait a bit longer for connection issues
-                if attempt < max_retries - 1:
-                    print(f"   ⏳ Waiting 15 seconds before retry...")
-                    time.sleep(15)
                 continue
             else:
                 # If it's not a connection issue, don't retry
@@ -157,6 +173,11 @@ class LightsailLAMPInstaller:
         
         # Check if instance is running
         if not self.wait_for_instance_running():
+            return False
+        
+        # Test SSH connection before proceeding
+        if not self.test_ssh_connection():
+            print("❌ SSH connection test failed, cannot proceed with installation")
             return False
         
         print("📦 Installing LAMP stack components...")
