@@ -58,7 +58,7 @@ jobs:
     - name: Install LAMP Stack
       run: |
         echo "🔧 Installing LAMP stack on Lightsail instance..."
-        python3 install-lamp-on-lightsail.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
+        python3 install-lamp-on-lightsail-enhanced.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
 
     - name: Create deployment package
       run: |
