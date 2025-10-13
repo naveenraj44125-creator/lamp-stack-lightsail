@@ -35,7 +35,7 @@ jobs:
         sleep 5
         curl -f http://localhost:8000/ || exit 1
 
-  deploy:
+  pre-steps:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -55,10 +55,29 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3
 
-    - name: Pre-deployment Steps
+    - name: Environment Preparation & LAMP Stack Installation
       run: |
         echo "🔧 Running pre-deployment steps (LAMP stack installation)..."
         python3 workflows/deploy-pre-steps.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
+
+  application-install:
+    needs: pre-steps
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
 
     - name: Create deployment package
       run: |
@@ -66,7 +85,38 @@ jobs:
         tar -czf app.tar.gz index.php css/ config/ || tar -czf app.tar.gz *
         ls -la app.tar.gz
 
-    - name: Post-deployment Steps
+    - name: Upload application package
+      uses: actions/upload-artifact@v4
+      with:
+        name: application-package
+        path: app.tar.gz
+        retention-days: 1
+
+  post-steps:
+    needs: application-install
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Download application package
+      uses: actions/download-artifact@v4
+      with:
+        name: application-package
+
+    - name: Application Deployment & Configuration
       run: |
         echo "🚀 Running post-deployment steps (application deployment)..."
         python3 workflows/deploy-post-steps.py \
@@ -80,9 +130,9 @@ jobs:
           --env GITHUB_ACTOR=${{ github.actor }} \
           --env GITHUB_RUN_ID=${{ github.run_id }}
 
-    - name: Verify deployment
+    - name: Final Verification
       run: |
-        echo "🔍 Verifying deployment..."
+        echo "🔍 Final deployment verification..."
         echo "Waiting for application to be ready..."
         sleep 30
         
@@ -107,7 +157,7 @@ jobs:
         echo "- **Instance**: ${{ env.LIGHTSAIL_INSTANCE_NAME }}" >> $GITHUB_STEP_SUMMARY
         echo "- **IP Address**: ${{ env.LIGHTSAIL_STATIC_IP }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Application URL**: http://${{ env.LIGHTSAIL_STATIC_IP }}/" >> $GITHUB_STEP_SUMMARY
-        echo "- **LAMP Stack**: ✅ Installed via modular script" >> $GITHUB_STEP_SUMMARY
+        echo "- **LAMP Stack**: ✅ Installed via modular approach" >> $GITHUB_STEP_SUMMARY
         echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
