@@ -151,11 +151,10 @@ jobs:
     - name: Application Health Check
       run: |
         echo "🔍 Running application health check..."
-        python3 workflows/deploy-post-steps.py \
+        python3 workflows/verify-deployment.py \
           ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
-          /dev/null \
           --region ${{ env.AWS_REGION }} \
-          --verify
+          --health-only
 
     - name: External Connectivity Test
       run: |
