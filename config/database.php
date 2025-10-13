@@ -54,10 +54,35 @@ function testDatabaseConnection() {
  * @return string Database status message
  */
 function getDatabaseStatus() {
-    if (testDatabaseConnection()) {
-        return "✅ Database connection successful";
-    } else {
-        return "❌ Database connection failed - Please check your MySQL/MariaDB setup";
+    try {
+        if (testDatabaseConnection()) {
+            $connection = getDatabaseConnection();
+            if ($connection) {
+                // Get database version
+                $stmt = $connection->query('SELECT VERSION() as version');
+                $result = $stmt->fetch();
+                return "✅ Connected to " . $result['version'];
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Database status check failed: " . $e->getMessage());
     }
+    
+    return "⚠️ Database connection unavailable (application still functional)";
+}
+
+/**
+ * Get server information
+ * 
+ * @return array Server information
+ */
+function getServerInfo() {
+    return [
+        'php_version' => phpversion(),
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+        'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'Unknown',
+        'server_name' => $_SERVER['SERVER_NAME'] ?? 'localhost',
+        'request_time' => date('Y-m-d H:i:s', $_SERVER['REQUEST_TIME'] ?? time())
+    ];
 }
 ?>

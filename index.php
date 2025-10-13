@@ -19,16 +19,17 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Advanced CI/CD Pipeline!</h2>";
-                    echo "<p>This is a simple LAMP stack application running on PHP.</p>";
+                    echo "<h2>🚀 Hello Welcome - Enhanced LAMP Stack Application!</h2>";
+                    echo "<p>This is a robust LAMP stack application running on PHP with improved error handling.</p>";
                     echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
                     echo "<p><strong>🔥 NEW FEATURE:</strong> Enhanced monitoring and status display!</p>";
-                    echo "<p><strong>✨ LATEST UPDATE:</strong> Demonstrating Git Push Integration!</p>";
+                    echo "<p><strong>✨ LATEST UPDATE:</strong> Improved database connection handling!</p>";
                     echo "<p><strong>🎉 NEWEST FEATURE:</strong> Continuous Deployment Pipeline Active!</p>";
                     echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Multi-Stage CI/CD Pipeline with Auto-Deploy!</p>";
+                    echo "<p><strong>🛠️ LATEST FIX:</strong> Enhanced endpoint reliability and error handling!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 2.8 - Advanced CI/CD at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 2.9 - Enhanced Reliability at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -44,12 +45,25 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 2.8)</h3>
+                <h3>🆕 System Status (Version 2.9)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Deployment Status:</strong> ✅ Successfully deployed via GitHub Actions</li>
                     <li><strong>Last Updated:</strong> <?php echo date('Y-m-d H:i:s T'); ?></li>
+                    <li><strong>Server Load:</strong> <?php echo sys_getloadavg()[0]; ?></li>
+                    <li><strong>PHP Extensions:</strong> <?php echo count(get_loaded_extensions()); ?> loaded</li>
+                </ul>
+            </div>
+            
+            <div class="info-section">
+                <h3>🔧 Health Check</h3>
+                <ul>
+                    <li><strong>Web Server:</strong> ✅ Apache is running</li>
+                    <li><strong>PHP Status:</strong> ✅ PHP <?php echo phpversion(); ?> is working</li>
+                    <li><strong>Database:</strong> <?php echo getDatabaseStatus(); ?></li>
+                    <li><strong>File Permissions:</strong> <?php echo is_writable('.') ? '✅ Writable' : '⚠️ Read-only'; ?></li>
+                    <li><strong>Session Support:</strong> <?php echo function_exists('session_start') ? '✅ Available' : '❌ Not available'; ?></li>
                 </ul>
             </div>
         </main>
