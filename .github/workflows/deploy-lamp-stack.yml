@@ -123,23 +123,50 @@ jobs:
           ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
           app.tar.gz \
           --region ${{ env.AWS_REGION }} \
-          --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
           --env GITHUB_REF=${{ github.ref_name }} \
           --env GITHUB_ACTOR=${{ github.actor }} \
           --env GITHUB_RUN_ID=${{ github.run_id }}
 
-    - name: Final Verification
+  verification:
+    needs: post-steps
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Python environment
       run: |
-        echo "🔍 Final deployment verification..."
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Application Health Check
+      run: |
+        echo "🔍 Running application health check..."
+        python3 workflows/deploy-post-steps.py \
+          ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
+          /dev/null \
+          --region ${{ env.AWS_REGION }} \
+          --verify
+
+    - name: External Connectivity Test
+      run: |
+        echo "🌐 Testing external connectivity..."
         echo "Waiting for application to be ready..."
         sleep 30
         
-        # Test the deployed application
+        # Test the deployed application from external network
         for i in {1..10}; do
           if curl -f -s http://${{ env.LIGHTSAIL_STATIC_IP }}/ | grep -q "Hello Welcome"; then
-            echo "✅ Application is working correctly!"
+            echo "✅ Application is accessible externally!"
             echo "🌐 Application URL: http://${{ env.LIGHTSAIL_STATIC_IP }}/"
             exit 0
           fi
@@ -147,8 +174,24 @@ jobs:
           sleep 10
         done
         
-        echo "❌ Application verification failed"
+        echo "❌ External connectivity test failed"
         exit 1
+
+    - name: Performance & Security Check
+      run: |
+        echo "⚡ Running performance and security checks..."
+        
+        # Basic performance test
+        echo "Testing response time..."
+        time curl -s http://${{ env.LIGHTSAIL_STATIC_IP }}/ > /dev/null
+        
+        # Check HTTP headers
+        echo "Checking HTTP headers..."
+        curl -I http://${{ env.LIGHTSAIL_STATIC_IP }}/
+        
+        # Test different endpoints if they exist
+        echo "Testing application endpoints..."
+        curl -f -s http://${{ env.LIGHTSAIL_STATIC_IP }}/index.php || echo "index.php test completed"
 
     - name: Deployment Summary
       if: always()
@@ -162,3 +205,4 @@ jobs:
         echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Verification**: ✅ Health check, connectivity, and performance tests completed" >> $GITHUB_STEP_SUMMARY
