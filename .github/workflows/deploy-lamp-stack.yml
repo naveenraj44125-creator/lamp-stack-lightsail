@@ -55,10 +55,10 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3
 
-    - name: Install LAMP Stack
+    - name: Pre-deployment Steps
       run: |
-        echo "🔧 Installing LAMP stack on Lightsail instance..."
-        python3 workflows/install-lamp-on-lightsail-enhanced.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
+        echo "🔧 Running pre-deployment steps (LAMP stack installation)..."
+        python3 workflows/deploy-pre-steps.py ${{ env.LIGHTSAIL_INSTANCE_NAME }} --region ${{ env.AWS_REGION }}
 
     - name: Create deployment package
       run: |
@@ -66,13 +66,15 @@ jobs:
         tar -czf app.tar.gz index.php css/ config/ || tar -czf app.tar.gz *
         ls -la app.tar.gz
 
-    - name: Deploy application to Lightsail
+    - name: Post-deployment Steps
       run: |
-        echo "🚀 Deploying application to Lightsail..."
-        python3 workflows/deploy-with-run-command.py \
+        echo "🚀 Running post-deployment steps (application deployment)..."
+        python3 workflows/deploy-post-steps.py \
           ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
           app.tar.gz \
           --region ${{ env.AWS_REGION }} \
+          --verify \
+          --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
           --env GITHUB_REF=${{ github.ref_name }} \
           --env GITHUB_ACTOR=${{ github.actor }} \
