@@ -287,14 +287,22 @@ sudo apt-get -f install -y || true
             ("Updating system packages", """
 set -e
 echo "Updating system packages..."
-sudo apt-get update -y
+# Use timeout command to prevent hanging and add retries
+timeout 600 sudo apt-get update -y || {
+    echo "First update attempt failed, trying with different options..."
+    sudo apt-get clean
+    sudo rm -rf /var/lib/apt/lists/*
+    timeout 600 sudo apt-get update -y --fix-missing || {
+        echo "Second update attempt failed, trying minimal update..."
+        timeout 300 sudo apt-get update -y --allow-releaseinfo-change || true
+    }
+}
             """.strip()),
-            
             ("Installing Apache", """
 set -e
 if ! command -v apache2 &> /dev/null; then
     echo "Installing Apache..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y apache2
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y apache2
 else
     echo "Apache already installed"
 fi
@@ -304,7 +312,7 @@ fi
 set -e
 if ! command -v mysql &> /dev/null; then
     echo "Installing MariaDB..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server mariadb-client
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server mariadb-client
 else
     echo "MySQL/MariaDB already installed"
 fi
@@ -314,7 +322,7 @@ fi
 set -e
 if ! command -v php &> /dev/null; then
     echo "Installing PHP and extensions..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php php-mysql php-cli php-curl php-json php-mbstring php-xml php-zip
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php php-mysql php-cli php-curl php-json php-mbstring php-xml php-zip
 else
     echo "PHP already installed"
 fi
@@ -342,7 +350,9 @@ sudo chmod -R 755 /var/www/html
         # Execute each step with retry logic
         for step_name, command in installation_steps:
             print(f"🔧 {step_name}...")
-            success, output = self.run_command_with_retry(command, timeout=300)
+            # Use longer timeout for package operations that can be slow
+            timeout_value = 900 if any(pkg in step_name.lower() for pkg in ['updating', 'installing']) else 300
+            success, output = self.run_command_with_retry(command, timeout=timeout_value)
             
             if not success:
                 print(f"❌ Failed to complete: {step_name}")
