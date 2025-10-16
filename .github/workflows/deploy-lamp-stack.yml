@@ -116,7 +116,7 @@ jobs:
         path: app.tar.gz
         retention-days: 1
 
-  post-steps:
+  post-steps-common:
     needs: application-install
     runs-on: ubuntu-latest
     steps:
@@ -140,21 +140,50 @@ jobs:
       with:
         name: application-package
 
-    - name: Application Deployment & Configuration
+    - name: Common Application Deployment
       run: |
-        echo "🚀 Running post-deployment steps (application deployment)..."
-        python3 workflows/deploy-post-steps.py \
+        echo "🚀 Running common post-deployment steps (file upload, extraction)..."
+        python3 workflows/deploy-post-steps-common.py \
           ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
           app.tar.gz \
           --region ${{ env.AWS_REGION }} \
+          --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
           --env GITHUB_REF=${{ github.ref_name }} \
           --env GITHUB_ACTOR=${{ github.actor }} \
           --env GITHUB_RUN_ID=${{ github.run_id }}
 
+  post-steps-lamp:
+    needs: post-steps-common
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: LAMP Application Configuration & Deployment
+      run: |
+        echo "🚀 Running LAMP-specific post-deployment steps (services, permissions)..."
+        python3 workflows/deploy-post-steps-lamp.py \
+          ${{ env.LIGHTSAIL_INSTANCE_NAME }} \
+          --region ${{ env.AWS_REGION }} \
+          --verify \
+          --optimize
+
   verification:
-    needs: post-steps
+    needs: post-steps-lamp
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
