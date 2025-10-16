@@ -24,55 +24,86 @@ class LightsailPreDeployer:
             print("❌ AWS credentials not found. Please configure AWS credentials.")
             sys.exit(1)
     
-    def run_command(self, command, timeout=300):
-        """Execute command on Lightsail instance using get_instance_access_details"""
-        try:
-            print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
-            
-            # Get SSH access details
-            ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
-            ssh_details = ssh_response['accessDetails']
-            
-            # Create temporary SSH key files
-            key_path, cert_path = self.create_ssh_files(ssh_details)
-            
+    def run_command(self, command, timeout=300, max_retries=3):
+        """Execute command on Lightsail instance using get_instance_access_details with retry logic"""
+        for attempt in range(max_retries):
             try:
-                ssh_cmd = [
-                    'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
-                    '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
-                    '-o', 'ConnectTimeout=15', '-o', 'IdentitiesOnly=yes',
-                    f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
-                ]
+                if attempt > 0:
+                    print(f"🔄 Retry attempt {attempt + 1}/{max_retries}")
+                    time.sleep(10)  # Wait before retry
                 
-                result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+                print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
                 
-                if result.returncode == 0:
-                    print(f"   ✅ Success")
-                    if result.stdout.strip():
-                        # Limit output for readability
-                        lines = result.stdout.strip().split('\n')
-                        for line in lines[:20]:  # Show first 20 lines
-                            print(f"   {line}")
-                        if len(lines) > 20:
-                            print(f"   ... ({len(lines) - 20} more lines)")
-                    return True, result.stdout.strip()
-                else:
-                    print(f"   ❌ Failed (exit code: {result.returncode})")
-                    if result.stderr.strip():
-                        print(f"   Error: {result.stderr.strip()}")
-                    return False, result.stderr.strip()
+                # Get SSH access details
+                ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
+                ssh_details = ssh_response['accessDetails']
                 
-            finally:
-                # Clean up temporary files
+                # Create temporary SSH key files
+                key_path, cert_path = self.create_ssh_files(ssh_details)
+                
                 try:
-                    os.unlink(key_path)
-                    os.unlink(cert_path)
-                except:
-                    pass
+                    ssh_cmd = [
+                        'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                        '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                        '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=10',
+                        '-o', 'ServerAliveCountMax=3', '-o', 'IdentitiesOnly=yes',
+                        '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
+                        f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+                    ]
+                    
+                    result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+                    
+                    if result.returncode == 0:
+                        print(f"   ✅ Success")
+                        if result.stdout.strip():
+                            # Limit output for readability
+                            lines = result.stdout.strip().split('\n')
+                            for line in lines[:20]:  # Show first 20 lines
+                                print(f"   {line}")
+                            if len(lines) > 20:
+                                print(f"   ... ({len(lines) - 20} more lines)")
+                        return True, result.stdout.strip()
+                    else:
+                        error_msg = result.stderr.strip()
+                        print(f"   ❌ Failed (exit code: {result.returncode})")
+                        if error_msg:
+                            print(f"   Error: {error_msg}")
+                        
+                        # Check if it's a connection issue that we should retry
+                        if any(phrase in error_msg.lower() for phrase in ['broken pipe', 'connection refused', 'connection timed out', 'network unreachable']):
+                            if attempt < max_retries - 1:
+                                print(f"   🔄 Connection issue detected, will retry...")
+                                continue
+                        
+                        return False, error_msg
+                    
+                finally:
+                    # Clean up temporary files
+                    try:
+                        os.unlink(key_path)
+                        os.unlink(cert_path)
+                    except:
+                        pass
+                    
+            except subprocess.TimeoutExpired:
+                print(f"   ⏰ Command timed out after {timeout} seconds")
+                if attempt < max_retries - 1:
+                    print(f"   🔄 Will retry...")
+                    continue
+                return False, f"Command timed out after {timeout} seconds"
+            except Exception as e:
+                error_msg = str(e)
+                print(f"   ❌ Error: {error_msg}")
                 
-        except Exception as e:
-            print(f"   ❌ Error: {str(e)}")
-            return False, str(e)
+                # Check if it's a connection issue that we should retry
+                if any(phrase in error_msg.lower() for phrase in ['broken pipe', 'connection refused', 'connection timed out', 'network unreachable']):
+                    if attempt < max_retries - 1:
+                        print(f"   🔄 Connection issue detected, will retry...")
+                        continue
+                
+                return False, error_msg
+        
+        return False, "Max retries exceeded"
 
     def create_ssh_files(self, ssh_details):
         """Create temporary SSH key files"""
@@ -93,7 +124,7 @@ class LightsailPreDeployer:
         return key_path, cert_path
 
     def wait_for_instance_running(self, timeout=300):
-        """Wait for instance to be in running state"""
+        """Wait for instance to be in running state and SSH to be ready"""
         print(f"⏳ Waiting for instance {self.instance_name} to be running...")
         start_time = time.time()
         
@@ -105,7 +136,22 @@ class LightsailPreDeployer:
                 
                 if state == 'running':
                     print("✅ Instance is running")
-                    return True
+                    
+                    # Wait additional time for SSH to be ready after restart
+                    print("⏳ Waiting for SSH service to be ready...")
+                    time.sleep(30)  # Give SSH service time to start
+                    
+                    # Test SSH connectivity
+                    print("🔍 Testing SSH connectivity...")
+                    success, _ = self.run_command("echo 'SSH test successful'", timeout=30, max_retries=3)
+                    if success:
+                        print("✅ SSH connectivity confirmed")
+                        return True
+                    else:
+                        print("⚠️  SSH not ready yet, waiting...")
+                        time.sleep(20)
+                        continue
+                        
                 elif state in ['stopped', 'stopping', 'terminated']:
                     print(f"❌ Instance is in {state} state")
                     return False
@@ -115,7 +161,7 @@ class LightsailPreDeployer:
                 print(f"❌ Error checking instance state: {e}")
                 return False
         
-        print("❌ Timeout waiting for instance to be running")
+        print("❌ Timeout waiting for instance to be running and SSH ready")
         return False
 
     def prepare_environment(self):
