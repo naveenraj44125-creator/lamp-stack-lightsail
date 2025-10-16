@@ -9,10 +9,11 @@ import os
 import time
 import argparse
 from lightsail_common import create_lightsail_client
+from lightsail_lamp import LightsailLAMPManager
 
 class LightsailLAMPInstaller:
     def __init__(self, instance_name, region='us-east-1'):
-        self.client = create_lightsail_client(instance_name, region, 'lamp')
+        self.client = LightsailLAMPManager(instance_name, region)
 
     def install_lamp_stack(self):
         """Install LAMP stack on Lightsail instance"""

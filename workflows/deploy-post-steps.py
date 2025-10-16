@@ -9,10 +9,11 @@ import sys
 import argparse
 from botocore.exceptions import ClientError
 from lightsail_common import create_lightsail_client
+from lightsail_lamp import LightsailLAMPManager
 
 class LightsailPostDeployer:
     def __init__(self, instance_name, region='us-east-1'):
-        self.client = create_lightsail_client(instance_name, region, 'lamp')
+        self.client = LightsailLAMPManager(instance_name, region)
 
     def deploy_application(self, package_path, env_vars=None):
         """Deploy the application files after environment is prepared"""

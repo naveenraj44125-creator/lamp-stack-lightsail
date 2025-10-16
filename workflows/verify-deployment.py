@@ -7,10 +7,11 @@ This script only performs health checks and verification without deploying anyth
 import sys
 import argparse
 from lightsail_common import create_lightsail_client
+from lightsail_lamp import LightsailLAMPManager
 
 class LightsailVerifier:
     def __init__(self, instance_name, region='us-east-1'):
-        self.client = create_lightsail_client(instance_name, region, 'lamp')
+        self.client = LightsailLAMPManager(instance_name, region)
 
     def verify_lamp_stack(self):
         """Verify LAMP stack components are running"""

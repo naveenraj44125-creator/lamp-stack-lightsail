@@ -7,10 +7,11 @@ This script handles environment preparation before application deployment
 import sys
 import argparse
 from lightsail_common import create_lightsail_client
+from lightsail_lamp import LightsailLAMPManager
 
 class LightsailPreDeployer:
     def __init__(self, instance_name, region='us-east-1'):
-        self.client = create_lightsail_client(instance_name, region, 'lamp')
+        self.client = LightsailLAMPManager(instance_name, region)
 
     def prepare_environment(self):
         """Prepare the environment for LAMP stack deployment"""
