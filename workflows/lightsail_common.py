@@ -1,0 +1,600 @@
+#!/usr/bin/env python3
+"""
+Common utilities for AWS Lightsail deployment workflows
+This module provides shared functionality for SSH connections, file operations, and AWS client management
+"""
+
+import boto3
+import subprocess
+import tempfile
+import os
+import time
+import sys
+import socket
+from botocore.exceptions import ClientError, NoCredentialsError
+
+class LightsailBase:
+    """Base class for Lightsail operations with common SSH and AWS functionality"""
+    
+    def __init__(self, instance_name, region='us-east-1'):
+        self.instance_name = instance_name
+        self.region = region
+        try:
+            self.lightsail = boto3.client('lightsail', region_name=region)
+        except NoCredentialsError:
+            print("❌ AWS credentials not found. Please configure AWS credentials.")
+            sys.exit(1)
+    
+    def run_command(self, command, timeout=300, max_retries=1, show_output_lines=20):
+        """
+        Execute command on Lightsail instance using get_instance_access_details
+        
+        Args:
+            command (str): Command to execute
+            timeout (int): Command timeout in seconds
+            max_retries (int): Maximum number of retry attempts
+            show_output_lines (int): Number of output lines to display
+            
+        Returns:
+            tuple: (success: bool, output: str)
+        """
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    print(f"🔄 Retry attempt {attempt + 1}/{max_retries}")
+                    # Progressive backoff with longer initial waits for GitHub Actions
+                    wait_time = min(15 + (attempt * 10), 60)
+                    print(f"   ⏳ Waiting {wait_time} seconds before retry...")
+                    time.sleep(wait_time)
+                    
+                    # Test connectivity before retry
+                    if not self.test_network_connectivity():
+                        print("   ⚠️ Network connectivity still failing, continuing retry...")
+                
+                print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
+                
+                # Get SSH access details
+                ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
+                ssh_details = ssh_response['accessDetails']
+                
+                # Create temporary SSH key files
+                key_path, cert_path = self.create_ssh_files(ssh_details)
+                
+                try:
+                    ssh_cmd = self._build_ssh_command(key_path, cert_path, ssh_details, command)
+                    result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+                    
+                    if result.returncode == 0:
+                        print(f"   ✅ Success")
+                        if result.stdout.strip():
+                            self._display_output(result.stdout.strip(), show_output_lines)
+                        return True, result.stdout.strip()
+                    else:
+                        error_msg = result.stderr.strip()
+                        print(f"   ❌ Failed (exit code: {result.returncode})")
+                        if error_msg:
+                            print(f"   Error: {error_msg}")
+                        
+                        # Check if it's a connection issue that we should retry
+                        if max_retries > 1 and self._is_connection_error(error_msg):
+                            if attempt < max_retries - 1:
+                                print(f"   🔄 Connection issue detected, will retry...")
+                                # For GitHub Actions, try to restart instance on persistent failures
+                                if attempt >= 3 and "GITHUB_ACTIONS" in os.environ:
+                                    print("   🔄 GitHub Actions detected - attempting instance restart...")
+                                    self.restart_instance_for_connectivity()
+                                continue
+                        
+                        return False, error_msg
+                    
+                finally:
+                    self._cleanup_ssh_files(key_path, cert_path)
+                    
+            except subprocess.TimeoutExpired:
+                print(f"   ⏰ Command timed out after {timeout} seconds")
+                if attempt < max_retries - 1:
+                    print(f"   🔄 Will retry...")
+                    continue
+                return False, f"Command timed out after {timeout} seconds"
+            except Exception as e:
+                error_msg = str(e)
+                print(f"   ❌ Error: {error_msg}")
+                
+                # Check if it's a connection issue that we should retry
+                if max_retries > 1 and self._is_connection_error(error_msg):
+                    if attempt < max_retries - 1:
+                        print(f"   🔄 Connection issue detected, will retry...")
+                        continue
+                
+                return False, error_msg
+        
+        return False, "Max retries exceeded"
+
+    def create_ssh_files(self, ssh_details):
+        """
+        Create temporary SSH key files from Lightsail access details
+        
+        Args:
+            ssh_details (dict): SSH access details from get_instance_access_details
+            
+        Returns:
+            tuple: (key_path: str, cert_path: str)
+        """
+        # Create private key file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as key_file:
+            key_file.write(ssh_details['privateKey'])
+            key_path = key_file.name
+        
+        # Create certificate file
+        cert_path = key_path + '-cert.pub'
+        cert_parts = ssh_details['certKey'].split(' ', 2)
+        formatted_cert = f'{cert_parts[0]} {cert_parts[1]}\n' if len(cert_parts) >= 2 else ssh_details['certKey'] + '\n'
+        
+        with open(cert_path, 'w') as cert_file:
+            cert_file.write(formatted_cert)
+        
+        # Set proper permissions
+        os.chmod(key_path, 0o600)
+        os.chmod(cert_path, 0o600)
+        
+        return key_path, cert_path
+
+    def copy_file_to_instance(self, local_path, remote_path, timeout=300):
+        """
+        Copy file to instance using SCP
+        
+        Args:
+            local_path (str): Local file path
+            remote_path (str): Remote file path
+            timeout (int): Transfer timeout in seconds
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            print(f"📤 Copying {local_path} to {remote_path}")
+            
+            ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
+            ssh_details = ssh_response['accessDetails']
+            
+            key_path, cert_path = self.create_ssh_files(ssh_details)
+            
+            try:
+                scp_cmd = [
+                    'scp', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                    '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                    '-o', 'ConnectTimeout=30', '-o', 'IdentitiesOnly=yes',
+                    local_path, f'{ssh_details["username"]}@{ssh_details["ipAddress"]}:{remote_path}'
+                ]
+                
+                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=timeout)
+                
+                if result.returncode == 0:
+                    print(f"   ✅ File copied successfully")
+                    return True
+                else:
+                    print(f"   ❌ Failed to copy file (exit code: {result.returncode})")
+                    if result.stderr.strip():
+                        print(f"   Error: {result.stderr.strip()}")
+                    return False
+                
+            finally:
+                self._cleanup_ssh_files(key_path, cert_path)
+                
+        except Exception as e:
+            print(f"   ❌ Error copying file: {str(e)}")
+            return False
+
+    def get_instance_info(self):
+        """
+        Get instance information including public IP and state
+        
+        Returns:
+            dict: Instance information or None if error
+        """
+        try:
+            response = self.lightsail.get_instance(instanceName=self.instance_name)
+            instance = response['instance']
+            return {
+                'name': instance['name'],
+                'state': instance['state']['name'],
+                'public_ip': instance.get('publicIpAddress'),
+                'private_ip': instance.get('privateIpAddress'),
+                'blueprint': instance.get('blueprintName'),
+                'bundle': instance.get('bundleId')
+            }
+        except ClientError as e:
+            print(f"❌ Error getting instance info: {e}")
+            return None
+
+    def wait_for_instance_state(self, target_state='running', timeout=300):
+        """
+        Wait for instance to reach target state
+        
+        Args:
+            target_state (str): Target instance state
+            timeout (int): Maximum wait time in seconds
+            
+        Returns:
+            bool: True if target state reached, False otherwise
+        """
+        print(f"⏳ Waiting for instance {self.instance_name} to be {target_state}...")
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                response = self.lightsail.get_instance(instanceName=self.instance_name)
+                current_state = response['instance']['state']['name']
+                print(f"Instance state: {current_state}")
+                
+                if current_state == target_state:
+                    print(f"✅ Instance is {target_state}")
+                    return True
+                elif current_state in ['stopped', 'stopping', 'terminated'] and target_state == 'running':
+                    print(f"❌ Instance is in {current_state} state")
+                    return False
+                    
+                time.sleep(10)
+            except ClientError as e:
+                print(f"❌ Error checking instance state: {e}")
+                return False
+        
+        print(f"❌ Timeout waiting for instance to be {target_state}")
+        return False
+
+    def test_ssh_connectivity(self, timeout=30, max_retries=3):
+        """
+        Test SSH connectivity to the instance
+        
+        Args:
+            timeout (int): Connection timeout
+            max_retries (int): Maximum retry attempts
+            
+        Returns:
+            bool: True if SSH is accessible, False otherwise
+        """
+        print("🔍 Testing SSH connectivity...")
+        success, _ = self.run_command("echo 'SSH test successful'", timeout=timeout, max_retries=max_retries)
+        if success:
+            print("✅ SSH connectivity confirmed")
+        else:
+            print("❌ SSH connectivity failed")
+        return success
+
+    def test_network_connectivity(self):
+        """Test network connectivity to the instance"""
+        try:
+            ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
+            ip_address = ssh_response['accessDetails']['ipAddress']
+            
+            print(f"🔍 Testing network connectivity to {ip_address}...")
+            
+            # Test basic connectivity
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            result = sock.connect_ex((ip_address, 22))
+            sock.close()
+            
+            if result == 0:
+                print("✅ Network connectivity to SSH port successful")
+                return True
+            else:
+                print(f"⚠️ Network connectivity test failed (error code: {result})")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ Network connectivity test error: {e}")
+            return False
+
+    def restart_instance_for_connectivity(self):
+        """Restart instance to resolve connectivity issues (GitHub Actions fallback)"""
+        try:
+            print("🔄 Attempting instance restart to resolve connectivity...")
+            
+            # Stop instance
+            self.lightsail.stop_instance(instanceName=self.instance_name)
+            print("   ⏳ Stopping instance...")
+            time.sleep(30)
+            
+            # Wait for stopped state
+            for _ in range(12):  # 2 minutes max
+                response = self.lightsail.get_instance(instanceName=self.instance_name)
+                state = response['instance']['state']['name']
+                if state == 'stopped':
+                    break
+                time.sleep(10)
+            
+            # Start instance
+            self.lightsail.start_instance(instanceName=self.instance_name)
+            print("   ⏳ Starting instance...")
+            time.sleep(60)
+            
+            # Wait for running state
+            for _ in range(18):  # 3 minutes max
+                response = self.lightsail.get_instance(instanceName=self.instance_name)
+                state = response['instance']['state']['name']
+                if state == 'running':
+                    print("   ✅ Instance restarted successfully")
+                    time.sleep(30)  # Additional wait for SSH service
+                    return True
+                time.sleep(10)
+                
+            print("   ⚠️ Instance restart timeout")
+            return False
+            
+        except Exception as e:
+            print(f"   ❌ Instance restart failed: {e}")
+            return False
+
+    def _build_ssh_command(self, key_path, cert_path, ssh_details, command):
+        """Build SSH command with proper options"""
+        # Enhanced SSH configuration for GitHub Actions compatibility
+        if "GITHUB_ACTIONS" in os.environ:
+            return [
+                'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                '-o', 'ConnectTimeout=60', '-o', 'ServerAliveInterval=30',
+                '-o', 'ServerAliveCountMax=6', '-o', 'ConnectionAttempts=3',
+                '-o', 'IdentitiesOnly=yes', '-o', 'TCPKeepAlive=yes',
+                '-o', 'ExitOnForwardFailure=yes', '-o', 'BatchMode=yes',
+                '-o', 'PreferredAuthentications=publickey', '-o', 'LogLevel=VERBOSE',
+                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+            ]
+        else:
+            return [
+                'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=10',
+                '-o', 'ServerAliveCountMax=3', '-o', 'IdentitiesOnly=yes',
+                '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
+                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+            ]
+
+    def _display_output(self, output, max_lines):
+        """Display command output with line limit"""
+        lines = output.split('\n')
+        for line in lines[:max_lines]:
+            print(f"   {line}")
+        if len(lines) > max_lines:
+            print(f"   ... ({len(lines) - max_lines} more lines)")
+
+    def _is_connection_error(self, error_msg):
+        """Check if error message indicates a connection issue"""
+        connection_errors = [
+            'broken pipe', 'connection refused', 'connection timed out', 
+            'network unreachable', 'host unreachable', 'no route to host',
+            'connection reset', 'connection closed by remote host',
+            'ssh_exchange_identification', 'connection lost', 'connection aborted',
+            'operation timed out', 'connect to host', 'timed out after'
+        ]
+        return any(phrase in error_msg.lower() for phrase in connection_errors)
+
+    def _cleanup_ssh_files(self, key_path, cert_path):
+        """Clean up temporary SSH key files"""
+        try:
+            if os.path.exists(key_path):
+                os.unlink(key_path)
+            if os.path.exists(cert_path):
+                os.unlink(cert_path)
+        except Exception:
+            pass  # Ignore cleanup errors
+
+
+class LightsailSSHManager(LightsailBase):
+    """Enhanced SSH manager with additional connectivity features"""
+    
+    def wait_for_ssh_ready(self, timeout=300):
+        """
+        Wait for instance to be running and SSH to be ready
+        
+        Args:
+            timeout (int): Maximum wait time in seconds
+            
+        Returns:
+            bool: True if SSH is ready, False otherwise
+        """
+        # First wait for instance to be running
+        if not self.wait_for_instance_state('running', timeout):
+            return False
+        
+        # Wait additional time for SSH service to start
+        print("⏳ Waiting for SSH service to be ready...")
+        time.sleep(30)  # Give SSH service time to start
+        
+        # Test SSH connectivity with retries
+        return self.test_ssh_connectivity(timeout=30, max_retries=3)
+
+
+class LightsailLAMPManager(LightsailBase):
+    """LAMP stack specific operations manager"""
+    
+    def get_lamp_install_script(self):
+        """Get the standard LAMP installation script"""
+        return '''
+set -e
+
+# Fix any broken packages first
+echo "Fixing any broken packages..."
+sudo dpkg --configure -a || true
+sudo apt-get -f install -y || true
+
+# Update system
+echo "Updating system packages..."
+# Use timeout command to prevent hanging and add retries
+timeout 600 sudo apt-get update -y || {
+    echo "First update attempt failed, trying with different options..."
+    sudo apt-get clean
+    sudo rm -rf /var/lib/apt/lists/*
+    timeout 600 sudo apt-get update -y --fix-missing || {
+        echo "Second update attempt failed, trying minimal update..."
+        timeout 300 sudo apt-get update -y --allow-releaseinfo-change || true
+    }
+}
+
+# Check if Apache is already installed
+if ! command -v apache2 &> /dev/null; then
+    echo "Installing Apache..."
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y apache2
+else
+    echo "Apache already installed"
+fi
+
+# Check if MySQL is already installed
+if ! command -v mysql &> /dev/null; then
+    echo "Installing MariaDB (lighter alternative to MySQL)..."
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server mariadb-client
+else
+    echo "MySQL/MariaDB already installed"
+fi
+
+# Check if PHP is already installed
+if ! command -v php &> /dev/null; then
+    echo "Installing PHP and extensions..."
+    timeout 600 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php php-mysql php-cli php-curl php-json php-mbstring php-xml php-zip
+else
+    echo "PHP already installed"
+fi
+
+# Start and enable services
+echo "Starting services..."
+sudo systemctl start apache2 || echo "Apache already running"
+sudo systemctl enable apache2
+sudo systemctl start mysql || echo "MySQL already running"
+sudo systemctl enable mysql
+
+# Configure Apache
+echo "Configuring Apache..."
+sudo a2enmod rewrite || echo "Rewrite module already enabled"
+sudo systemctl restart apache2
+
+# Set up web directory permissions
+sudo chown -R www-data:www-data /var/www/html
+sudo chmod -R 755 /var/www/html
+
+echo "✅ LAMP stack installation completed"
+'''
+
+    def get_database_setup_script(self):
+        """Get the standard database setup script"""
+        return '''
+set -e
+
+# Configure MySQL (basic setup)
+echo "Setting up database..."
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS lamp_demo;"
+sudo mysql -e "CREATE USER IF NOT EXISTS 'lamp_user'@'localhost' IDENTIFIED BY 'lamp_password';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON lamp_demo.* TO 'lamp_user'@'localhost';"
+sudo mysql -e "FLUSH PRIVILEGES;"
+
+echo "✅ Database setup completed"
+'''
+
+    def get_deployment_script(self):
+        """Get the standard application deployment script"""
+        return '''
+set -e
+
+# Extract application
+cd /tmp
+echo "Extracting application archive..."
+tar -xzf app.tar.gz
+
+# Backup current version if it exists
+if [ -f "/var/www/html/index.html" ]; then
+    echo "Backing up default Apache page..."
+    sudo mv /var/www/html/index.html /var/www/html/index.html.backup.$(date +%Y%m%d_%H%M%S)
+fi
+
+# Deploy new version
+echo "Deploying application files..."
+sudo cp -r * /var/www/html/
+sudo chown -R www-data:www-data /var/www/html
+sudo chmod -R 755 /var/www/html
+
+echo "✅ Application files deployed successfully"
+'''
+
+    def get_verification_script(self):
+        """Get the standard verification script"""
+        return '''
+set -e
+
+echo "=== LAMP Stack Verification ==="
+
+# Check Apache
+echo "Checking Apache..."
+sudo systemctl is-active apache2 && echo "✅ Apache is running" || echo "❌ Apache is not running"
+
+# Check MySQL/MariaDB
+echo "Checking MySQL/MariaDB..."
+sudo systemctl is-active mysql && echo "✅ MySQL is running" || echo "❌ MySQL is not running"
+
+# Check PHP
+echo "Checking PHP..."
+php --version | head -1 && echo "✅ PHP is installed" || echo "❌ PHP is not installed"
+
+# Check web server response
+echo "Checking web server response..."
+curl -f -s http://localhost/ > /dev/null && echo "✅ Web server responding" || echo "❌ Web server not responding"
+
+# Check if application files exist
+echo "Checking application files..."
+ls -la /var/www/html/ | head -10
+
+echo "=== LAMP Stack Verification Complete ==="
+'''
+
+    def install_lamp_stack(self, timeout=900, max_retries=8):
+        """Install LAMP stack with enhanced retry logic"""
+        print("📦 Installing LAMP stack components...")
+        return self.run_command(self.get_lamp_install_script(), timeout=timeout, max_retries=max_retries)
+
+    def setup_database(self, timeout=120, max_retries=3):
+        """Set up the database"""
+        print("🗄️ Setting up MySQL database...")
+        return self.run_command(self.get_database_setup_script(), timeout=timeout, max_retries=max_retries)
+
+    def deploy_application_files(self, timeout=300, max_retries=3):
+        """Deploy application files"""
+        print("🚀 Deploying application files...")
+        return self.run_command(self.get_deployment_script(), timeout=timeout, max_retries=max_retries)
+
+    def verify_lamp_stack(self, timeout=120, max_retries=3):
+        """Verify LAMP stack installation"""
+        print("🔍 Verifying LAMP stack components...")
+        return self.run_command(self.get_verification_script(), timeout=timeout, max_retries=max_retries)
+
+    def create_environment_file(self, env_vars, timeout=60):
+        """Create environment file with given variables"""
+        if not env_vars:
+            return True, ""
+        
+        print("📝 Creating environment file...")
+        env_content = "\\n".join([f"{k}={v}" for k, v in env_vars.items()])
+        env_script = f'''
+sudo tee /var/www/html/.env > /dev/null << 'ENVEOF'
+{env_content}
+ENVEOF
+sudo chown www-data:www-data /var/www/html/.env
+'''
+        return self.run_command(env_script, timeout=timeout)
+
+
+def create_lightsail_client(instance_name, region='us-east-1', client_type='base'):
+    """
+    Factory function to create appropriate Lightsail client
+    
+    Args:
+        instance_name (str): Lightsail instance name
+        region (str): AWS region
+        client_type (str): Type of client ('base', 'ssh', 'lamp')
+        
+    Returns:
+        LightsailBase, LightsailSSHManager, or LightsailLAMPManager: Configured client instance
+    """
+    if client_type == 'ssh':
+        return LightsailSSHManager(instance_name, region)
+    elif client_type == 'lamp':
+        return LightsailLAMPManager(instance_name, region)
+    else:
+        return LightsailBase(instance_name, region)
