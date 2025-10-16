@@ -16,8 +16,36 @@ class LightsailLAMPPostDeployer:
         """Deploy application files to LAMP web directory"""
         print(f"🌐 Deploying LAMP application files...")
         
-        # Deploy application files using LAMP-specific functionality
-        success, output = self.client.deploy_application_files()
+        # Deploy application files from the extracted directory
+        deploy_script = '''
+set -e
+
+# Check if extracted files exist
+if [ ! -d "/tmp/app_extract" ]; then
+    echo "❌ Application extraction directory not found"
+    exit 1
+fi
+
+# Backup current version if it exists
+if [ -f "/var/www/html/index.html" ]; then
+    echo "Backing up default Apache page..."
+    sudo mv /var/www/html/index.html /var/www/html/index.html.backup.$(date +%Y%m%d_%H%M%S)
+fi
+
+# Deploy new version from extracted files
+echo "Deploying application files to web directory..."
+cd /tmp/app_extract
+sudo cp -r * /var/www/html/
+sudo chown -R www-data:www-data /var/www/html
+sudo chmod -R 755 /var/www/html
+
+# Set specific permissions for PHP files
+find /var/www/html -name "*.php" -exec sudo chmod 644 {} \\;
+
+echo "✅ Application files deployed successfully"
+'''
+        
+        success, output = self.client.run_command(deploy_script, timeout=300, max_retries=3)
         if not success:
             print("❌ Failed to deploy LAMP application files")
             print(f"Error output: {output}")
@@ -38,7 +66,7 @@ sudo chown -R www-data:www-data /var/www/html
 sudo chmod -R 755 /var/www/html
 
 # Ensure PHP files have correct permissions
-find /var/www/html -name "*.php" -exec sudo chmod 644 {} \;
+find /var/www/html -name "*.php" -exec sudo chmod 644 {} \\;
 
 # Set special permissions for config directory if it exists
 if [ -d "/var/www/html/config" ]; then
