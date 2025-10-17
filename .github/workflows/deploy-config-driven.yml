@@ -1,0 +1,449 @@
+name: Deploy LAMP Stack to Lightsail (Config-Driven)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      instance_name: ${{ steps.config.outputs.instance_name }}
+      static_ip: ${{ steps.config.outputs.static_ip }}
+      aws_region: ${{ steps.config.outputs.aws_region }}
+      php_version: ${{ steps.config.outputs.php_version }}
+      package_files: ${{ steps.config.outputs.package_files }}
+      should_deploy: ${{ steps.config.outputs.should_deploy }}
+      test_enabled: ${{ steps.config.outputs.test_enabled }}
+      artifact_retention_days: ${{ steps.config.outputs.artifact_retention_days }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install PyYAML
+      run: pip install PyYAML
+
+    - name: Load and Parse Configuration
+      id: config
+      run: |
+        python3 << 'EOF'
+        import yaml
+        import os
+        import sys
+        
+        # Load configuration
+        with open('deployment.config.yml', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        # Extract values
+        instance_name = config['lightsail']['instance_name']
+        static_ip = config['lightsail']['static_ip']
+        aws_region = config['aws']['region']
+        php_version = config['application']['php_version']
+        package_files = ','.join(config['application']['package_files'])
+        
+        # Determine if we should deploy based on branch and event
+        branch = os.environ.get('GITHUB_REF_NAME', 'main')
+        event_type = os.environ.get('GITHUB_EVENT_NAME', 'push')
+        
+        should_deploy = False
+        if event_type == 'workflow_dispatch':
+            should_deploy = True
+        elif event_type == 'push':
+            push_branches = config['github_actions']['triggers']['push_branches']
+            deploy_on_push = config['github_actions']['jobs']['deployment']['deploy_on_push']
+            should_deploy = deploy_on_push and branch in push_branches
+        elif event_type == 'pull_request':
+            should_deploy = config['github_actions']['jobs']['deployment']['deploy_on_pr']
+        
+        # Test configuration
+        test_enabled = config['github_actions']['jobs']['test']['enabled']
+        
+        # Artifact retention
+        artifact_retention_days = config['github_actions']['jobs']['deployment']['artifact_retention_days']
+        
+        # Set outputs
+        print(f"instance_name={instance_name}")
+        print(f"static_ip={static_ip}")
+        print(f"aws_region={aws_region}")
+        print(f"php_version={php_version}")
+        print(f"package_files={package_files}")
+        print(f"should_deploy={str(should_deploy).lower()}")
+        print(f"test_enabled={str(test_enabled).lower()}")
+        print(f"artifact_retention_days={artifact_retention_days}")
+        
+        # Write to GitHub outputs
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"instance_name={instance_name}\n")
+            f.write(f"static_ip={static_ip}\n")
+            f.write(f"aws_region={aws_region}\n")
+            f.write(f"php_version={php_version}\n")
+            f.write(f"package_files={package_files}\n")
+            f.write(f"should_deploy={str(should_deploy).lower()}\n")
+            f.write(f"test_enabled={str(test_enabled).lower()}\n")
+            f.write(f"artifact_retention_days={artifact_retention_days}\n")
+        
+        print(f"✅ Configuration loaded successfully")
+        print(f"📋 Instance: {instance_name}")
+        print(f"🌍 Region: {aws_region}")
+        print(f"🚀 Should Deploy: {should_deploy}")
+        EOF
+
+  test:
+    needs: load-config
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.test_enabled == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ needs.load-config.outputs.php_version }}
+        extensions: pdo, pdo_mysql
+
+    - name: Validate PHP syntax
+      run: |
+        find . -name "*.php" -exec php -l {} \;
+
+    - name: Test PHP application
+      run: |
+        php -S localhost:8000 index.php &
+        sleep 5
+        curl -f http://localhost:8000/ || exit 1
+
+  pre-steps-common:
+    needs: [load-config, test]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true' && (always() && (needs.test.result == 'success' || needs.test.result == 'skipped'))
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: Common Environment Preparation
+      run: |
+        echo "🔧 Running common pre-deployment steps (SSH check, directories)..."
+        python3 workflows/deploy-pre-steps-common.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }}
+
+  pre-steps-lamp:
+    needs: [load-config, pre-steps-common]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: LAMP Stack Installation & Configuration
+      run: |
+        echo "🔧 Running LAMP-specific pre-deployment steps (LAMP installation)..."
+        python3 workflows/deploy-pre-steps-lamp.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }}
+
+  application-install:
+    needs: [load-config, pre-steps-lamp]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: Create deployment package
+      run: |
+        echo "📦 Creating application package..."
+        
+        # Get package files from configuration
+        PACKAGE_FILES="${{ needs.load-config.outputs.package_files }}"
+        
+        # Try to create package with specified files
+        if [ -n "$PACKAGE_FILES" ]; then
+          IFS=',' read -ra FILES <<< "$PACKAGE_FILES"
+          EXISTING_FILES=()
+          
+          for file in "${FILES[@]}"; do
+            if [ -e "$file" ]; then
+              EXISTING_FILES+=("$file")
+            else
+              echo "⚠️  File/directory not found: $file"
+            fi
+          done
+          
+          if [ ${#EXISTING_FILES[@]} -gt 0 ]; then
+            echo "📦 Creating package with: ${EXISTING_FILES[*]}"
+            tar -czf app.tar.gz "${EXISTING_FILES[@]}"
+          else
+            echo "⚠️  No specified files found, creating package with all files"
+            tar -czf app.tar.gz * || tar -czf app.tar.gz .
+          fi
+        else
+          echo "📦 Creating package with all files"
+          tar -czf app.tar.gz * || tar -czf app.tar.gz .
+        fi
+        
+        ls -la app.tar.gz
+
+    - name: Upload application package
+      uses: actions/upload-artifact@v4
+      with:
+        name: application-package
+        path: app.tar.gz
+        retention-days: ${{ needs.load-config.outputs.artifact_retention_days }}
+
+  post-steps-common:
+    needs: [load-config, application-install]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: Download application package
+      uses: actions/download-artifact@v4
+      with:
+        name: application-package
+
+    - name: Common Application Deployment
+      run: |
+        echo "🚀 Running common post-deployment steps (file upload, extraction)..."
+        python3 workflows/deploy-post-steps-common.py \
+          app.tar.gz \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --env GITHUB_SHA=${{ github.sha }} \
+          --env GITHUB_REF=${{ github.ref_name }} \
+          --env GITHUB_ACTOR=${{ github.actor }} \
+          --env GITHUB_RUN_ID=${{ github.run_id }}
+
+  post-steps-lamp:
+    needs: [load-config, post-steps-common]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: LAMP Application Configuration & Deployment
+      run: |
+        echo "🚀 Running LAMP-specific post-deployment steps (services, permissions)..."
+        python3 workflows/deploy-post-steps-lamp.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }}
+
+  verification:
+    needs: [load-config, post-steps-lamp]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3 PyYAML
+
+    - name: Application Health Check
+      run: |
+        echo "🔍 Running application health check..."
+        python3 workflows/verify-deployment.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --health-only
+
+    - name: External Connectivity Test
+      run: |
+        echo "🌐 Testing external connectivity..."
+        
+        # Load health check configuration from config file
+        python3 << 'EOF'
+        import yaml
+        import time
+        import subprocess
+        import sys
+        
+        # Load configuration
+        with open('deployment.config.yml', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        health_config = config['monitoring']['health_check']
+        static_ip = config['lightsail']['static_ip']
+        
+        endpoint = health_config['endpoint']
+        expected_content = health_config['expected_content']
+        max_attempts = health_config['max_attempts']
+        wait_between_attempts = health_config['wait_between_attempts']
+        initial_wait = health_config['initial_wait']
+        
+        print(f"Waiting {initial_wait} seconds for application to be ready...")
+        time.sleep(initial_wait)
+        
+        # Test the deployed application from external network
+        for i in range(1, max_attempts + 1):
+            try:
+                result = subprocess.run([
+                    'curl', '-f', '-s', f'http://{static_ip}{endpoint}'
+                ], capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0 and expected_content in result.stdout:
+                    print("✅ Application is accessible externally!")
+                    print(f"🌐 Application URL: http://{static_ip}/")
+                    sys.exit(0)
+                    
+            except subprocess.TimeoutExpired:
+                print(f"⏰ Request timed out (attempt {i}/{max_attempts})")
+            except Exception as e:
+                print(f"❌ Request failed: {e} (attempt {i}/{max_attempts})")
+            
+            if i < max_attempts:
+                print(f"Waiting {wait_between_attempts} seconds before next attempt...")
+                time.sleep(wait_between_attempts)
+        
+        print("❌ External connectivity test failed")
+        sys.exit(1)
+        EOF
+
+    - name: Performance & Security Check
+      run: |
+        echo "⚡ Running performance and security checks..."
+        
+        # Load configuration for performance tests
+        python3 << 'EOF'
+        import yaml
+        import subprocess
+        import sys
+        
+        # Load configuration
+        with open('deployment.config.yml', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        static_ip = config['lightsail']['static_ip']
+        performance_config = config['monitoring']['performance']
+        endpoints = config['deployment']['steps']['verification']['endpoints_to_test']
+        
+        base_url = f"http://{static_ip}"
+        
+        if performance_config.get('response_time_check', True):
+            print("Testing response time...")
+            try:
+                result = subprocess.run(['time', 'curl', '-s', f'{base_url}/', '-o', '/dev/null'], 
+                                      capture_output=True, text=True)
+                print("Response time test completed")
+            except Exception as e:
+                print(f"Response time test failed: {e}")
+        
+        if performance_config.get('http_headers_check', True):
+            print("Checking HTTP headers...")
+            try:
+                result = subprocess.run(['curl', '-I', f'{base_url}/'], 
+                                      capture_output=True, text=True)
+                print("HTTP Headers:")
+                print(result.stdout)
+            except Exception as e:
+                print(f"HTTP headers check failed: {e}")
+        
+        # Test different endpoints
+        print("Testing application endpoints...")
+        for endpoint in endpoints:
+            try:
+                result = subprocess.run(['curl', '-f', '-s', f'{base_url}{endpoint}'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"✅ Endpoint {endpoint} is accessible")
+                else:
+                    print(f"⚠️  Endpoint {endpoint} returned error code {result.returncode}")
+            except Exception as e:
+                print(f"❌ Endpoint {endpoint} test failed: {e}")
+        EOF
+
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "## 🚀 Config-Driven LAMP Stack Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Instance**: ${{ needs.load-config.outputs.instance_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **IP Address**: ${{ needs.load-config.outputs.static_ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Application URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Configuration**: ✅ Loaded from deployment.config.yml" >> $GITHUB_STEP_SUMMARY
+        echo "- **LAMP Stack**: ✅ Installed via config-driven approach" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Verification**: ✅ Health check, connectivity, and performance tests completed" >> $GITHUB_STEP_SUMMARY

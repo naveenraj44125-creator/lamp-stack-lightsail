@@ -1,0 +1,156 @@
+# Deployment Configuration for LAMP Stack on AWS Lightsail
+# This file contains all configuration parameters for the deployment workflow
+
+# AWS Configuration
+aws:
+  region: us-east-1
+  
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: lamp-stack-demo
+  static_ip: 98.91.3.69
+  
+# Application Configuration
+application:
+  name: lamp-stack-app
+  version: "1.0.0"
+  php_version: "8.1"
+  
+  # Files to include in deployment package
+  package_files:
+    - "index.php"
+    - "css/"
+    - "config/"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
+  
+  # Environment variables to set on the instance
+  environment_variables:
+    APP_ENV: production
+    APP_DEBUG: false
+    APP_NAME: "LAMP Stack Demo"
+  
+# Deployment Configuration
+deployment:
+  # Timeout settings (in seconds)
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  # Retry settings
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  # Deployment steps configuration
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      lamp:
+        enabled: true
+        install_apache: true
+        install_mysql: true
+        install_php: true
+        configure_firewall: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      lamp:
+        enabled: true
+        configure_apache: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+        - "/index.php"
+
+# GitHub Actions Configuration
+github_actions:
+  # Trigger configuration
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  # Job configuration
+  jobs:
+    test:
+      enabled: true
+      php_syntax_check: true
+      local_server_test: true
+      test_port: 8000
+    
+    deployment:
+      # Only deploy on main branch
+      deploy_on_push: true
+      deploy_on_pr: false
+      
+      # Artifact retention
+      artifact_retention_days: 1
+      
+      # Deployment summary
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  # Health check configuration
+  health_check:
+    endpoint: "/"
+    expected_content: "Hello Welcome"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+  
+  # Performance monitoring
+  performance:
+    response_time_check: true
+    http_headers_check: true
+  
+  # Logging configuration
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  # File permissions
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+  
+  # Apache security
+  apache:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false  # Set to true if database backups are needed

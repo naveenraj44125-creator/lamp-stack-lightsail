@@ -7,20 +7,31 @@ This script handles general environment preparation that applies to any deployme
 import sys
 import argparse
 from lightsail_common import create_lightsail_client
+from config_loader import load_deployment_config
 
 class LightsailCommonPreDeployer:
-    def __init__(self, instance_name, region='us-east-1'):
-        self.instance_name = instance_name
-        self.region = region
-        self.client = create_lightsail_client(instance_name, region, 'ssh')
+    def __init__(self, instance_name=None, region=None, config=None):
+        self.config = config or load_deployment_config()
+        self.instance_name = instance_name or self.config.get_instance_name()
+        self.region = region or self.config.get_aws_region()
+        self.client = create_lightsail_client(self.instance_name, self.region, 'ssh')
 
     def prepare_common_environment(self):
         """Prepare common environment for any deployment"""
         print(f"🔧 Preparing common environment for deployment")
         
+        # Get step configuration
+        step_config = self.config.get_step_config('pre_deployment.common')
+        
+        # Check if this step is enabled
+        if not self.config.is_step_enabled('pre_deployment.common'):
+            print("ℹ️  Common pre-deployment steps are disabled in configuration")
+            return True
+        
         # Check if instance is running and SSH is ready
         print("🔍 Checking SSH connectivity...")
-        if not self.client.wait_for_ssh_ready():
+        ssh_timeout = self.config.get_timeout('ssh_connection')
+        if not self.client.wait_for_ssh_ready(timeout=ssh_timeout):
             print("❌ SSH connection failed")
             return False
         
@@ -28,7 +39,12 @@ class LightsailCommonPreDeployer:
         
         # Prepare deployment directory
         print("📁 Preparing deployment directory...")
-        prep_script = '''
+        
+        # Get backup configuration
+        backup_config = self.config.get_backup_config()
+        backup_location = backup_config.get('backup_location', '/var/backups/deployments')
+        
+        prep_script = f'''
 set -e
 
 # Create temporary deployment directory
@@ -36,17 +52,26 @@ sudo mkdir -p /tmp/deployment
 sudo chown $(whoami):$(whoami) /tmp/deployment
 
 # Create backup directory if it doesn't exist
-sudo mkdir -p /var/backups/deployments
-sudo chown $(whoami):$(whoami) /var/backups/deployments
-
+sudo mkdir -p {backup_location}
+sudo chown $(whoami):$(whoami) {backup_location}
+'''
+        
+        # Add package update if enabled
+        if step_config.get('update_packages', True):
+            prep_script += '''
 # Update system packages (non-interactive)
 echo "Updating system packages..."
 sudo apt-get update -qq > /dev/null 2>&1 || echo "Package update completed with warnings"
-
+'''
+        
+        prep_script += '''
 echo "✅ Common environment preparation completed"
 '''
         
-        success, output = self.client.run_command(prep_script, timeout=120, max_retries=3)
+        timeout = self.config.get_timeout('command_execution')
+        max_retries = self.config.get_max_retries()
+        
+        success, output = self.client.run_command(prep_script, timeout=timeout, max_retries=max_retries)
         if not success:
             print("❌ Failed to prepare common environment")
             print(f"Error output: {output}")
@@ -57,22 +82,36 @@ echo "✅ Common environment preparation completed"
 
 def main():
     parser = argparse.ArgumentParser(description='Common pre-deployment steps for AWS Lightsail')
-    parser.add_argument('instance_name', help='Lightsail instance name')
-    parser.add_argument('--region', default='us-east-1', help='AWS region')
+    parser.add_argument('--instance-name', help='Lightsail instance name (overrides config)')
+    parser.add_argument('--region', help='AWS region (overrides config)')
+    parser.add_argument('--config', default='deployment.config.yml', help='Configuration file path')
     
     args = parser.parse_args()
     
-    print(f"🔧 Starting common pre-deployment steps for {args.instance_name}")
-    print(f"🌍 Region: {args.region}")
-    
-    # Create pre-deployer and prepare environment
-    pre_deployer = LightsailCommonPreDeployer(args.instance_name, args.region)
-    
-    if pre_deployer.prepare_common_environment():
-        print("🎉 Common pre-deployment steps completed successfully!")
-        sys.exit(0)
-    else:
-        print("❌ Common pre-deployment steps failed")
+    try:
+        # Load configuration
+        config = load_deployment_config(args.config)
+        config.print_config_summary()
+        
+        # Create pre-deployer and prepare environment
+        pre_deployer = LightsailCommonPreDeployer(
+            instance_name=args.instance_name,
+            region=args.region,
+            config=config
+        )
+        
+        print(f"🔧 Starting common pre-deployment steps for {pre_deployer.instance_name}")
+        print(f"🌍 Region: {pre_deployer.region}")
+        
+        if pre_deployer.prepare_common_environment():
+            print("🎉 Common pre-deployment steps completed successfully!")
+            sys.exit(0)
+        else:
+            print("❌ Common pre-deployment steps failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"❌ Configuration or initialization error: {e}")
         sys.exit(1)
 
 if __name__ == '__main__':
