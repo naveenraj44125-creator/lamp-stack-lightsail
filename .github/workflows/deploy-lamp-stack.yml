@@ -194,8 +194,8 @@ jobs:
       run: |
         echo "🚀 Running common post-deployment steps (file upload, extraction)..."
         python3 workflows/deploy-post-steps-common.py \
-          ${{ needs.load-config.outputs.instance_name }} \
           app.tar.gz \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
           --verify \
           --cleanup \
@@ -227,7 +227,7 @@ jobs:
       run: |
         echo "🚀 Running LAMP-specific post-deployment steps (services, permissions)..."
         python3 workflows/deploy-post-steps-lamp.py \
-          ${{ needs.load-config.outputs.instance_name }} \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
           --verify \
           --optimize
