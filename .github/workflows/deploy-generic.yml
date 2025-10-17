@@ -317,7 +317,7 @@ jobs:
           app.tar.gz \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file deployment-generic.config.yml \
+          --config deployment-generic.config.yml \
           --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
