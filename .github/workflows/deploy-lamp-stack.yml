@@ -111,7 +111,7 @@ jobs:
         python3 workflows/deploy-pre-steps-common.py --instance-name ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
 
   pre-steps-lamp:
-    needs: pre-steps-common
+    needs: [load-config, pre-steps-common]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -135,7 +135,7 @@ jobs:
         python3 workflows/deploy-pre-steps-lamp.py --instance-name ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
 
   application-install:
-    needs: pre-steps-lamp
+    needs: [load-config, pre-steps-lamp]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -167,7 +167,7 @@ jobs:
         retention-days: 1
 
   post-steps-common:
-    needs: application-install
+    needs: [load-config, application-install]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -205,7 +205,7 @@ jobs:
           --env GITHUB_RUN_ID=${{ github.run_id }}
 
   post-steps-lamp:
-    needs: post-steps-common
+    needs: [load-config, post-steps-common]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -233,7 +233,7 @@ jobs:
           --optimize
 
   verification:
-    needs: post-steps-lamp
+    needs: [load-config, post-steps-lamp]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
