@@ -6,7 +6,7 @@ This script handles dependency installation and configuration based on config
 
 import sys
 import argparse
-from lightsail_common import LightsailManager
+from lightsail_common import LightsailBase
 from config_loader import DeploymentConfig
 from dependency_manager import DependencyManager
 
@@ -23,7 +23,7 @@ class GenericPreDeployer:
             region = config.get_aws_region()
             
         self.config = config
-        self.client = LightsailManager(instance_name, region)
+        self.client = LightsailBase(instance_name, region)
         self.dependency_manager = DependencyManager(self.client, config)
 
     def prepare_environment(self):
