@@ -202,6 +202,9 @@ def load_deployment_config(config_file: str = 'deployment.config.yml') -> Deploy
     """
     return DeploymentConfig(config_file)
 
+# Alias for backward compatibility
+ConfigLoader = DeploymentConfig
+
 # Example usage and testing
 if __name__ == '__main__':
     try:
