@@ -19,7 +19,7 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Enhanced LAMP Stack Application!</h2>";
+                    echo "<h2>🚀 Hello Welcome - Enhanced LAMP Stack Application v3.0!</h2>";
                     echo "<p>This is a robust LAMP stack application running on PHP with improved error handling.</p>";
                     echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
                     echo "<p><strong>🔥 NEW FEATURE:</strong> Enhanced monitoring and status display!</p>";
@@ -27,9 +27,10 @@ require_once 'config/database.php';
                     echo "<p><strong>🎉 NEWEST FEATURE:</strong> Continuous Deployment Pipeline Active!</p>";
                     echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Multi-Stage CI/CD Pipeline with Auto-Deploy!</p>";
                     echo "<p><strong>🛠️ LATEST FIX:</strong> Enhanced endpoint reliability and error handling!</p>";
+                    echo "<p><strong>🆕 VERSION 3.0:</strong> Updated deployment with improved file extraction process!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 2.9 - Enhanced Reliability at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 3.0 - Enhanced Reliability at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -45,7 +46,7 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 2.9)</h3>
+                <h3>🆕 System Status (Version 3.0)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
