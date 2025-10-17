@@ -6,7 +6,7 @@ This script handles application deployment and service configuration based on co
 
 import sys
 import argparse
-from lightsail_common import LightsailManager
+from lightsail_common import LightsailBase
 from config_loader import DeploymentConfig
 from dependency_manager import DependencyManager
 
@@ -23,7 +23,7 @@ class GenericPostDeployer:
             region = config.get_aws_region()
             
         self.config = config
-        self.client = LightsailManager(instance_name, region)
+        self.client = LightsailBase(instance_name, region)
         self.dependency_manager = DependencyManager(self.client, config)
         
         # Load installed dependencies from the system
