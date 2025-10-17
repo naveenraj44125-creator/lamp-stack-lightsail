@@ -19,18 +19,19 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Enhanced LAMP Stack Application v3.0!</h2>";
-                    echo "<p>This is a robust LAMP stack application running on PHP with improved error handling.</p>";
-                    echo "<p><strong>🎯 Deployment Test:</strong> This version was deployed via GitHub Actions!</p>";
-                    echo "<p><strong>🔥 NEW FEATURE:</strong> Enhanced monitoring and status display!</p>";
-                    echo "<p><strong>✨ LATEST UPDATE:</strong> Improved database connection handling!</p>";
-                    echo "<p><strong>🎉 NEWEST FEATURE:</strong> Continuous Deployment Pipeline Active!</p>";
-                    echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Multi-Stage CI/CD Pipeline with Auto-Deploy!</p>";
-                    echo "<p><strong>🛠️ LATEST FIX:</strong> Enhanced endpoint reliability and error handling!</p>";
-                    echo "<p><strong>🆕 VERSION 3.0:</strong> Updated deployment with improved file extraction process!</p>";
+                    echo "<h2>🚀 Hello Welcome - Config-Driven LAMP Stack Application v4.0!</h2>";
+                    echo "<p>This is a robust LAMP stack application with configuration-driven deployment architecture.</p>";
+                    echo "<p><strong>🎯 Deployment Test:</strong> This version uses config-driven GitHub Actions workflow!</p>";
+                    echo "<p><strong>🔥 NEW FEATURE:</strong> Configuration-based deployment parameters!</p>";
+                    echo "<p><strong>✨ LATEST UPDATE:</strong> Centralized configuration management with YAML!</p>";
+                    echo "<p><strong>🎉 NEWEST FEATURE:</strong> Dynamic workflow configuration loading!</p>";
+                    echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Multi-job pipeline with config dependencies!</p>";
+                    echo "<p><strong>🛠️ LATEST FIX:</strong> Resolved argument parsing and ConfigLoader issues!</p>";
+                    echo "<p><strong>🆕 VERSION 4.0:</strong> Complete transformation to config-driven architecture!</p>";
+                    echo "<p><strong>⚡ CONFIG-DRIVEN:</strong> All deployment parameters now read from deployment.config.yml!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 3.0 - Enhanced Reliability at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 4.0 - Config-Driven Architecture at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -46,7 +47,7 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 3.0)</h3>
+                <h3>🆕 System Status (Version 4.0)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
