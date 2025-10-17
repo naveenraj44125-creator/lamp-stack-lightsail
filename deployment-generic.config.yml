@@ -7,7 +7,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: generic-app-demo
+  instance_name: lamp-stack-demo
   static_ip: 98.91.3.69
   
 # Application Configuration
