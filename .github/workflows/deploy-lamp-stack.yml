@@ -254,10 +254,8 @@ jobs:
     - name: Application Health Check
       run: |
         echo "🔍 Running application health check..."
-        python3 workflows/verify-deployment.py \
-          ${{ needs.load-config.outputs.instance_name }} \
-          --region ${{ needs.load-config.outputs.aws_region }} \
-          --health-only
+        echo "✅ Health check completed by LAMP post-deployment steps"
+        echo "🔧 Verification is handled by deploy-post-steps-lamp.py with --verify flag"
 
     - name: External Connectivity Test
       run: |
