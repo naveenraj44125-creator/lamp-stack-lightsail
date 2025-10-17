@@ -86,7 +86,8 @@ def main():
     
     try:
         # Load configuration
-        config = ConfigLoader(config_file=args.config)
+        config_file = args.config if args.config else 'deployment.config.yml'
+        config = ConfigLoader(config_file=config_file)
         
         # Create pre-deployer and prepare environment
         pre_deployer = LightsailCommonPreDeployer(

@@ -92,7 +92,8 @@ def main():
     
     try:
         # Load configuration
-        config = ConfigLoader(config_file=args.config_file)
+        config_file = args.config_file if args.config_file else 'deployment.config.yml'
+        config = ConfigLoader(config_file=config_file)
         
         # Use command line args if provided, otherwise use config
         instance_name = args.instance_name or config.get_instance_name()
