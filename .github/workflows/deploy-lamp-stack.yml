@@ -108,7 +108,7 @@ jobs:
     - name: Common Environment Preparation
       run: |
         echo "🔧 Running common pre-deployment steps (SSH check, directories)..."
-        python3 workflows/deploy-pre-steps-common.py ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
+        python3 workflows/deploy-pre-steps-common.py --instance-name ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
 
   pre-steps-lamp:
     needs: pre-steps-common
@@ -132,7 +132,7 @@ jobs:
     - name: LAMP Stack Installation & Configuration
       run: |
         echo "🔧 Running LAMP-specific pre-deployment steps (LAMP installation)..."
-        python3 workflows/deploy-pre-steps-lamp.py ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
+        python3 workflows/deploy-pre-steps-lamp.py --instance-name ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
 
   application-install:
     needs: pre-steps-lamp
