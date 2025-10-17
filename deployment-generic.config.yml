@@ -1,0 +1,264 @@
+# Generic Application Deployment Configuration for AWS Lightsail
+# This file contains all configuration parameters for deploying any type of application
+
+# AWS Configuration
+aws:
+  region: us-east-1
+  
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: generic-app-demo
+  static_ip: 98.91.3.69
+  
+# Application Configuration
+application:
+  name: generic-app
+  version: "1.0.0"
+  type: web  # web, api, static, custom
+  
+  # Files to include in deployment package
+  package_files:
+    - "index.php"
+    - "css/"
+    - "config/"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
+  
+  # Environment variables to set on the instance
+  environment_variables:
+    APP_ENV: production
+    APP_DEBUG: false
+    APP_NAME: "Generic Application"
+
+# Dependencies Configuration - Each dependency can be enabled/disabled
+dependencies:
+  # Web Server Dependencies
+  apache:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+      enable_rewrite: true
+  
+  nginx:
+    enabled: false
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+  
+  # Database Dependencies
+  mysql:
+    enabled: true
+    version: "8.0"
+    config:
+      root_password_auto: true
+      create_app_database: true
+      database_name: "app_db"
+  
+  postgresql:
+    enabled: false
+    version: "14"
+    config:
+      create_app_database: true
+      database_name: "app_db"
+  
+  # Programming Language Dependencies
+  php:
+    enabled: true
+    version: "8.1"
+    config:
+      extensions:
+        - "pdo"
+        - "pdo_mysql"
+        - "curl"
+        - "json"
+        - "mbstring"
+      enable_composer: true
+  
+  python:
+    enabled: false
+    version: "3.9"
+    config:
+      pip_packages:
+        - "flask"
+        - "gunicorn"
+      virtual_env: true
+  
+  nodejs:
+    enabled: false
+    version: "18"
+    config:
+      npm_packages:
+        - "express"
+        - "pm2"
+      package_manager: "npm"  # npm or yarn
+  
+  # Additional Dependencies
+  redis:
+    enabled: false
+    version: "latest"
+    config:
+      bind_all_interfaces: false
+  
+  memcached:
+    enabled: false
+    version: "latest"
+  
+  docker:
+    enabled: false
+    version: "latest"
+    config:
+      enable_compose: true
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  # System Dependencies
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+      deny_all_other: true
+  
+  ssl_certificates:
+    enabled: false
+    config:
+      provider: "letsencrypt"  # letsencrypt, custom
+      domains: []
+  
+  monitoring:
+    enabled: false
+    config:
+      tools:
+        - "htop"
+        - "iotop"
+        - "netstat"
+
+# Deployment Configuration
+deployment:
+  # Timeout settings (in seconds)
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  # Retry settings
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  # Deployment steps configuration
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+
+# GitHub Actions Configuration
+github_actions:
+  # Trigger configuration
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  # Job configuration
+  jobs:
+    test:
+      enabled: true
+      language_specific_tests: true
+      local_server_test: true
+      test_port: 8000
+    
+    deployment:
+      # Only deploy on main branch
+      deploy_on_push: true
+      deploy_on_pr: false
+      
+      # Artifact retention
+      artifact_retention_days: 1
+      
+      # Deployment summary
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  # Health check configuration
+  health_check:
+    endpoint: "/"
+    expected_content: "Hello"  # Generic content check
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+  
+  # Performance monitoring
+  performance:
+    response_time_check: true
+    http_headers_check: true
+  
+  # Logging configuration
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  # File permissions
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+  
+  # Web server security (applies to enabled web server)
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false  # Set to true if database backups are needed

@@ -1,0 +1,697 @@
+#!/usr/bin/env python3
+"""
+Generic Dependency Manager for AWS Lightsail Deployments
+This module handles installation and configuration of various dependencies
+based on configuration settings (Apache, MySQL, PHP, Python, Node.js, etc.)
+"""
+
+import sys
+import json
+from typing import Dict, List, Any, Tuple
+from config_loader import DeploymentConfig
+
+class DependencyManager:
+    """Manages installation and configuration of application dependencies"""
+    
+    def __init__(self, lightsail_client, config: DeploymentConfig):
+        """
+        Initialize dependency manager
+        
+        Args:
+            lightsail_client: Lightsail client instance for running commands
+            config: Deployment configuration instance
+        """
+        self.client = lightsail_client
+        self.config = config
+        self.installed_dependencies = []
+        self.failed_dependencies = []
+    
+    def get_enabled_dependencies(self) -> List[str]:
+        """Get list of enabled dependencies from configuration"""
+        dependencies = []
+        deps_config = self.config.get('dependencies', {})
+        
+        for dep_name, dep_config in deps_config.items():
+            if isinstance(dep_config, dict) and dep_config.get('enabled', False):
+                dependencies.append(dep_name)
+        
+        return dependencies
+    
+    def install_all_dependencies(self) -> Tuple[bool, List[str], List[str]]:
+        """
+        Install all enabled dependencies
+        
+        Returns:
+            Tuple of (success, installed_deps, failed_deps)
+        """
+        enabled_deps = self.get_enabled_dependencies()
+        
+        if not enabled_deps:
+            print("ℹ️  No dependencies enabled in configuration")
+            return True, [], []
+        
+        print(f"📦 Installing {len(enabled_deps)} enabled dependencies: {', '.join(enabled_deps)}")
+        
+        # Install dependencies in order of priority
+        dependency_order = [
+            'git', 'firewall', 'apache', 'nginx', 'mysql', 'postgresql', 
+            'php', 'python', 'nodejs', 'redis', 'memcached', 'docker',
+            'ssl_certificates', 'monitoring'
+        ]
+        
+        # Sort enabled dependencies by priority order
+        sorted_deps = []
+        for dep in dependency_order:
+            if dep in enabled_deps:
+                sorted_deps.append(dep)
+        
+        # Add any remaining dependencies not in the priority list
+        for dep in enabled_deps:
+            if dep not in sorted_deps:
+                sorted_deps.append(dep)
+        
+        overall_success = True
+        
+        for dep_name in sorted_deps:
+            print(f"\n🔧 Installing {dep_name}...")
+            success = self._install_dependency(dep_name)
+            
+            if success:
+                self.installed_dependencies.append(dep_name)
+                print(f"✅ {dep_name} installed successfully")
+            else:
+                self.failed_dependencies.append(dep_name)
+                print(f"❌ {dep_name} installation failed")
+                overall_success = False
+        
+        return overall_success, self.installed_dependencies, self.failed_dependencies
+    
+    def _install_dependency(self, dep_name: str) -> bool:
+        """Install a specific dependency"""
+        dep_config = self.config.get(f'dependencies.{dep_name}', {})
+        
+        if dep_name == 'apache':
+            return self._install_apache(dep_config)
+        elif dep_name == 'nginx':
+            return self._install_nginx(dep_config)
+        elif dep_name == 'mysql':
+            return self._install_mysql(dep_config)
+        elif dep_name == 'postgresql':
+            return self._install_postgresql(dep_config)
+        elif dep_name == 'php':
+            return self._install_php(dep_config)
+        elif dep_name == 'python':
+            return self._install_python(dep_config)
+        elif dep_name == 'nodejs':
+            return self._install_nodejs(dep_config)
+        elif dep_name == 'redis':
+            return self._install_redis(dep_config)
+        elif dep_name == 'memcached':
+            return self._install_memcached(dep_config)
+        elif dep_name == 'docker':
+            return self._install_docker(dep_config)
+        elif dep_name == 'git':
+            return self._install_git(dep_config)
+        elif dep_name == 'firewall':
+            return self._configure_firewall(dep_config)
+        elif dep_name == 'ssl_certificates':
+            return self._install_ssl_certificates(dep_config)
+        elif dep_name == 'monitoring':
+            return self._install_monitoring_tools(dep_config)
+        else:
+            print(f"⚠️  Unknown dependency: {dep_name}")
+            return False
+    
+    def _install_apache(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Apache web server"""
+        version = config.get('version', 'latest')
+        apache_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing Apache web server..."
+
+# Install Apache
+sudo apt-get update
+sudo apt-get install -y apache2
+
+# Enable Apache to start on boot
+sudo systemctl enable apache2
+
+# Configure Apache
+DOCUMENT_ROOT="{apache_config.get('document_root', '/var/www/html')}"
+sudo mkdir -p "$DOCUMENT_ROOT"
+
+# Set proper ownership
+sudo chown -R www-data:www-data "$DOCUMENT_ROOT"
+sudo chmod -R 755 "$DOCUMENT_ROOT"
+
+# Enable mod_rewrite if requested
+if [ "{apache_config.get('enable_rewrite', True)}" = "True" ]; then
+    sudo a2enmod rewrite
+fi
+
+# Configure security settings
+if [ "{config.get('hide_version', True)}" = "True" ]; then
+    echo "ServerTokens Prod" | sudo tee -a /etc/apache2/conf-available/security.conf
+    echo "ServerSignature Off" | sudo tee -a /etc/apache2/conf-available/security.conf
+    sudo a2enconf security
+fi
+
+# Start Apache
+sudo systemctl start apache2
+sudo systemctl reload apache2
+
+echo "✅ Apache installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _install_nginx(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Nginx web server"""
+        script = f'''
+set -e
+echo "Installing Nginx web server..."
+
+# Install Nginx
+sudo apt-get update
+sudo apt-get install -y nginx
+
+# Enable Nginx to start on boot
+sudo systemctl enable nginx
+
+# Configure document root
+DOCUMENT_ROOT="{config.get('config', {}).get('document_root', '/var/www/html')}"
+sudo mkdir -p "$DOCUMENT_ROOT"
+sudo chown -R www-data:www-data "$DOCUMENT_ROOT"
+sudo chmod -R 755 "$DOCUMENT_ROOT"
+
+# Start Nginx
+sudo systemctl start nginx
+
+echo "✅ Nginx installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _install_mysql(self, config: Dict[str, Any]) -> bool:
+        """Install and configure MySQL database"""
+        mysql_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing MySQL database server..."
+
+# Set non-interactive mode
+export DEBIAN_FRONTEND=noninteractive
+
+# Install MySQL
+sudo apt-get update
+sudo apt-get install -y mysql-server
+
+# Enable MySQL to start on boot
+sudo systemctl enable mysql
+
+# Start MySQL
+sudo systemctl start mysql
+
+# Secure MySQL installation (basic)
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" || true
+
+# Create application database if requested
+if [ "{mysql_config.get('create_app_database', True)}" = "True" ]; then
+    DB_NAME="{mysql_config.get('database_name', 'app_db')}"
+    sudo mysql -u root -proot123 -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;" || true
+    echo "✅ Database '$DB_NAME' created"
+fi
+
+echo "✅ MySQL installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        return success
+    
+    def _install_postgresql(self, config: Dict[str, Any]) -> bool:
+        """Install and configure PostgreSQL database"""
+        pg_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing PostgreSQL database server..."
+
+# Install PostgreSQL
+sudo apt-get update
+sudo apt-get install -y postgresql postgresql-contrib
+
+# Enable PostgreSQL to start on boot
+sudo systemctl enable postgresql
+
+# Start PostgreSQL
+sudo systemctl start postgresql
+
+# Create application database if requested
+if [ "{pg_config.get('create_app_database', True)}" = "True" ]; then
+    DB_NAME="{pg_config.get('database_name', 'app_db')}"
+    sudo -u postgres createdb "$DB_NAME" || true
+    echo "✅ Database '$DB_NAME' created"
+fi
+
+echo "✅ PostgreSQL installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        return success
+    
+    def _install_php(self, config: Dict[str, Any]) -> bool:
+        """Install and configure PHP"""
+        version = config.get('version', '8.1')
+        php_config = config.get('config', {})
+        extensions = php_config.get('extensions', ['pdo', 'pdo_mysql'])
+        
+        # Build extension list
+        ext_packages = []
+        for ext in extensions:
+            if ext == 'pdo':
+                ext_packages.append('php-pdo')
+            elif ext == 'pdo_mysql':
+                ext_packages.append('php-mysql')
+            else:
+                ext_packages.append(f'php-{ext}')
+        
+        ext_list = ' '.join(ext_packages)
+        
+        script = f'''
+set -e
+echo "Installing PHP {version}..."
+
+# Install PHP and extensions
+sudo apt-get update
+sudo apt-get install -y php{version} php{version}-fpm {ext_list}
+
+# Install Composer if requested
+if [ "{php_config.get('enable_composer', True)}" = "True" ]; then
+    curl -sS https://getcomposer.org/installer | php
+    sudo mv composer.phar /usr/local/bin/composer
+    sudo chmod +x /usr/local/bin/composer
+    echo "✅ Composer installed"
+fi
+
+# Configure PHP-FPM if Apache is also enabled
+if systemctl is-active --quiet apache2; then
+    sudo apt-get install -y libapache2-mod-php{version}
+    sudo a2enmod php{version}
+    sudo systemctl reload apache2
+fi
+
+echo "✅ PHP {version} installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        return success
+    
+    def _install_python(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Python"""
+        version = config.get('version', '3.9')
+        python_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing Python {version}..."
+
+# Install Python and pip
+sudo apt-get update
+sudo apt-get install -y python{version} python{version}-pip python{version}-venv
+
+# Create virtual environment if requested
+if [ "{python_config.get('virtual_env', True)}" = "True" ]; then
+    sudo mkdir -p /opt/python-venv
+    sudo python{version} -m venv /opt/python-venv/app
+    sudo chown -R www-data:www-data /opt/python-venv
+    echo "✅ Python virtual environment created"
+fi
+
+echo "✅ Python {version} installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        
+        # Install pip packages if specified
+        pip_packages = python_config.get('pip_packages', [])
+        if pip_packages and success:
+            pip_script = f'''
+set -e
+echo "Installing Python packages: {' '.join(pip_packages)}"
+
+if [ -d "/opt/python-venv/app" ]; then
+    source /opt/python-venv/app/bin/activate
+    pip install {' '.join(pip_packages)}
+else
+    sudo pip{version} install {' '.join(pip_packages)}
+fi
+
+echo "✅ Python packages installed"
+'''
+            success, output = self.client.run_command(pip_script, timeout=180)
+        
+        return success
+    
+    def _install_nodejs(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Node.js"""
+        version = config.get('version', '18')
+        node_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing Node.js {version}..."
+
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_{version}.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install Yarn if requested
+if [ "{node_config.get('package_manager', 'npm')}" = "yarn" ]; then
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+    sudo apt-get update
+    sudo apt-get install -y yarn
+fi
+
+echo "✅ Node.js {version} installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        
+        # Install npm packages if specified
+        npm_packages = node_config.get('npm_packages', [])
+        if npm_packages and success:
+            pkg_manager = node_config.get('package_manager', 'npm')
+            npm_script = f'''
+set -e
+echo "Installing Node.js packages: {' '.join(npm_packages)}"
+sudo {pkg_manager} install -g {' '.join(npm_packages)}
+echo "✅ Node.js packages installed"
+'''
+            success, output = self.client.run_command(npm_script, timeout=180)
+        
+        return success
+    
+    def _install_redis(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Redis"""
+        script = '''
+set -e
+echo "Installing Redis..."
+
+# Install Redis
+sudo apt-get update
+sudo apt-get install -y redis-server
+
+# Enable Redis to start on boot
+sudo systemctl enable redis-server
+
+# Start Redis
+sudo systemctl start redis-server
+
+echo "✅ Redis installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _install_memcached(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Memcached"""
+        script = '''
+set -e
+echo "Installing Memcached..."
+
+# Install Memcached
+sudo apt-get update
+sudo apt-get install -y memcached
+
+# Enable Memcached to start on boot
+sudo systemctl enable memcached
+
+# Start Memcached
+sudo systemctl start memcached
+
+echo "✅ Memcached installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _install_docker(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Docker"""
+        docker_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing Docker..."
+
+# Install Docker
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+
+# Start Docker
+sudo systemctl start docker
+
+# Install Docker Compose if requested
+if [ "{docker_config.get('enable_compose', True)}" = "True" ]; then
+    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "✅ Docker Compose installed"
+fi
+
+echo "✅ Docker installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
+        return success
+    
+    def _install_git(self, config: Dict[str, Any]) -> bool:
+        """Install and configure Git"""
+        git_config = config.get('config', {})
+        
+        script = f'''
+set -e
+echo "Installing Git..."
+
+# Install Git
+sudo apt-get update
+sudo apt-get install -y git
+
+# Install Git LFS if requested
+if [ "{git_config.get('install_lfs', False)}" = "True" ]; then
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    sudo apt-get install -y git-lfs
+    echo "✅ Git LFS installed"
+fi
+
+echo "✅ Git installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _configure_firewall(self, config: Dict[str, Any]) -> bool:
+        """Configure firewall settings"""
+        firewall_config = config.get('config', {})
+        allowed_ports = firewall_config.get('allowed_ports', ['22', '80', '443'])
+        
+        script = f'''
+set -e
+echo "Configuring firewall..."
+
+# Install UFW if not present
+sudo apt-get update
+sudo apt-get install -y ufw
+
+# Reset UFW to defaults
+sudo ufw --force reset
+
+# Set default policies
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Allow specified ports
+'''
+        
+        for port in allowed_ports:
+            script += f'sudo ufw allow {port}\n'
+        
+        script += '''
+# Enable UFW
+sudo ufw --force enable
+
+echo "✅ Firewall configuration completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=120)
+        return success
+    
+    def _install_ssl_certificates(self, config: Dict[str, Any]) -> bool:
+        """Install SSL certificates"""
+        ssl_config = config.get('config', {})
+        provider = ssl_config.get('provider', 'letsencrypt')
+        
+        if provider == 'letsencrypt':
+            script = '''
+set -e
+echo "Installing Certbot for Let's Encrypt..."
+
+# Install Certbot
+sudo apt-get update
+sudo apt-get install -y certbot python3-certbot-apache
+
+echo "✅ Certbot installation completed"
+echo "ℹ️  Run 'sudo certbot --apache' to obtain SSL certificates"
+'''
+        else:
+            print(f"⚠️  SSL provider '{provider}' not implemented")
+            return True  # Don't fail deployment for this
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _install_monitoring_tools(self, config: Dict[str, Any]) -> bool:
+        """Install monitoring tools"""
+        monitoring_config = config.get('config', {})
+        tools = monitoring_config.get('tools', ['htop'])
+        
+        script = f'''
+set -e
+echo "Installing monitoring tools..."
+
+# Install monitoring tools
+sudo apt-get update
+sudo apt-get install -y {' '.join(tools)}
+
+echo "✅ Monitoring tools installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def configure_services(self) -> bool:
+        """Configure installed services"""
+        print("🔧 Configuring installed services...")
+        
+        success = True
+        
+        # Configure web server document root and permissions
+        if 'apache' in self.installed_dependencies or 'nginx' in self.installed_dependencies:
+            success &= self._configure_web_server()
+        
+        # Configure database connections
+        if 'mysql' in self.installed_dependencies:
+            success &= self._configure_mysql_app_access()
+        
+        if 'postgresql' in self.installed_dependencies:
+            success &= self._configure_postgresql_app_access()
+        
+        return success
+    
+    def _configure_web_server(self) -> bool:
+        """Configure web server for application"""
+        script = '''
+set -e
+echo "Configuring web server..."
+
+# Set proper permissions for web directory
+sudo chown -R www-data:www-data /var/www/html
+sudo chmod -R 755 /var/www/html
+
+# Remove default index files that might conflict
+sudo rm -f /var/www/html/index.html
+sudo rm -f /var/www/html/index.nginx-debian.html
+
+echo "✅ Web server configuration completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=60)
+        return success
+    
+    def _configure_mysql_app_access(self) -> bool:
+        """Configure MySQL for application access"""
+        script = '''
+set -e
+echo "Configuring MySQL for application access..."
+
+# Create application user (optional, basic setup)
+# This is a basic setup - production should use more secure credentials
+mysql -u root -proot123 -e "CREATE USER IF NOT EXISTS 'app'@'localhost' IDENTIFIED BY 'app123';" || true
+mysql -u root -proot123 -e "GRANT ALL PRIVILEGES ON app_db.* TO 'app'@'localhost';" || true
+mysql -u root -proot123 -e "FLUSH PRIVILEGES;" || true
+
+echo "✅ MySQL application access configured"
+'''
+        
+        success, output = self.client.run_command(script, timeout=60)
+        return success
+    
+    def _configure_postgresql_app_access(self) -> bool:
+        """Configure PostgreSQL for application access"""
+        script = '''
+set -e
+echo "Configuring PostgreSQL for application access..."
+
+# Create application user (basic setup)
+sudo -u postgres createuser -D -A -P app || true
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE app_db TO app;" || true
+
+echo "✅ PostgreSQL application access configured"
+'''
+        
+        success, output = self.client.run_command(script, timeout=60)
+        return success
+    
+    def restart_services(self) -> bool:
+        """Restart all installed services"""
+        print("🔄 Restarting installed services...")
+        
+        service_map = {
+            'apache': 'apache2',
+            'nginx': 'nginx',
+            'mysql': 'mysql',
+            'postgresql': 'postgresql',
+            'redis': 'redis-server',
+            'memcached': 'memcached',
+            'docker': 'docker'
+        }
+        
+        success = True
+        
+        for dep in self.installed_dependencies:
+            if dep in service_map:
+                service_name = service_map[dep]
+                restart_script = f'''
+set -e
+echo "Restarting {service_name}..."
+sudo systemctl restart {service_name}
+sudo systemctl enable {service_name}
+echo "✅ {service_name} restarted"
+'''
+                
+                svc_success, output = self.client.run_command(restart_script, timeout=60)
+                if not svc_success:
+                    print(f"⚠️  Failed to restart {service_name}")
+                    success = False
+        
+        return success
+    
+    def get_installation_summary(self) -> Dict[str, Any]:
+        """Get summary of dependency installation"""
+        return {
+            'installed': self.installed_dependencies,
+            'failed': self.failed_dependencies,
+            'total_enabled': len(self.get_enabled_dependencies()),
+            'success_rate': len(self.installed_dependencies) / max(1, len(self.get_enabled_dependencies())) * 100
+        }
