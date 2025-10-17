@@ -19,19 +19,19 @@ require_once 'config/database.php';
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Config-Driven LAMP Stack Application v4.0!</h2>";
-                    echo "<p>This is a robust LAMP stack application with configuration-driven deployment architecture.</p>";
-                    echo "<p><strong>🎯 Deployment Test:</strong> This version uses config-driven GitHub Actions workflow!</p>";
-                    echo "<p><strong>🔥 NEW FEATURE:</strong> Configuration-based deployment parameters!</p>";
-                    echo "<p><strong>✨ LATEST UPDATE:</strong> Centralized configuration management with YAML!</p>";
-                    echo "<p><strong>🎉 NEWEST FEATURE:</strong> Dynamic workflow configuration loading!</p>";
-                    echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Multi-job pipeline with config dependencies!</p>";
-                    echo "<p><strong>🛠️ LATEST FIX:</strong> Resolved argument parsing and ConfigLoader issues!</p>";
-                    echo "<p><strong>🆕 VERSION 4.0:</strong> Complete transformation to config-driven architecture!</p>";
-                    echo "<p><strong>⚡ CONFIG-DRIVEN:</strong> All deployment parameters now read from deployment.config.yml!</p>";
+                    echo "<h2>🚀 Hello Welcome - Clean Config-Driven LAMP Stack Application v4.1!</h2>";
+                    echo "<p>This is a streamlined LAMP stack application with clean, config-driven deployment architecture.</p>";
+                    echo "<p><strong>🎯 Deployment Test:</strong> This version uses optimized config-driven GitHub Actions workflow!</p>";
+                    echo "<p><strong>🔥 NEW FEATURE:</strong> Streamlined codebase with only essential files!</p>";
+                    echo "<p><strong>✨ LATEST UPDATE:</strong> Removed all unused files and documentation!</p>";
+                    echo "<p><strong>🎉 NEWEST FEATURE:</strong> Fixed workflow verification after cleanup!</p>";
+                    echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Clean multi-job pipeline with integrated verification!</p>";
+                    echo "<p><strong>🛠️ LATEST FIX:</strong> Resolved verify-deployment.py reference after file cleanup!</p>";
+                    echo "<p><strong>🆕 VERSION 4.1:</strong> Clean, production-ready config-driven deployment!</p>";
+                    echo "<p><strong>⚡ CLEAN & OPTIMIZED:</strong> Only essential files, no bloat, pure config-driven power!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 4.0 - Config-Driven Architecture at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 4.1 - Clean Config-Driven Architecture at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -47,7 +47,7 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 4.0)</h3>
+                <h3>🆕 System Status (Version 4.1)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
