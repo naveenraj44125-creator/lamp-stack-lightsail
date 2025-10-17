@@ -7,9 +7,21 @@ This script handles LAMP stack application deployment and configuration
 import sys
 import argparse
 from lightsail_lamp import LightsailLAMPManager
+from config_loader import ConfigLoader
 
 class LightsailLAMPPostDeployer:
-    def __init__(self, instance_name, region='us-east-1'):
+    def __init__(self, instance_name=None, region=None, config=None):
+        # Initialize configuration
+        if config is None:
+            config = ConfigLoader()
+        
+        # Use config values if parameters not provided
+        if instance_name is None:
+            instance_name = config.get_instance_name()
+        if region is None:
+            region = config.get_aws_region()
+            
+        self.config = config
         self.client = LightsailLAMPManager(instance_name, region)
 
     def deploy_lamp_application(self):
@@ -234,52 +246,74 @@ echo "✅ LAMP deployment finalized"
 
 def main():
     parser = argparse.ArgumentParser(description='LAMP-specific post-deployment steps for AWS Lightsail')
-    parser.add_argument('instance_name', help='Lightsail instance name')
-    parser.add_argument('--region', default='us-east-1', help='AWS region')
+    parser.add_argument('--instance-name', help='Lightsail instance name (overrides config)')
+    parser.add_argument('--region', help='AWS region (overrides config)')
+    parser.add_argument('--config-file', help='Path to configuration file')
     parser.add_argument('--verify', action='store_true', help='Verify LAMP deployment after completion')
     parser.add_argument('--optimize', action='store_true', help='Apply performance optimizations')
     
     args = parser.parse_args()
     
-    print(f"🚀 Starting LAMP-specific post-deployment steps for {args.instance_name}")
-    print(f"🌍 Region: {args.region}")
-    
-    # Create LAMP post-deployer
-    lamp_post_deployer = LightsailLAMPPostDeployer(args.instance_name, args.region)
-    
-    success = True
-    
-    # Deploy LAMP application
-    if not lamp_post_deployer.deploy_lamp_application():
-        print("❌ LAMP application deployment failed")
-        success = False
-    
-    # Configure LAMP services
-    if success and not lamp_post_deployer.configure_lamp_services():
-        print("❌ LAMP services configuration failed")
-        success = False
-    
-    # Apply optimizations if requested
-    if success and args.optimize:
-        if not lamp_post_deployer.optimize_lamp_performance():
-            print("⚠️  LAMP performance optimization failed (non-critical)")
-    
-    # Verify deployment if requested
-    if success and args.verify:
-        if not lamp_post_deployer.verify_lamp_deployment():
-            print("⚠️  LAMP deployment verification failed")
+    try:
+        # Load configuration
+        config = ConfigLoader(config_file=args.config_file)
+        
+        # Use command line args if provided, otherwise use config
+        instance_name = args.instance_name or config.get_instance_name()
+        region = args.region or config.get_aws_region()
+        
+        print(f"🚀 Starting LAMP-specific post-deployment steps for {instance_name}")
+        print(f"🌍 Region: {region}")
+        
+        # Check if LAMP steps are enabled in config
+        if not config.get('deployment.steps.lamp.enabled', True):
+            print("ℹ️  LAMP-specific steps are disabled in configuration")
+            sys.exit(0)
+        
+        # Get configuration options
+        verify_enabled = args.verify or config.get('deployment.steps.lamp.verify', True)
+        optimize_enabled = args.optimize or config.get('deployment.steps.lamp.optimize', False)
+        
+        # Create LAMP post-deployer
+        lamp_post_deployer = LightsailLAMPPostDeployer(instance_name, region, config)
+        
+        success = True
+        
+        # Deploy LAMP application
+        if not lamp_post_deployer.deploy_lamp_application():
+            print("❌ LAMP application deployment failed")
             success = False
-    
-    # Finalize deployment
-    if success:
-        if not lamp_post_deployer.finalize_lamp_deployment():
-            print("⚠️  LAMP deployment finalization had issues (may be non-critical)")
-    
-    if success:
-        print("🎉 LAMP-specific post-deployment steps completed successfully!")
-        sys.exit(0)
-    else:
-        print("❌ LAMP-specific post-deployment steps failed")
+        
+        # Configure LAMP services
+        if success and not lamp_post_deployer.configure_lamp_services():
+            print("❌ LAMP services configuration failed")
+            success = False
+        
+        # Apply optimizations if enabled
+        if success and optimize_enabled:
+            if not lamp_post_deployer.optimize_lamp_performance():
+                print("⚠️  LAMP performance optimization failed (non-critical)")
+        
+        # Verify deployment if enabled
+        if success and verify_enabled:
+            if not lamp_post_deployer.verify_lamp_deployment():
+                print("⚠️  LAMP deployment verification failed")
+                success = False
+        
+        # Finalize deployment
+        if success:
+            if not lamp_post_deployer.finalize_lamp_deployment():
+                print("⚠️  LAMP deployment finalization had issues (may be non-critical)")
+        
+        if success:
+            print("🎉 LAMP-specific post-deployment steps completed successfully!")
+            sys.exit(0)
+        else:
+            print("❌ LAMP-specific post-deployment steps failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"❌ Error in LAMP post-deployment steps: {str(e)}")
         sys.exit(1)
 
 if __name__ == '__main__':

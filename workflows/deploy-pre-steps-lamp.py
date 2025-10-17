@@ -7,9 +7,21 @@ This script handles LAMP stack installation and configuration
 import sys
 import argparse
 from lightsail_lamp import LightsailLAMPManager
+from config_loader import ConfigLoader
 
 class LightsailLAMPPreDeployer:
-    def __init__(self, instance_name, region='us-east-1'):
+    def __init__(self, instance_name=None, region=None, config=None):
+        # Initialize configuration
+        if config is None:
+            config = ConfigLoader()
+        
+        # Use config values if parameters not provided
+        if instance_name is None:
+            instance_name = config.get_instance_name()
+        if region is None:
+            region = config.get_aws_region()
+            
+        self.config = config
         self.client = LightsailLAMPManager(instance_name, region)
 
     def prepare_lamp_environment(self):
@@ -72,22 +84,40 @@ echo "✅ LAMP environment preparation completed"
 
 def main():
     parser = argparse.ArgumentParser(description='LAMP-specific pre-deployment steps for AWS Lightsail')
-    parser.add_argument('instance_name', help='Lightsail instance name')
-    parser.add_argument('--region', default='us-east-1', help='AWS region')
+    parser.add_argument('--instance-name', help='Lightsail instance name (overrides config)')
+    parser.add_argument('--region', help='AWS region (overrides config)')
+    parser.add_argument('--config-file', help='Path to configuration file')
     
     args = parser.parse_args()
     
-    print(f"🔧 Starting LAMP-specific pre-deployment steps for {args.instance_name}")
-    print(f"🌍 Region: {args.region}")
-    
-    # Create LAMP pre-deployer and prepare environment
-    lamp_pre_deployer = LightsailLAMPPreDeployer(args.instance_name, args.region)
-    
-    if lamp_pre_deployer.prepare_lamp_environment():
-        print("🎉 LAMP-specific pre-deployment steps completed successfully!")
-        sys.exit(0)
-    else:
-        print("❌ LAMP-specific pre-deployment steps failed")
+    try:
+        # Load configuration
+        config = ConfigLoader(config_file=args.config_file)
+        
+        # Use command line args if provided, otherwise use config
+        instance_name = args.instance_name or config.get_instance_name()
+        region = args.region or config.get_aws_region()
+        
+        print(f"🔧 Starting LAMP-specific pre-deployment steps for {instance_name}")
+        print(f"🌍 Region: {region}")
+        
+        # Check if LAMP steps are enabled in config
+        if not config.get('deployment.steps.lamp.enabled', True):
+            print("ℹ️  LAMP-specific steps are disabled in configuration")
+            sys.exit(0)
+        
+        # Create LAMP pre-deployer and prepare environment
+        lamp_pre_deployer = LightsailLAMPPreDeployer(instance_name, region, config)
+        
+        if lamp_pre_deployer.prepare_lamp_environment():
+            print("🎉 LAMP-specific pre-deployment steps completed successfully!")
+            sys.exit(0)
+        else:
+            print("❌ LAMP-specific pre-deployment steps failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"❌ Error in LAMP pre-deployment steps: {str(e)}")
         sys.exit(1)
 
 if __name__ == '__main__':
