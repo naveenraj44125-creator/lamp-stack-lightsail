@@ -7,11 +7,11 @@ This script handles general environment preparation that applies to any deployme
 import sys
 import argparse
 from lightsail_common import create_lightsail_client
-from config_loader import load_deployment_config
+from config_loader import ConfigLoader
 
 class LightsailCommonPreDeployer:
     def __init__(self, instance_name=None, region=None, config=None):
-        self.config = config or load_deployment_config()
+        self.config = config or ConfigLoader()
         self.instance_name = instance_name or self.config.get_instance_name()
         self.region = region or self.config.get_aws_region()
         self.client = create_lightsail_client(self.instance_name, self.region, 'ssh')
@@ -20,17 +20,14 @@ class LightsailCommonPreDeployer:
         """Prepare common environment for any deployment"""
         print(f"🔧 Preparing common environment for deployment")
         
-        # Get step configuration
-        step_config = self.config.get_step_config('pre_deployment.common')
-        
         # Check if this step is enabled
-        if not self.config.is_step_enabled('pre_deployment.common'):
+        if not self.config.get('deployment.steps.common.enabled', True):
             print("ℹ️  Common pre-deployment steps are disabled in configuration")
             return True
         
         # Check if instance is running and SSH is ready
         print("🔍 Checking SSH connectivity...")
-        ssh_timeout = self.config.get_timeout('ssh_connection')
+        ssh_timeout = self.config.get('deployment.timeouts.ssh_connection', 300)
         if not self.client.wait_for_ssh_ready(timeout=ssh_timeout):
             print("❌ SSH connection failed")
             return False
@@ -41,8 +38,7 @@ class LightsailCommonPreDeployer:
         print("📁 Preparing deployment directory...")
         
         # Get backup configuration
-        backup_config = self.config.get_backup_config()
-        backup_location = backup_config.get('backup_location', '/var/backups/deployments')
+        backup_location = self.config.get('backup.backup_location', '/var/backups/deployments')
         
         prep_script = f'''
 set -e
@@ -57,7 +53,7 @@ sudo chown $(whoami):$(whoami) {backup_location}
 '''
         
         # Add package update if enabled
-        if step_config.get('update_packages', True):
+        if self.config.get('deployment.steps.common.update_packages', True):
             prep_script += '''
 # Update system packages (non-interactive)
 echo "Updating system packages..."
@@ -68,8 +64,8 @@ sudo apt-get update -qq > /dev/null 2>&1 || echo "Package update completed with 
 echo "✅ Common environment preparation completed"
 '''
         
-        timeout = self.config.get_timeout('command_execution')
-        max_retries = self.config.get_max_retries()
+        timeout = self.config.get('deployment.timeouts.command_execution', 300)
+        max_retries = self.config.get('deployment.max_retries', 3)
         
         success, output = self.client.run_command(prep_script, timeout=timeout, max_retries=max_retries)
         if not success:
@@ -90,8 +86,7 @@ def main():
     
     try:
         # Load configuration
-        config = load_deployment_config(args.config)
-        config.print_config_summary()
+        config = ConfigLoader(config_file=args.config)
         
         # Create pre-deployer and prepare environment
         pre_deployer = LightsailCommonPreDeployer(
