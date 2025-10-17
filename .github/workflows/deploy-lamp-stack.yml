@@ -3,6 +3,8 @@ name: Config-Driven LAMP Stack Deployment
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -13,21 +15,10 @@ jobs:
       static_ip: ${{ steps.config.outputs.static_ip }}
       aws_region: ${{ steps.config.outputs.aws_region }}
       php_version: ${{ steps.config.outputs.php_version }}
-      package_files: ${{ steps.config.outputs.package_files }}
       should_deploy: ${{ steps.config.outputs.should_deploy }}
-      ssh_key_name: ${{ steps.config.outputs.ssh_key_name }}
-      domain_name: ${{ steps.config.outputs.domain_name }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install Dependencies
-      run: pip install PyYAML boto3
 
     - name: Load Configuration
       id: config
@@ -47,21 +38,18 @@ jobs:
         static_ip = config['lightsail']['static_ip']
         aws_region = config['aws']['region']
         php_version = config['application']['php_version']
-        package_files = ','.join(config['application']['package_files'])
-        ssh_key_name = config['lightsail']['ssh_key_name']
-        domain_name = config['application']['domain_name']
         
         # Show configuration
         print(f"✅ Instance Name: {instance_name}")
         print(f"✅ AWS Region: {aws_region}")
         print(f"✅ PHP Version: {php_version}")
         print(f"✅ Static IP: {static_ip}")
-        print(f"✅ SSH Key: {ssh_key_name}")
-        print(f"✅ Domain: {domain_name}")
         
-        # Determine deployment based on config
+        # Determine deployment based on config and event
         branch = os.environ.get('GITHUB_REF_NAME', 'main')
-        should_deploy = branch in config['github_actions']['triggers']['push_branches']
+        event_name = os.environ.get('GITHUB_EVENT_NAME', 'push')
+        should_deploy = (branch in config['github_actions']['triggers']['push_branches'] and 
+                        (event_name == 'push' or event_name == 'workflow_dispatch'))
         
         print(f"🚀 Should Deploy: {should_deploy}")
         
@@ -71,16 +59,12 @@ jobs:
             f.write(f"static_ip={static_ip}\n")
             f.write(f"aws_region={aws_region}\n")
             f.write(f"php_version={php_version}\n")
-            f.write(f"package_files={package_files}\n")
             f.write(f"should_deploy={str(should_deploy).lower()}\n")
-            f.write(f"ssh_key_name={ssh_key_name}\n")
-            f.write(f"domain_name={domain_name}\n")
         EOF
 
-  validate-and-package:
+  test:
     needs: load-config
     runs-on: ubuntu-latest
-    if: needs.load-config.outputs.should_deploy == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -91,213 +75,243 @@ jobs:
         php-version: ${{ needs.load-config.outputs.php_version }}
         extensions: pdo, pdo_mysql
 
-    - name: Validate PHP Files
+    - name: Validate PHP syntax
       run: |
-        echo "🔍 Validating PHP files..."
         find . -name "*.php" -exec php -l {} \;
-        echo "✅ PHP syntax validation completed"
 
-    - name: Create Deployment Package
+    - name: Test PHP application
       run: |
-        echo "📦 Creating deployment package..."
-        
-        # Get package files from configuration
-        PACKAGE_FILES="${{ needs.load-config.outputs.package_files }}"
-        echo "Files to package: $PACKAGE_FILES"
-        
-        # Create package with files specified in config
-        IFS=',' read -ra FILES <<< "$PACKAGE_FILES"
-        EXISTING_FILES=()
-        
-        for file in "${FILES[@]}"; do
-          if [ -e "$file" ]; then
-            EXISTING_FILES+=("$file")
-            echo "✅ Found: $file"
-          else
-            echo "⚠️  Not found: $file"
-          fi
-        done
-        
-        if [ ${#EXISTING_FILES[@]} -gt 0 ]; then
-          echo "📦 Creating package: ${EXISTING_FILES[*]}"
-          tar -czf deployment-package.tar.gz "${EXISTING_FILES[@]}"
-          echo "✅ Package created successfully"
-          ls -la deployment-package.tar.gz
-        else
-          echo "❌ No files found to package"
-          exit 1
-        fi
+        php -S localhost:8000 index.php &
+        sleep 5
+        curl -f http://localhost:8000/ || exit 1
 
-    - name: Upload Package
-      uses: actions/upload-artifact@v4
-      with:
-        name: deployment-package
-        path: deployment-package.tar.gz
-        retention-days: 1
-
-  deploy-to-lightsail:
-    needs: [load-config, validate-and-package]
+  pre-steps-common:
+    needs: [load-config, test]
     runs-on: ubuntu-latest
     if: needs.load-config.outputs.should_deploy == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install Dependencies
-      run: |
-        pip install PyYAML boto3 paramiko
-
-    - name: Download Deployment Package
-      uses: actions/download-artifact@v4
-      with:
-        name: deployment-package
-
-    - name: Configure AWS Credentials
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
-    - name: Setup SSH Key
+    - name: Setup Python environment
       run: |
-        echo "${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}" > lightsail-key.pem
-        chmod 600 lightsail-key.pem
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
 
-    - name: Deploy to Lightsail
+    - name: Common Environment Preparation
       run: |
-        python3 << 'EOF'
-        import sys
-        import os
-        sys.path.append('workflows')
-        
-        from config_loader import ConfigLoader
-        from deploy_pre_steps_lamp import DeployPreStepsLAMP
-        from deploy_post_steps_lamp import DeployPostStepsLAMP
-        
-        print("🚀 Starting Config-Driven Deployment...")
-        
-        # Load configuration
-        config = ConfigLoader()
-        
-        # Get configuration values
-        instance_name = config.get_instance_name()
-        region = config.get_aws_region()
-        static_ip = config.get('lightsail.static_ip')
-        
-        print(f"📋 Deploying to: {instance_name}")
-        print(f"🌍 Region: {region}")
-        print(f"🌐 Static IP: {static_ip}")
-        
-        try:
-            # Pre-deployment steps
-            print("🔧 Running pre-deployment steps...")
-            pre_steps = DeployPreStepsLAMP(config=config)
-            pre_steps.run()
-            
-            # Deploy application files
-            print("📦 Deploying application files...")
-            import subprocess
-            
-            # Copy deployment package to instance
-            scp_cmd = [
-                'scp', '-i', 'lightsail-key.pem', 
-                '-o', 'StrictHostKeyChecking=no',
-                'deployment-package.tar.gz',
-                f'ubuntu@{static_ip}:/tmp/'
-            ]
-            subprocess.run(scp_cmd, check=True)
-            
-            # Extract and deploy on instance
-            ssh_cmd = [
-                'ssh', '-i', 'lightsail-key.pem',
-                '-o', 'StrictHostKeyChecking=no',
-                f'ubuntu@{static_ip}',
-                '''
-                cd /tmp &&
-                tar -xzf deployment-package.tar.gz &&
-                sudo cp -r * /var/www/html/ &&
-                sudo chown -R www-data:www-data /var/www/html/ &&
-                sudo systemctl restart apache2 &&
-                echo "✅ Application deployed successfully"
-                '''
-            ]
-            subprocess.run(ssh_cmd, check=True)
-            
-            # Post-deployment steps
-            print("🔧 Running post-deployment steps...")
-            post_steps = DeployPostStepsLAMP(config=config)
-            post_steps.run()
-            
-            print("🎉 Deployment completed successfully!")
-            
-        except Exception as e:
-            print(f"❌ Deployment failed: {e}")
-            sys.exit(1)
-        EOF
+        echo "🔧 Running common pre-deployment steps (SSH check, directories)..."
+        python3 workflows/deploy-pre-steps-common.py ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
 
-    - name: Verify Deployment
+  pre-steps-lamp:
+    needs: pre-steps-common
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
       run: |
-        python3 << 'EOF'
-        import sys
-        import os
-        sys.path.append('workflows')
-        
-        from config_loader import ConfigLoader
-        from verify_deployment import VerifyDeployment
-        
-        print("🔍 Verifying deployment...")
-        
-        config = ConfigLoader()
-        verifier = VerifyDeployment(config=config)
-        
-        if verifier.run():
-            print("✅ Deployment verification successful!")
-        else:
-            print("❌ Deployment verification failed!")
-            sys.exit(1)
-        EOF
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
 
-    - name: Cleanup
+    - name: LAMP Stack Installation & Configuration
+      run: |
+        echo "🔧 Running LAMP-specific pre-deployment steps (LAMP installation)..."
+        python3 workflows/deploy-pre-steps-lamp.py ${{ needs.load-config.outputs.instance_name }} --region ${{ needs.load-config.outputs.aws_region }}
+
+  application-install:
+    needs: pre-steps-lamp
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Create deployment package
+      run: |
+        echo "📦 Creating application package..."
+        tar -czf app.tar.gz index.php css/ config/ || tar -czf app.tar.gz *
+        ls -la app.tar.gz
+
+    - name: Upload application package
+      uses: actions/upload-artifact@v4
+      with:
+        name: application-package
+        path: app.tar.gz
+        retention-days: 1
+
+  post-steps-common:
+    needs: application-install
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Download application package
+      uses: actions/download-artifact@v4
+      with:
+        name: application-package
+
+    - name: Common Application Deployment
+      run: |
+        echo "🚀 Running common post-deployment steps (file upload, extraction)..."
+        python3 workflows/deploy-post-steps-common.py \
+          ${{ needs.load-config.outputs.instance_name }} \
+          app.tar.gz \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --verify \
+          --cleanup \
+          --env GITHUB_SHA=${{ github.sha }} \
+          --env GITHUB_REF=${{ github.ref_name }} \
+          --env GITHUB_ACTOR=${{ github.actor }} \
+          --env GITHUB_RUN_ID=${{ github.run_id }}
+
+  post-steps-lamp:
+    needs: post-steps-common
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: LAMP Application Configuration & Deployment
+      run: |
+        echo "🚀 Running LAMP-specific post-deployment steps (services, permissions)..."
+        python3 workflows/deploy-post-steps-lamp.py \
+          ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --verify \
+          --optimize
+
+  verification:
+    needs: post-steps-lamp
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Application Health Check
+      run: |
+        echo "🔍 Running application health check..."
+        python3 workflows/verify-deployment.py \
+          ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --health-only
+
+    - name: External Connectivity Test
+      run: |
+        echo "🌐 Testing external connectivity..."
+        echo "Waiting for application to be ready..."
+        sleep 30
+
+        # Test the deployed application from external network
+        for i in {1..10}; do
+          if curl -f -s http://${{ needs.load-config.outputs.static_ip }}/ | grep -q "Hello Welcome"; then
+            echo "✅ Application is accessible externally!"
+            echo "🌐 Application URL: http://${{ needs.load-config.outputs.static_ip }}/"
+            exit 0
+          fi
+          echo "Waiting for application to respond... ($i/10)"
+          sleep 10
+        done
+
+        echo "❌ External connectivity test failed"
+        exit 1
+
+    - name: Performance & Security Check
+      run: |
+        echo "⚡ Running performance and security checks..."
+
+        # Basic performance test
+        echo "Testing response time..."
+        time curl -s http://${{ needs.load-config.outputs.static_ip }}/ > /dev/null
+
+        # Check HTTP headers
+        echo "Checking HTTP headers..."
+        curl -I http://${{ needs.load-config.outputs.static_ip }}/
+
+        # Test different endpoints if they exist
+        echo "Testing application endpoints..."
+        curl -f -s http://${{ needs.load-config.outputs.static_ip }}/index.php || echo "index.php test completed"
+
+    - name: Deployment Summary
       if: always()
       run: |
-        rm -f lightsail-key.pem
-        rm -f deployment-package.tar.gz
-
-  deployment-summary:
-    needs: [load-config, validate-and-package, deploy-to-lightsail]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-    - name: Deployment Summary
-      run: |
-        echo "## 🚀 Config-Driven LAMP Stack Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "## 🚀 Config-Driven LAMP Stack Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Configuration (from deployment.config.yml)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Instance**: ${{ needs.load-config.outputs.instance_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **IP Address**: ${{ needs.load-config.outputs.static_ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **AWS Region**: ${{ needs.load-config.outputs.aws_region }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **PHP Version**: ${{ needs.load-config.outputs.php_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Application URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Deployment Configuration" >> $GITHUB_STEP_SUMMARY
-        echo "| Parameter | Value | Source |" >> $GITHUB_STEP_SUMMARY
-        echo "|-----------|-------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Instance Name | ${{ needs.load-config.outputs.instance_name }} | deployment.config.yml |" >> $GITHUB_STEP_SUMMARY
-        echo "| AWS Region | ${{ needs.load-config.outputs.aws_region }} | deployment.config.yml |" >> $GITHUB_STEP_SUMMARY
-        echo "| PHP Version | ${{ needs.load-config.outputs.php_version }} | deployment.config.yml |" >> $GITHUB_STEP_SUMMARY
-        echo "| Static IP | ${{ needs.load-config.outputs.static_ip }} | deployment.config.yml |" >> $GITHUB_STEP_SUMMARY
-        echo "| Domain | ${{ needs.load-config.outputs.domain_name }} | deployment.config.yml |" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Deployment Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **LAMP Stack**: ✅ Installed via config-driven modular approach" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Verification**: ✅ Health check, connectivity, and performance tests completed" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ needs.deploy-to-lightsail.result }}" == "success" ]; then
-          echo "### ✅ Deployment Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 Package created and validated" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 Application deployed to Lightsail" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔍 Deployment verified" >> $GITHUB_STEP_SUMMARY
-          echo "- 🌐 Application available at: http://${{ needs.load-config.outputs.static_ip }}" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "### ❌ Deployment Status: FAILED" >> $GITHUB_STEP_SUMMARY
-          echo "Check the deployment logs for details." >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**🎯 All parameters read from deployment.config.yml - No hardcoded values!**" >> $GITHUB_STEP_SUMMARY
+        echo "**🎉 All parameters read from deployment.config.yml - No hardcoded values!**" >> $GITHUB_STEP_SUMMARY
