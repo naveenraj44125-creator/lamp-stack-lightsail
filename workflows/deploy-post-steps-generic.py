@@ -146,6 +146,14 @@ echo "Service check completed"
         else:
             target_dir = '/opt/app'
         
+        # First, copy the package file to the remote instance
+        print(f"📤 Uploading package file {package_file} to remote instance...")
+        remote_package_path = f"/tmp/{package_file}"
+        
+        if not self.client.copy_file_to_instance(package_file, remote_package_path):
+            print(f"❌ Failed to upload package file to remote instance")
+            return False
+        
         script = f'''
 set -e
 echo "Deploying application files to {target_dir}..."
@@ -435,13 +443,13 @@ fi
         """Set up application-specific configurations"""
         app_type = self.config.get('application.type', 'web')
         
-        script = f'''
+        script = '''
 set -e
 echo "Setting up application-specific configurations..."
 
 # Set up log rotation
 cat > /tmp/app-logs << 'EOF'
-/var/log/app/*.log {{
+/var/log/app/*.log {
     daily
     missingok
     rotate 14
@@ -449,7 +457,7 @@ cat > /tmp/app-logs << 'EOF'
     delaycompress
     notifempty
     create 644 ubuntu ubuntu
-}}
+}
 EOF
 
 sudo mv /tmp/app-logs /etc/logrotate.d/app
