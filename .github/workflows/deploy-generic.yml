@@ -177,7 +177,7 @@ jobs:
           echo "✅ Configuration file is valid YAML"
         fi
 
-  pre-steps-common:
+  pre-steps-generic:
     needs: [load-config, test]
     runs-on: ubuntu-latest
     if: needs.load-config.outputs.should_deploy == 'true'
@@ -197,16 +197,16 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3
 
-    - name: Common Environment Preparation
+    - name: Generic Environment Preparation & Dependency Installation
       run: |
-        echo "🔧 Running common pre-deployment steps (SSH check, directories)..."
-        python3 workflows/deploy-pre-steps-common.py \
+        echo "🔧 Running generic pre-deployment steps (SSH check, directories, dependencies)..."
+        python3 workflows/deploy-pre-steps-generic.py \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config deployment-generic.config.yml
+          --config-file deployment-generic.config.yml
 
-  pre-steps-dependencies:
-    needs: [load-config, pre-steps-common]
+  application-package:
+    needs: [load-config, pre-steps-generic]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
@@ -218,26 +218,6 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
-
-    - name: Setup Python environment
-      run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install boto3
-
-    - name: Generic Dependency Installation & Configuration
-      run: |
-        echo "🔧 Installing and configuring dependencies: ${{ needs.load-config.outputs.enabled_dependencies }}"
-        python3 workflows/deploy-pre-steps-generic.py \
-          --instance-name ${{ needs.load-config.outputs.instance_name }} \
-          --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file deployment-generic.config.yml
-
-  application-package:
-    needs: [load-config, pre-steps-dependencies]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
 
     - name: Create deployment package
       run: |
@@ -286,7 +266,7 @@ jobs:
         path: app.tar.gz
         retention-days: 1
 
-  post-steps-common:
+  post-steps-generic:
     needs: [load-config, application-package]
     runs-on: ubuntu-latest
     steps:
@@ -310,14 +290,14 @@ jobs:
       with:
         name: application-package
 
-    - name: Common Application Deployment
+    - name: Generic Application Deployment & Configuration
       run: |
-        echo "🚀 Running common post-deployment steps (file upload, extraction)..."
-        python3 workflows/deploy-post-steps-common.py \
+        echo "🚀 Running generic application deployment and configuration..."
+        python3 workflows/deploy-post-steps-generic.py \
           app.tar.gz \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config deployment-generic.config.yml \
+          --config-file deployment-generic.config.yml \
           --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
@@ -327,43 +307,8 @@ jobs:
           --env APP_TYPE=${{ needs.load-config.outputs.app_type }} \
           --env APP_VERSION=${{ needs.load-config.outputs.app_version }}
 
-  post-steps-application:
-    needs: [load-config, post-steps-common]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ needs.load-config.outputs.aws_region }}
-
-    - name: Setup Python environment
-      run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install boto3
-
-    - name: Download application package
-      uses: actions/download-artifact@v4
-      with:
-        name: application-package
-
-    - name: Generic Application Configuration & Deployment
-      run: |
-        echo "🚀 Running generic application deployment and configuration..."
-        python3 workflows/deploy-post-steps-generic.py \
-          app.tar.gz \
-          --instance-name ${{ needs.load-config.outputs.instance_name }} \
-          --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file deployment-generic.config.yml \
-          --verify \
-          --cleanup
-
   verification:
-    needs: [load-config, post-steps-application]
+    needs: [load-config, post-steps-generic]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
