@@ -13,25 +13,25 @@ require_once 'config/database.php';
 <body>
     <div class="container">
         <header>
-            <h1>LAMP Stack Application</h1>
+            <h1>Generic Application Deployment System</h1>
         </header>
         
         <main>
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Clean Config-Driven LAMP Stack Application v4.1!</h2>";
-                    echo "<p>This is a streamlined LAMP stack application with clean, config-driven deployment architecture.</p>";
-                    echo "<p><strong>🎯 Deployment Test:</strong> This version uses optimized config-driven GitHub Actions workflow!</p>";
-                    echo "<p><strong>🔥 NEW FEATURE:</strong> Streamlined codebase with only essential files!</p>";
-                    echo "<p><strong>✨ LATEST UPDATE:</strong> Removed all unused files and documentation!</p>";
-                    echo "<p><strong>🎉 NEWEST FEATURE:</strong> Fixed workflow verification after cleanup!</p>";
-                    echo "<p><strong>🚀 ADVANCED FEATURE:</strong> Clean multi-job pipeline with integrated verification!</p>";
-                    echo "<p><strong>🛠️ LATEST FIX:</strong> Resolved verify-deployment.py reference after file cleanup!</p>";
-                    echo "<p><strong>🆕 VERSION 4.1:</strong> Clean, production-ready config-driven deployment!</p>";
-                    echo "<p><strong>⚡ CLEAN & OPTIMIZED:</strong> Only essential files, no bloat, pure config-driven power!</p>";
+                    echo "<h2>🚀 Hello Welcome - Generic Deployment System v2.0.0!</h2>";
+                    echo "<p>This application is deployed using the new <strong>Generic Deployment System</strong> that works with any application stack!</p>";
+                    echo "<p><strong>🎯 NEW ARCHITECTURE:</strong> Fully configurable dependency system - no more LAMP-only limitations!</p>";
+                    echo "<p><strong>🔥 MAJOR UPGRADE:</strong> Support for Apache, Nginx, MySQL, PostgreSQL, PHP, Python, Node.js, Redis, Docker & more!</p>";
+                    echo "<p><strong>✨ SMART DEPLOYMENT:</strong> Automatically installs only the dependencies you enable in config!</p>";
+                    echo "<p><strong>🎉 ADAPTIVE TESTING:</strong> Runs PHP, Python, or Node.js tests based on your configuration!</p>";
+                    echo "<p><strong>🚀 MODULAR DESIGN:</strong> Each dependency is independent and reusable across different application types!</p>";
+                    echo "<p><strong>🛠️ PRODUCTION READY:</strong> Comprehensive error handling, file upload, and service optimization!</p>";
+                    echo "<p><strong>🆕 VERSION 2.0.0:</strong> Complete transformation from LAMP-specific to fully generic system!</p>";
+                    echo "<p><strong>⚡ CONFIGURATION-DRIVEN:</strong> Simple enabled: true/false flags control entire deployment stack!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 4.1 - Clean Config-Driven Architecture at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 2.0.0 - Generic Deployment System at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -47,7 +47,7 @@ require_once 'config/database.php';
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 4.1)</h3>
+                <h3>🆕 System Status (Version 2.0.0)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
