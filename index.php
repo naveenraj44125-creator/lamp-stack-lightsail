@@ -7,7 +7,7 @@ require_once 'config/database.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LAMP Stack Application</title>
+    <title>Generic Application Deployment System v2.0.0</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -71,7 +71,7 @@ require_once 'config/database.php';
         </main>
         
         <footer>
-            <p>&copy; 2025 LAMP Stack Demo Application</p>
+            <p>&copy; 2025 Generic Application Deployment System v2.0.0</p>
         </footer>
     </div>
 </body>
