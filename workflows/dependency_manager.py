@@ -9,6 +9,7 @@ import sys
 import json
 from typing import Dict, List, Any, Tuple
 from config_loader import DeploymentConfig
+from lightsail_rds import LightsailRDSManager
 
 class DependencyManager:
     """Manages installation and configuration of application dependencies"""
@@ -89,7 +90,11 @@ class DependencyManager:
     def _install_dependency(self, dep_name: str) -> bool:
         """Install a specific dependency"""
         dep_config = self.config.get(f'dependencies.{dep_name}', {})
-        
+
+        # Check if this is an external RDS database
+        if dep_name in ['mysql', 'postgresql'] and dep_config.get('external', False):
+            return self._install_external_database(dep_name, dep_config)
+
         if dep_name == 'apache':
             return self._install_apache(dep_config)
         elif dep_name == 'nginx':
@@ -686,7 +691,175 @@ echo "✅ {service_name} restarted"
                     success = False
         
         return success
+
+    def _install_external_database(self, db_type: str, config: Dict[str, Any]) -> bool:
+        """
+        Install external RDS database client and configure connection
+        
+        Args:
+            db_type: Database type ('mysql' or 'postgresql')
+            config: Database configuration from deployment config
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            print(f"🔗 Configuring external {db_type.upper()} RDS database...")
+            
+            # Get RDS configuration
+            rds_config = config.get('rds', {})
+            db_name = rds_config.get('database_name')
+            
+            if not db_name:
+                print(f"❌ RDS database name not specified in configuration")
+                return False
+            
+            # Initialize RDS manager
+            rds_manager = LightsailRDSManager(
+                region=rds_config.get('region', 'us-east-1'),
+                access_key=rds_config.get('access_key'),
+                secret_key=rds_config.get('secret_key')
+            )
+            
+            # Get RDS connection details
+            print(f"📡 Retrieving RDS connection details for {db_name}...")
+            connection_details = rds_manager.get_rds_connection_details(db_name)
+            
+            if not connection_details:
+                print(f"❌ Failed to retrieve RDS connection details for {db_name}")
+                return False
+            
+            # Install database client
+            print(f"📦 Installing {db_type} client...")
+            client_success = self._install_database_client(db_type)
+            
+            if not client_success:
+                print(f"❌ Failed to install {db_type} client")
+                return False
+            
+            # Test database connectivity
+            print(f"🔍 Testing database connectivity...")
+            connectivity_success = rds_manager.test_database_connectivity(
+                db_name, 
+                connection_details
+            )
+            
+            if not connectivity_success:
+                print(f"⚠️  Database connectivity test failed, but continuing...")
+            
+            # Configure environment variables for application
+            print(f"⚙️  Configuring environment variables...")
+            env_success = self._configure_database_environment(
+                db_type, 
+                connection_details, 
+                config
+            )
+            
+            if not env_success:
+                print(f"⚠️  Failed to configure environment variables")
+                return False
+            
+            print(f"✅ External {db_type.upper()} RDS database configured successfully")
+            print(f"   Host: {connection_details['host']}")
+            print(f"   Port: {connection_details['port']}")
+            print(f"   Database: {connection_details['database']}")
+            print(f"   Username: {connection_details['username']}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error configuring external {db_type} database: {str(e)}")
+            return False
     
+    def _install_database_client(self, db_type: str) -> bool:
+        """Install database client tools"""
+        if db_type == 'mysql':
+            script = '''
+set -e
+echo "Installing MySQL client..."
+
+# Install MySQL client
+sudo apt-get update
+sudo apt-get install -y mysql-client
+
+echo "✅ MySQL client installation completed"
+'''
+        elif db_type == 'postgresql':
+            script = '''
+set -e
+echo "Installing PostgreSQL client..."
+
+# Install PostgreSQL client
+sudo apt-get update
+sudo apt-get install -y postgresql-client
+
+echo "✅ PostgreSQL client installation completed"
+'''
+        else:
+            print(f"❌ Unsupported database type: {db_type}")
+            return False
+        
+        success, output = self.client.run_command(script, timeout=180)
+        return success
+    
+    def _configure_database_environment(self, db_type: str, connection_details: Dict[str, Any], config: Dict[str, Any]) -> bool:
+        """Configure environment variables for database connection"""
+        try:
+            # Create environment file for database configuration
+            env_vars = {
+                f'DB_TYPE': db_type.upper(),
+                f'DB_HOST': connection_details['host'],
+                f'DB_PORT': str(connection_details['port']),
+                f'DB_NAME': connection_details['database'],
+                f'DB_USERNAME': connection_details['username'],
+                f'DB_PASSWORD': connection_details['password'],
+                f'DB_EXTERNAL': 'true'
+            }
+            
+            # Add any custom environment variables from config
+            custom_env = config.get('environment', {})
+            env_vars.update(custom_env)
+            
+            # Create environment file
+            env_content = '\n'.join([f'{key}={value}' for key, value in env_vars.items()])
+            
+            script = f'''
+set -e
+echo "Configuring database environment variables..."
+
+# Create environment file
+sudo mkdir -p /opt/app
+cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
+{env_content}
+EOF
+
+# Set proper permissions
+sudo chmod 600 /opt/app/database.env
+sudo chown root:root /opt/app/database.env
+
+# Create symlink for easy access
+sudo ln -sf /opt/app/database.env /var/www/html/.env 2>/dev/null || true
+
+echo "✅ Database environment configuration completed"
+echo "Environment file created at: /opt/app/database.env"
+'''
+            
+            success, output = self.client.run_command(script, timeout=60)
+            
+            if success:
+                print("📝 Database environment variables configured:")
+                for key, value in env_vars.items():
+                    if 'PASSWORD' in key:
+                        print(f"   {key}=***")
+                    else:
+                        print(f"   {key}={value}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error configuring database environment: {str(e)}")
+            return False
+
     def get_installation_summary(self) -> Dict[str, Any]:
         """Get summary of dependency installation"""
         return {

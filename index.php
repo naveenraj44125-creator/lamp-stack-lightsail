@@ -37,10 +37,13 @@ require_once 'config/database.php';
             
             <div class="info-section">
                 <h3>Application Information</h3>
+                <?php $dbConfig = getDatabaseConfig(); ?>
                 <ul>
                     <li><strong>Server:</strong> Apache</li>
                     <li><strong>Language:</strong> PHP <?php echo phpversion(); ?></li>
-                    <li><strong>Database:</strong> MySQL/MariaDB</li>
+                    <li><strong>Database:</strong> <?php echo $dbConfig['external'] ? 'AWS Lightsail RDS' : 'Local'; ?> <?php echo $dbConfig['type']; ?></li>
+                    <li><strong>DB Host:</strong> <?php echo $dbConfig['host'] . ':' . $dbConfig['port']; ?></li>
+                    <li><strong>DB Name:</strong> <?php echo $dbConfig['database']; ?></li>
                     <li><strong>OS:</strong> Linux</li>
                     <li><strong>DB Status:</strong> <?php echo getDatabaseStatus(); ?></li>
                 </ul>

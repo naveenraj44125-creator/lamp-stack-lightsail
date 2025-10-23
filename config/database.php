@@ -1,17 +1,48 @@
 <?php
 /**
- * Database Configuration for LAMP Stack Application
+ * Database Configuration for Generic Application
  * 
  * This file contains the database connection settings.
- * Modify these settings according to your MySQL/MariaDB setup.
+ * Supports both local database and external RDS configurations.
+ * RDS configuration is loaded from environment variables.
  */
 
-// Database configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'lamp_app');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
+// Load environment variables from .env file if it exists
+if (file_exists(__DIR__ . '/../.env')) {
+    $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) {
+            continue; // Skip comments
+        }
+        list($name, $value) = explode('=', $line, 2);
+        $_ENV[trim($name)] = trim($value);
+    }
+}
+
+// Check if external RDS database is configured
+$isExternalDB = isset($_ENV['DB_EXTERNAL']) && $_ENV['DB_EXTERNAL'] === 'true';
+
+if ($isExternalDB) {
+    // External RDS Database configuration from environment variables
+    define('DB_HOST', $_ENV['DB_HOST'] ?? 'localhost');
+    define('DB_NAME', $_ENV['DB_NAME'] ?? 'app_db');
+    define('DB_USER', $_ENV['DB_USERNAME'] ?? 'root');
+    define('DB_PASS', $_ENV['DB_PASSWORD'] ?? '');
+    define('DB_PORT', $_ENV['DB_PORT'] ?? '3306');
+    define('DB_TYPE', $_ENV['DB_TYPE'] ?? 'MYSQL');
+    define('DB_CHARSET', $_ENV['DB_CHARSET'] ?? 'utf8mb4');
+    define('DB_EXTERNAL', true);
+} else {
+    // Local database configuration (fallback)
+    define('DB_HOST', 'localhost');
+    define('DB_NAME', 'lamp_app');
+    define('DB_USER', 'root');
+    define('DB_PASS', '');
+    define('DB_PORT', '3306');
+    define('DB_TYPE', 'MYSQL');
+    define('DB_CHARSET', 'utf8mb4');
+    define('DB_EXTERNAL', false);
+}
 
 /**
  * Create database connection
@@ -20,7 +51,14 @@ define('DB_CHARSET', 'utf8mb4');
  */
 function getDatabaseConnection() {
     try {
-        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+        // Build DSN based on database type
+        if (DB_TYPE === 'POSTGRESQL') {
+            $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
+        } else {
+            // Default to MySQL
+            $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+        }
+        
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -58,10 +96,16 @@ function getDatabaseStatus() {
         if (testDatabaseConnection()) {
             $connection = getDatabaseConnection();
             if ($connection) {
-                // Get database version
-                $stmt = $connection->query('SELECT VERSION() as version');
+                // Get database version based on type
+                if (DB_TYPE === 'POSTGRESQL') {
+                    $stmt = $connection->query('SELECT version() as version');
+                } else {
+                    $stmt = $connection->query('SELECT VERSION() as version');
+                }
                 $result = $stmt->fetch();
-                return "✅ Connected to " . $result['version'];
+                
+                $dbType = DB_EXTERNAL ? 'RDS ' . DB_TYPE : 'Local ' . DB_TYPE;
+                return "✅ Connected to " . $dbType . " - " . $result['version'];
             }
         }
     } catch (Exception $e) {
@@ -69,6 +113,23 @@ function getDatabaseStatus() {
     }
     
     return "⚠️ Database connection unavailable (application still functional)";
+}
+
+/**
+ * Get database configuration information
+ * 
+ * @return array Database configuration details
+ */
+function getDatabaseConfig() {
+    return [
+        'type' => DB_TYPE,
+        'host' => DB_HOST,
+        'port' => DB_PORT,
+        'database' => DB_NAME,
+        'username' => DB_USER,
+        'external' => DB_EXTERNAL,
+        'charset' => DB_CHARSET ?? 'N/A'
+    ];
 }
 
 /**
