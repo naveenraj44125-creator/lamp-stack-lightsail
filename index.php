@@ -10,7 +10,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $pdo = getDatabaseConnection();
         
-        if (isset($_POST['action'])) {
+        if ($pdo === null) {
+            $error = "❌ Database connection unavailable. Please check your database configuration.";
+        } elseif (isset($_POST['action'])) {
             switch ($_POST['action']) {
                 case 'create_table':
                     // Create a sample table for demonstration
@@ -24,17 +26,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pdo->exec($sql);
                     $message = "✅ Table 'user_visits' created successfully!";
                     break;
-                    
+
                 case 'add_visit':
                     $name = $_POST['visitor_name'] ?? 'Anonymous';
                     $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
                     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
-                    
+
                     $stmt = $pdo->prepare("INSERT INTO user_visits (visitor_name, ip_address, user_agent) VALUES (?, ?, ?)");
                     $stmt->execute([$name, $ip, $userAgent]);
                     $message = "✅ Visit recorded for: " . htmlspecialchars($name);
                     break;
-                    
+
                 case 'clear_visits':
                     $pdo->exec("DELETE FROM user_visits");
                     $message = "✅ All visit records cleared!";
@@ -43,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (PDOException $e) {
         $error = "❌ Database Error: " . $e->getMessage();
+    } catch (Exception $e) {
+        $error = "❌ Application Error: " . $e->getMessage();
     }
 }
 
@@ -50,9 +54,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function getVisitRecords() {
     try {
         $pdo = getDatabaseConnection();
+        if ($pdo === null) {
+            return [];
+        }
         $stmt = $pdo->query("SELECT * FROM user_visits ORDER BY visit_time DESC LIMIT 10");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
+        return [];
+    } catch (Exception $e) {
         return [];
     }
 }
@@ -61,9 +70,14 @@ function getVisitRecords() {
 function getVisitStats() {
     try {
         $pdo = getDatabaseConnection();
+        if ($pdo === null) {
+            return ['total_visits' => 0, 'unique_visitors' => 0];
+        }
         $stmt = $pdo->query("SELECT COUNT(*) as total_visits, COUNT(DISTINCT ip_address) as unique_visitors FROM user_visits");
         return $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
+        return ['total_visits' => 0, 'unique_visitors' => 0];
+    } catch (Exception $e) {
         return ['total_visits' => 0, 'unique_visitors' => 0];
     }
 }
@@ -72,9 +86,14 @@ function getVisitStats() {
 function tableExists() {
     try {
         $pdo = getDatabaseConnection();
+        if ($pdo === null) {
+            return false;
+        }
         $stmt = $pdo->query("SHOW TABLES LIKE 'user_visits'");
         return $stmt->rowCount() > 0;
     } catch (PDOException $e) {
+        return false;
+    } catch (Exception $e) {
         return false;
     }
 }
