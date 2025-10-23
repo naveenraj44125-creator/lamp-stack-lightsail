@@ -52,11 +52,15 @@ dependencies:
   # Database Dependencies
   mysql:
     enabled: true
-    version: "8.0"
-    config:
-      root_password_auto: true
-      create_app_database: true
-      database_name: "app_db"
+    external: true
+    rds:
+      database_name: "lamp-app-db"
+      endpoint: "ls-64e1bfa3e7e830b55b522ced46f63beaf9e8e046.cnhasnqdqfjq.us-east-1.rds.amazonaws.com"
+      port: 3306
+      master_database: "app_db"
+      username: "admin"
+      password: "SecurePass123!"
+      region: "us-east-1"
   
   postgresql:
     enabled: false
