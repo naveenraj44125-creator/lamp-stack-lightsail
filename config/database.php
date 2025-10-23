@@ -35,9 +35,9 @@ if ($isExternalDB) {
 } else {
     // Local database configuration (fallback)
     define('DB_HOST', 'localhost');
-    define('DB_NAME', 'lamp_app');
+    define('DB_NAME', 'app_db');  // Changed from 'lamp_app' to match deployment config
     define('DB_USER', 'root');
-    define('DB_PASS', '');
+    define('DB_PASS', 'root123');  // Changed from empty to match deployment config
     define('DB_PORT', '3306');
     define('DB_TYPE', 'MYSQL');
     define('DB_CHARSET', 'utf8mb4');
