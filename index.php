@@ -1,6 +1,83 @@
 <?php
 // Include database configuration
 require_once 'config/database.php';
+
+// Handle form submissions for database operations
+$message = '';
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $pdo = getDatabaseConnection();
+        
+        if (isset($_POST['action'])) {
+            switch ($_POST['action']) {
+                case 'create_table':
+                    // Create a sample table for demonstration
+                    $sql = "CREATE TABLE IF NOT EXISTS user_visits (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        visitor_name VARCHAR(100) NOT NULL,
+                        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        ip_address VARCHAR(45),
+                        user_agent TEXT
+                    )";
+                    $pdo->exec($sql);
+                    $message = "✅ Table 'user_visits' created successfully!";
+                    break;
+                    
+                case 'add_visit':
+                    $name = $_POST['visitor_name'] ?? 'Anonymous';
+                    $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+                    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+                    
+                    $stmt = $pdo->prepare("INSERT INTO user_visits (visitor_name, ip_address, user_agent) VALUES (?, ?, ?)");
+                    $stmt->execute([$name, $ip, $userAgent]);
+                    $message = "✅ Visit recorded for: " . htmlspecialchars($name);
+                    break;
+                    
+                case 'clear_visits':
+                    $pdo->exec("DELETE FROM user_visits");
+                    $message = "✅ All visit records cleared!";
+                    break;
+            }
+        }
+    } catch (PDOException $e) {
+        $error = "❌ Database Error: " . $e->getMessage();
+    }
+}
+
+// Function to get visit records
+function getVisitRecords() {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->query("SELECT * FROM user_visits ORDER BY visit_time DESC LIMIT 10");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        return [];
+    }
+}
+
+// Function to get visit statistics
+function getVisitStats() {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->query("SELECT COUNT(*) as total_visits, COUNT(DISTINCT ip_address) as unique_visitors FROM user_visits");
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        return ['total_visits' => 0, 'unique_visitors' => 0];
+    }
+}
+
+// Function to check if table exists
+function tableExists() {
+    try {
+        $pdo = getDatabaseConnection();
+        $stmt = $pdo->query("SHOW TABLES LIKE 'user_visits'");
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -70,6 +147,91 @@ require_once 'config/database.php';
                     <li><strong>File Permissions:</strong> <?php echo is_writable('.') ? '✅ Writable' : '⚠️ Read-only'; ?></li>
                     <li><strong>Session Support:</strong> <?php echo function_exists('session_start') ? '✅ Available' : '❌ Not available'; ?></li>
                 </ul>
+            </div>
+
+            <!-- Database Operations Section -->
+            <div class="info-section">
+                <h3>💾 Database Operations (RDS Integration)</h3>
+                
+                <?php if ($message): ?>
+                    <div class="success-message"><?php echo $message; ?></div>
+                <?php endif; ?>
+                
+                <?php if ($error): ?>
+                    <div class="error-message"><?php echo $error; ?></div>
+                <?php endif; ?>
+                
+                <!-- Database Setup -->
+                <?php if (!tableExists()): ?>
+                    <div class="db-setup">
+                        <h4>🚀 Initialize Database</h4>
+                        <p>Create the sample table to start using database operations:</p>
+                        <form method="POST" style="display: inline;">
+                            <input type="hidden" name="action" value="create_table">
+                            <button type="submit" class="btn btn-primary">Create Sample Table</button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <!-- Add Visit Form -->
+                    <div class="db-operation">
+                        <h4>✍️ Add New Visit Record</h4>
+                        <form method="POST" class="visit-form">
+                            <input type="hidden" name="action" value="add_visit">
+                            <label for="visitor_name">Visitor Name:</label>
+                            <input type="text" id="visitor_name" name="visitor_name" placeholder="Enter your name" required>
+                            <button type="submit" class="btn btn-success">Record Visit</button>
+                        </form>
+                    </div>
+
+                    <!-- Visit Statistics -->
+                    <div class="db-stats">
+                        <h4>📊 Visit Statistics</h4>
+                        <?php $stats = getVisitStats(); ?>
+                        <ul>
+                            <li><strong>Total Visits:</strong> <?php echo $stats['total_visits']; ?></li>
+                            <li><strong>Unique Visitors:</strong> <?php echo $stats['unique_visitors']; ?></li>
+                        </ul>
+                    </div>
+
+                    <!-- Recent Visits Display -->
+                    <div class="db-records">
+                        <h4>📋 Recent Visits (Last 10)</h4>
+                        <?php $visits = getVisitRecords(); ?>
+                        <?php if (empty($visits)): ?>
+                            <p><em>No visits recorded yet. Add your first visit above!</em></p>
+                        <?php else: ?>
+                            <table class="visits-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Visitor Name</th>
+                                        <th>Visit Time</th>
+                                        <th>IP Address</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($visits as $visit): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($visit['id']); ?></td>
+                                            <td><?php echo htmlspecialchars($visit['visitor_name']); ?></td>
+                                            <td><?php echo htmlspecialchars($visit['visit_time']); ?></td>
+                                            <td><?php echo htmlspecialchars($visit['ip_address']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Clear Data Option -->
+                    <div class="db-management">
+                        <h4>🗑️ Database Management</h4>
+                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to clear all visit records?');">
+                            <input type="hidden" name="action" value="clear_visits">
+                            <button type="submit" class="btn btn-danger">Clear All Visits</button>
+                        </form>
+                    </div>
+                <?php endif; ?>
             </div>
         </main>
         
