@@ -72,7 +72,7 @@ dependencies:
   # Programming Language Dependencies
   php:
     enabled: true
-    version: "8.1"
+    version: "8.3"
     config:
       extensions:
         - "pdo"

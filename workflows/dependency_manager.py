@@ -717,8 +717,8 @@ echo "✅ {service_name} restarted"
             # Initialize RDS manager
             rds_manager = LightsailRDSManager(
                 region=rds_config.get('region', 'us-east-1'),
-                access_key=rds_config.get('access_key'),
-                secret_key=rds_config.get('secret_key')
+                aws_access_key_id=rds_config.get('access_key'),
+                aws_secret_access_key=rds_config.get('secret_key')
             )
             
             # Get RDS connection details
