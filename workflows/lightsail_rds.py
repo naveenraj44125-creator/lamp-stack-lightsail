@@ -14,8 +14,17 @@ from lightsail_common import LightsailBase
 class LightsailRDSManager(LightsailBase):
     """Manager for Lightsail RDS database operations"""
     
-    def __init__(self, instance_name, region='us-east-1'):
+    def __init__(self, instance_name, region='us-east-1', aws_access_key_id=None, aws_secret_access_key=None):
         super().__init__(instance_name, region)
+        
+        # Initialize Lightsail client with credentials if provided
+        if aws_access_key_id and aws_secret_access_key:
+            self.lightsail = boto3.client(
+                'lightsail',
+                region_name=region,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key
+            )
         
     def get_rds_connection_details(self, rds_instance_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -320,13 +329,18 @@ echo "✅ PostgreSQL client configured for RDS"
         Returns:
             dict: Environment variables for database connection
         """
+        engine = connection_details['engine']
+        db_type = 'MYSQL' if engine.startswith('mysql') else 'POSTGRESQL' if engine.startswith('postgres') else engine.upper()
+        
         return {
+            'DB_TYPE': db_type,
             'DB_HOST': connection_details['endpoint'],
             'DB_PORT': str(connection_details['port']),
             'DB_NAME': database_name,
-            'DB_USER': connection_details['master_username'],
+            'DB_USERNAME': connection_details['master_username'],
             'DB_PASSWORD': connection_details['master_password'] or '',
-            'DB_ENGINE': connection_details['engine'],
+            'DB_CHARSET': 'utf8mb4',
+            'DB_EXTERNAL': 'true',
             'DATABASE_URL': self._build_database_url(connection_details, database_name)
         }
     

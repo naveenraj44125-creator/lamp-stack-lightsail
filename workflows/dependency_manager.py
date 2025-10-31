@@ -716,6 +716,7 @@ echo "✅ {service_name} restarted"
             
             # Initialize RDS manager
             rds_manager = LightsailRDSManager(
+                instance_name=self.client.instance_name,
                 region=rds_config.get('region', 'us-east-1'),
                 aws_access_key_id=rds_config.get('access_key'),
                 aws_secret_access_key=rds_config.get('secret_key')
@@ -739,9 +740,9 @@ echo "✅ {service_name} restarted"
             
             # Test database connectivity
             print(f"🔍 Testing database connectivity...")
-            connectivity_success = rds_manager.test_database_connectivity(
-                db_name, 
-                connection_details
+            connectivity_success = rds_manager.test_rds_connectivity(
+                connection_details, 
+                rds_config.get('master_database', 'app_db')
             )
             
             if not connectivity_success:
@@ -749,21 +750,21 @@ echo "✅ {service_name} restarted"
             
             # Configure environment variables for application
             print(f"⚙️  Configuring environment variables...")
-            env_success = self._configure_database_environment(
-                db_type, 
+            env_vars = rds_manager.create_database_env_vars(
                 connection_details, 
-                config
+                rds_config.get('master_database', 'app_db')
             )
+            env_success = self._create_environment_file(env_vars, config)
             
             if not env_success:
                 print(f"⚠️  Failed to configure environment variables")
                 return False
             
             print(f"✅ External {db_type.upper()} RDS database configured successfully")
-            print(f"   Host: {connection_details['host']}")
+            print(f"   Host: {connection_details['endpoint']}")
             print(f"   Port: {connection_details['port']}")
-            print(f"   Database: {connection_details['database']}")
-            print(f"   Username: {connection_details['username']}")
+            print(f"   Database: {connection_details['database_name']}")
+            print(f"   Username: {connection_details['master_username']}")
             
             return True
             
@@ -802,6 +803,53 @@ echo "✅ PostgreSQL client installation completed"
         success, output = self.client.run_command(script, timeout=180)
         return success
     
+    def _create_environment_file(self, env_vars: Dict[str, str], config: Dict[str, Any]) -> bool:
+        """Create environment file with database configuration"""
+        try:
+            # Add any custom environment variables from config
+            custom_env = config.get('rds', {}).get('environment', {})
+            env_vars.update(custom_env)
+            
+            # Create environment file
+            env_content = '\n'.join([f'{key}={value}' for key, value in env_vars.items()])
+            
+            script = f'''
+set -e
+echo "Configuring database environment variables..."
+
+# Create environment file
+sudo mkdir -p /opt/app
+cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
+{env_content}
+EOF
+
+# Set proper permissions
+sudo chmod 600 /opt/app/database.env
+sudo chown root:root /opt/app/database.env
+
+# Create symlink for easy access
+sudo ln -sf /opt/app/database.env /var/www/html/.env 2>/dev/null || true
+
+echo "✅ Database environment configuration completed"
+echo "Environment file created at: /opt/app/database.env"
+'''
+            
+            success, output = self.client.run_command(script, timeout=60)
+            
+            if success:
+                print("📝 Database environment variables configured:")
+                for key, value in env_vars.items():
+                    if 'PASSWORD' in key:
+                        print(f"   {key}=***")
+                    else:
+                        print(f"   {key}={value}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error creating environment file: {str(e)}")
+            return False
+
     def _configure_database_environment(self, db_type: str, connection_details: Dict[str, Any], config: Dict[str, Any]) -> bool:
         """Configure environment variables for database connection"""
         try:
