@@ -8,14 +8,79 @@ and setting up the local MySQL database as a fallback.
 
 import sys
 import argparse
-from lightsail_common import LightsailBase
-from config_loader import DeploymentConfig
+import boto3
+import subprocess
+import tempfile
+import os
+import time
 
 class DatabaseFixer:
     def __init__(self, instance_name, region):
-        self.client = LightsailBase(instance_name, region)
+        self.lightsail = boto3.client('lightsail', region_name=region)
         self.instance_name = instance_name
         self.region = region
+
+    def create_ssh_files(self, ssh_details):
+        """Create temporary SSH key files"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as key_file:
+            key_file.write(ssh_details['privateKey'])
+            key_path = key_file.name
+        
+        cert_path = key_path + '-cert.pub'
+        cert_parts = ssh_details['certKey'].split(' ', 2)
+        formatted_cert = f'{cert_parts[0]} {cert_parts[1]}\n' if len(cert_parts) >= 2 else ssh_details['certKey'] + '\n'
+        
+        with open(cert_path, 'w') as cert_file:
+            cert_file.write(formatted_cert)
+        
+        os.chmod(key_path, 0o600)
+        os.chmod(cert_path, 0o600)
+        
+        return key_path, cert_path
+
+    def run_command(self, command, timeout=300):
+        """Execute SSH command on the Lightsail instance"""
+        try:
+            print(f"🔧 Running: {command[:80]}{'...' if len(command) > 80 else ''}")
+            
+            ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
+            ssh_details = ssh_response['accessDetails']
+            
+            key_path, cert_path = self.create_ssh_files(ssh_details)
+            
+            try:
+                ssh_cmd = [
+                    'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                    '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                    '-o', 'ConnectTimeout=15', '-o', 'IdentitiesOnly=yes',
+                    f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+                ]
+                
+                result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+                
+                if result.returncode == 0:
+                    print(f"   ✅ Success")
+                    if result.stdout.strip():
+                        for line in result.stdout.strip().split('\n'):
+                            print(f"   {line}")
+                    return True, result.stdout.strip()
+                else:
+                    print(f"   ❌ Failed (exit code: {result.returncode})")
+                    if result.stderr.strip():
+                        for line in result.stderr.strip().split('\n'):
+                            print(f"   ERROR: {line}")
+                    return False, result.stderr.strip()
+                
+            finally:
+                try:
+                    os.unlink(key_path)
+                    os.unlink(cert_path)
+                except:
+                    pass
+                
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)}")
+            return False, str(e)
 
     def fix_database_connection(self):
         """Fix the database connection by setting up local MySQL and environment file"""
@@ -60,7 +125,7 @@ mysql -u root -proot123 -e "SELECT 1 as test;" app_db 2>/dev/null && echo "✅ M
 echo "✅ MySQL setup completed"
 '''
         
-        success, output = self.client.run_command(mysql_setup_script, timeout=180)
+        success, output = self.run_command(mysql_setup_script, timeout=180)
         if not success:
             print("❌ Failed to set up MySQL")
             return False
@@ -97,7 +162,7 @@ echo "Configuration:"
 cat /var/www/html/.env | grep -v PASSWORD
 '''
         
-        success, output = self.client.run_command(env_setup_script, timeout=60)
+        success, output = self.run_command(env_setup_script, timeout=60)
         if not success:
             print("❌ Failed to create environment file")
             return False
@@ -145,7 +210,7 @@ sudo rm -f /tmp/test_db_connection.php
 echo "✅ PHP database test completed"
 '''
         
-        success, output = self.client.run_command(php_test_script, timeout=60)
+        success, output = self.run_command(php_test_script, timeout=60)
         if not success:
             print("⚠️  PHP database test had issues")
         
@@ -160,7 +225,7 @@ sudo systemctl is-active --quiet apache2 && echo "✅ Apache is running" || echo
 echo "✅ Apache restart completed"
 '''
         
-        success, output = self.client.run_command(restart_script, timeout=30)
+        success, output = self.run_command(restart_script, timeout=30)
         if not success:
             print("⚠️  Apache restart had issues")
         
