@@ -14,8 +14,24 @@ if (file_exists(__DIR__ . '/../.env')) {
         if (strpos(trim($line), '#') === 0) {
             continue; // Skip comments
         }
-        list($name, $value) = explode('=', $line, 2);
-        $_ENV[trim($name)] = trim($value);
+        if (strpos($line, '=') !== false) {
+            list($name, $value) = explode('=', $line, 2);
+            $_ENV[trim($name)] = trim($value, '"\'');
+        }
+    }
+}
+
+// Also check for environment file in /opt/app/database.env
+if (file_exists('/opt/app/database.env')) {
+    $lines = file('/opt/app/database.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) {
+            continue; // Skip comments
+        }
+        if (strpos($line, '=') !== false) {
+            list($name, $value) = explode('=', $line, 2);
+            $_ENV[trim($name)] = trim($value, '"\'');
+        }
     }
 }
 

@@ -490,12 +490,23 @@ echo "✅ Application-specific configurations completed"
 set -e
 echo "Setting deployment environment variables..."
 
-# Append deployment vars to existing .env file
-cat >> /var/www/html/.env << 'EOF'
+# Create .env file with proper permissions if it doesn't exist
+if [ ! -f /var/www/html/.env ]; then
+    sudo touch /var/www/html/.env
+    sudo chown www-data:www-data /var/www/html/.env
+    sudo chmod 644 /var/www/html/.env
+fi
+
+# Create temporary file with deployment variables
+cat > /tmp/deployment_vars << 'EOF'
 
 # Deployment Variables
 {env_file_content}
 EOF
+
+# Append deployment vars to existing .env file using sudo
+sudo bash -c 'cat /tmp/deployment_vars >> /var/www/html/.env'
+sudo rm -f /tmp/deployment_vars
 
 echo "✅ Deployment environment variables set"
 '''
