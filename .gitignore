@@ -27,3 +27,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
+
+# Ignore run-command folder (for temporary scripts and commands)
+run-command/
