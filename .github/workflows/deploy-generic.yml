@@ -426,3 +426,20 @@ jobs:
         echo "- **Verification**: ✅ Health check, connectivity, and performance tests completed" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**🎉 Fully configurable deployment - Dependencies installed based on configuration!**" >> $GITHUB_STEP_SUMMARY
+
+    - name: View Command Execution Log
+      if: always()
+      run: |
+        echo "📋 Displaying Command Execution Log"
+        echo "=================================="
+        echo "🔍 Showing commands executed on instance during deployment..."
+        echo ""
+        
+        # Set GitHub Actions environment for enhanced logging
+        export GITHUB_ACTIONS=true
+        
+        # View the command log from the instance
+        python3 workflows/view_command_log.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --lines 100
