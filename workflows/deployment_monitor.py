@@ -249,6 +249,54 @@ fi
         if success:
             print(output)
     
+    def view_command_log(self, lines=50):
+        """View command execution log"""
+        print("="*60)
+        print("📋 COMMAND EXECUTION LOG")
+        print("="*60)
+        
+        success, log_content = self.client.get_command_log(lines)
+        
+        if success:
+            if log_content.strip() and "No commands logged yet" not in log_content:
+                print(f"📋 Last {lines} Commands Executed on Instance:")
+                print("─" * 60)
+                
+                # Parse and display log entries
+                log_lines = log_content.strip().split('\n')
+                for i, line in enumerate(log_lines, 1):
+                    if line.strip():
+                        # Format: [timestamp] COMMAND: actual_command
+                        if '] COMMAND: ' in line:
+                            timestamp_part, command_part = line.split('] COMMAND: ', 1)
+                            timestamp = timestamp_part.replace('[', '')
+                            command = command_part.replace(' | ', '\n        ')  # Restore newlines
+                            
+                            print(f"{i:3d}. [{timestamp}]")
+                            print(f"     {command}")
+                        else:
+                            print(f"{i:3d}. {line}")
+                
+                print("─" * 60)
+                print(f"📊 Total commands: {len([l for l in log_lines if l.strip()])}")
+                print(f"📁 Log location: /var/log/deployment-commands.log")
+            else:
+                print("📋 No commands found in execution log")
+        else:
+            print(f"❌ Failed to retrieve command log: {log_content}")
+    
+    def clear_command_log(self):
+        """Clear command execution log"""
+        print("="*60)
+        print("🧹 CLEARING COMMAND LOG")
+        print("="*60)
+        
+        success, message = self.client.clear_command_log()
+        if success:
+            print(f"✅ {message}")
+        else:
+            print(f"❌ Failed to clear log: {message}")
+    
     def restart_services(self, services=None):
         """Restart specified services or all detected services"""
         if services is None:
@@ -302,6 +350,11 @@ def main():
     restart_parser = subparsers.add_parser('restart', help='Restart services')
     restart_parser.add_argument('services', nargs='*', help='Services to restart (default: all)')
     
+    # Command log viewing
+    cmdlog_parser = subparsers.add_parser('cmdlog', help='View command execution log')
+    cmdlog_parser.add_argument('--lines', type=int, default=50, help='Number of command log lines to show')
+    cmdlog_parser.add_argument('--clear', action='store_true', help='Clear the command log')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -322,6 +375,11 @@ def main():
             monitor.monitor_logs(args.lines, args.follow)
         elif args.command == 'restart':
             monitor.restart_services(args.services if args.services else None)
+        elif args.command == 'cmdlog':
+            if args.clear:
+                monitor.clear_command_log()
+            else:
+                monitor.view_command_log(args.lines)
         
     except Exception as e:
         print(f"❌ Error: {str(e)}")

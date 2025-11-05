@@ -64,6 +64,9 @@ class LightsailBase:
                 print("COMMAND END:")
                 print("─" * 80)
                 
+                # Log command to file on the instance
+                self._log_command_to_instance(ssh_details, command)
+                
                 # Create temporary SSH key files
                 key_path, cert_path = self.create_ssh_files(ssh_details)
                 
@@ -421,6 +424,95 @@ class LightsailBase:
             'operation timed out', 'connect to host', 'timed out after'
         ]
         return any(phrase in error_msg.lower() for phrase in connection_errors)
+
+    def _log_command_to_instance(self, ssh_details, command):
+        """Log command to a file on the Lightsail instance for tracking"""
+        try:
+            # Create log entry with timestamp
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+            log_entry = f"[{timestamp}] COMMAND: {command.replace(chr(10), ' | ')}"
+            
+            # Create the logging command (append to log file on instance)
+            log_command = f"echo '{log_entry}' >> /var/log/deployment-commands.log"
+            
+            # Create temporary SSH key files for logging
+            key_path, cert_path = self.create_ssh_files(ssh_details)
+            
+            try:
+                # Build SSH command for logging
+                ssh_cmd = [
+                    'ssh', '-i', key_path, '-o', f'CertificateFile={cert_path}',
+                    '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+                    '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
+                    f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', log_command
+                ]
+                
+                # Execute logging command (don't wait for output, fire and forget)
+                subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=15)
+                
+            finally:
+                self._cleanup_ssh_files(key_path, cert_path)
+                
+        except Exception:
+            # Silently ignore logging errors - don't let logging break the main command
+            pass
+
+    def get_command_log(self, lines=50):
+        """
+        Retrieve the command log from the Lightsail instance
+        
+        Args:
+            lines (int): Number of recent lines to retrieve
+            
+        Returns:
+            tuple: (success: bool, log_content: str)
+        """
+        try:
+            print(f"📋 Retrieving last {lines} commands from instance log...")
+            
+            # Get the log file content
+            log_command = f"sudo tail -n {lines} /var/log/deployment-commands.log 2>/dev/null || echo 'No command log found'"
+            success, output = self.run_command(log_command, timeout=30, max_retries=1)
+            
+            if success:
+                if "No command log found" in output:
+                    print("📋 No command log file found on instance")
+                    return True, "No commands logged yet"
+                else:
+                    print(f"📋 Retrieved {len(output.split(chr(10)))} log entries")
+                    return True, output
+            else:
+                print(f"❌ Failed to retrieve command log: {output}")
+                return False, output
+                
+        except Exception as e:
+            print(f"❌ Error retrieving command log: {e}")
+            return False, str(e)
+
+    def clear_command_log(self):
+        """
+        Clear the command log on the Lightsail instance
+        
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            print("🧹 Clearing command log on instance...")
+            
+            # Clear the log file
+            clear_command = "sudo rm -f /var/log/deployment-commands.log && echo 'Command log cleared'"
+            success, output = self.run_command(clear_command, timeout=30, max_retries=1)
+            
+            if success:
+                print("✅ Command log cleared successfully")
+                return True, "Command log cleared"
+            else:
+                print(f"❌ Failed to clear command log: {output}")
+                return False, output
+                
+        except Exception as e:
+            print(f"❌ Error clearing command log: {e}")
+            return False, str(e)
 
     def _cleanup_ssh_files(self, key_path, cert_path):
         """Clean up temporary SSH key files"""
