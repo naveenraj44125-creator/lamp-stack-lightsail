@@ -428,12 +428,16 @@ class LightsailBase:
     def _log_command_to_instance(self, ssh_details, command):
         """Log command to a file on the Lightsail instance for tracking"""
         try:
+            # Show that we're logging (only in GitHub Actions for visibility)
+            if "GITHUB_ACTIONS" in os.environ:
+                print(f"📝 Logging command to instance log file...")
+            
             # Create log entry with timestamp
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
             log_entry = f"[{timestamp}] COMMAND: {command.replace(chr(10), ' | ')}"
             
-            # Create the logging command (append to log file on instance)
-            log_command = f"echo '{log_entry}' >> /var/log/deployment-commands.log"
+            # Create the logging command (ensure directory exists and append to log file)
+            log_command = f"sudo mkdir -p /var/log && echo '{log_entry}' | sudo tee -a /var/log/deployment-commands.log > /dev/null"
             
             # Create temporary SSH key files for logging
             key_path, cert_path = self.create_ssh_files(ssh_details)
@@ -447,14 +451,25 @@ class LightsailBase:
                     f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', log_command
                 ]
                 
-                # Execute logging command (don't wait for output, fire and forget)
-                subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=15)
+                # Execute logging command
+                result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=15)
+                
+                # Show logging result in GitHub Actions for debugging
+                if "GITHUB_ACTIONS" in os.environ:
+                    if result.returncode == 0:
+                        print(f"   ✅ Command logged successfully")
+                    else:
+                        print(f"   ⚠️ Logging failed (exit code: {result.returncode})")
+                        if result.stderr:
+                            print(f"   Error: {result.stderr.strip()}")
                 
             finally:
                 self._cleanup_ssh_files(key_path, cert_path)
                 
-        except Exception:
-            # Silently ignore logging errors - don't let logging break the main command
+        except Exception as e:
+            # Show logging errors in GitHub Actions for debugging
+            if "GITHUB_ACTIONS" in os.environ:
+                print(f"   ⚠️ Logging exception: {str(e)}")
             pass
 
     def get_command_log(self, lines=50):
