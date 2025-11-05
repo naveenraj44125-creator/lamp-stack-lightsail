@@ -131,47 +131,82 @@ class DependencyManager:
         """Install and configure Apache web server"""
         version = config.get('version', 'latest')
         apache_config = config.get('config', {})
+        document_root = apache_config.get('document_root', '/var/www/html')
         
-        script = f'''
-set -e
-echo "Installing Apache web server..."
-
-# Install Apache
-sudo apt-get update
-sudo apt-get install -y apache2
-
-# Enable Apache to start on boot
-sudo systemctl enable apache2
-
-# Configure Apache
-DOCUMENT_ROOT="{apache_config.get('document_root', '/var/www/html')}"
-sudo mkdir -p "$DOCUMENT_ROOT"
-
-# Set proper ownership
-sudo chown -R www-data:www-data "$DOCUMENT_ROOT"
-sudo chmod -R 755 "$DOCUMENT_ROOT"
-
-# Enable mod_rewrite if requested
-if [ "{apache_config.get('enable_rewrite', True)}" = "True" ]; then
-    sudo a2enmod rewrite
-fi
-
-# Configure security settings
-if [ "{config.get('hide_version', True)}" = "True" ]; then
-    echo "ServerTokens Prod" | sudo tee -a /etc/apache2/conf-available/security.conf
-    echo "ServerSignature Off" | sudo tee -a /etc/apache2/conf-available/security.conf
-    sudo a2enconf security
-fi
-
-# Start Apache
-sudo systemctl start apache2
-sudo systemctl reload apache2
-
-echo "✅ Apache installation completed"
-'''
+        print("🔧 Installing Apache web server step by step...")
         
-        success, output = self.client.run_command_with_live_output(script, timeout=180)
-        return success
+        # Step 1: Update package list
+        print("\n📦 Step 1: Updating package list")
+        success, output = self.client.run_command("sudo apt-get update")
+        if not success:
+            return False
+        
+        # Step 2: Install Apache
+        print("\n📦 Step 2: Installing Apache package")
+        success, output = self.client.run_command("sudo apt-get install -y apache2")
+        if not success:
+            return False
+        
+        # Step 3: Enable Apache service
+        print("\n🔧 Step 3: Enabling Apache service")
+        success, output = self.client.run_command("sudo systemctl enable apache2")
+        if not success:
+            return False
+        
+        # Step 4: Create document root
+        print(f"\n📁 Step 4: Creating document root: {document_root}")
+        success, output = self.client.run_command(f"sudo mkdir -p {document_root}")
+        if not success:
+            return False
+        
+        # Step 5: Set ownership
+        print("\n🔐 Step 5: Setting proper ownership")
+        success, output = self.client.run_command(f"sudo chown -R www-data:www-data {document_root}")
+        if not success:
+            return False
+        
+        # Step 6: Set permissions
+        print("\n🔐 Step 6: Setting proper permissions")
+        success, output = self.client.run_command(f"sudo chmod -R 755 {document_root}")
+        if not success:
+            return False
+        
+        # Step 7: Enable mod_rewrite if requested
+        if apache_config.get('enable_rewrite', True):
+            print("\n🔧 Step 7: Enabling mod_rewrite")
+            success, output = self.client.run_command("sudo a2enmod rewrite")
+            if not success:
+                return False
+        
+        # Step 8: Configure security settings
+        if config.get('hide_version', True):
+            print("\n🔒 Step 8: Configuring security settings")
+            success, output = self.client.run_command('echo "ServerTokens Prod" | sudo tee -a /etc/apache2/conf-available/security.conf')
+            if not success:
+                return False
+            
+            success, output = self.client.run_command('echo "ServerSignature Off" | sudo tee -a /etc/apache2/conf-available/security.conf')
+            if not success:
+                return False
+            
+            success, output = self.client.run_command("sudo a2enconf security")
+            if not success:
+                return False
+        
+        # Step 9: Start Apache
+        print("\n🚀 Step 9: Starting Apache service")
+        success, output = self.client.run_command("sudo systemctl start apache2")
+        if not success:
+            return False
+        
+        # Step 10: Reload Apache
+        print("\n🔄 Step 10: Reloading Apache configuration")
+        success, output = self.client.run_command("sudo systemctl reload apache2")
+        if not success:
+            return False
+        
+        print("\n✅ Apache installation completed successfully!")
+        return True
     
     def _install_nginx(self, config: Dict[str, Any]) -> bool:
         """Install and configure Nginx web server"""

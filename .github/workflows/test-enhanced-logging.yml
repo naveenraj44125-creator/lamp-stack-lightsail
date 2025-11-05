@@ -33,8 +33,8 @@ jobs:
         # Set GitHub Actions environment for enhanced logging
         export GITHUB_ACTIONS=true
         
-        # Run the test script
-        python3 workflows/test_detailed_logging.py
+        # Run the command visibility test
+        python3 workflows/test_command_visibility.py
 
   test-deployment-steps:
     runs-on: ubuntu-latest

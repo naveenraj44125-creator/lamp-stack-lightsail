@@ -52,22 +52,17 @@ class LightsailBase:
                     if not self.test_network_connectivity():
                         print("   ⚠️ Network connectivity still failing, continuing retry...")
                 
-                # Show command being executed
-                if verbose or "GITHUB_ACTIONS" in os.environ:
-                    print(f"🔧 Executing command on {self.instance_name}:")
-                    # Show first few lines of the command for context
-                    cmd_lines = command.split('\n')
-                    for i, line in enumerate(cmd_lines[:5]):
-                        if line.strip():
-                            print(f"   {i+1}: {line.strip()}")
-                    if len(cmd_lines) > 5:
-                        print(f"   ... ({len(cmd_lines)-5} more lines)")
-                else:
-                    print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
-                
-                # Get SSH access details
+                # Get SSH access details first
                 ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
                 ssh_details = ssh_response['accessDetails']
+                
+                # Show EXACT command being sent to host
+                print(f"📡 Sending command to host {ssh_details['username']}@{ssh_details['ipAddress']}, command:")
+                print("─" * 80)
+                print("COMMAND START:")
+                print(command)
+                print("COMMAND END:")
+                print("─" * 80)
                 
                 # Create temporary SSH key files
                 key_path, cert_path = self.create_ssh_files(ssh_details)
@@ -75,30 +70,40 @@ class LightsailBase:
                 try:
                     ssh_cmd = self._build_ssh_command(key_path, cert_path, ssh_details, command)
                     
-                    # Show SSH command in verbose mode
-                    if verbose or "GITHUB_ACTIONS" in os.environ:
-                        print(f"📡 SSH Command: ssh {ssh_details['username']}@{ssh_details['ipAddress']}")
+                    # Show full SSH command being executed
+                    if "GITHUB_ACTIONS" in os.environ:
+                        print(f"🔧 Full SSH Command:")
+                        ssh_cmd_str = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in ssh_cmd])
+                        print(f"   {ssh_cmd_str}")
+                        print("─" * 80)
                     
+                    print(f"⏳ Executing on remote host...")
                     result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
                     
+                    print("─" * 80)
+                    print("REMOTE HOST OUTPUT:")
+                    print("─" * 80)
+                    
                     if result.returncode == 0:
-                        print(f"   ✅ Success (exit code: 0)")
+                        print(f"✅ SUCCESS (exit code: 0)")
                         if result.stdout.strip():
-                            if verbose or "GITHUB_ACTIONS" in os.environ:
-                                print(f"   📤 Output:")
-                                self._display_detailed_output(result.stdout.strip(), show_output_lines)
-                            else:
-                                self._display_output(result.stdout.strip(), show_output_lines)
+                            print("STDOUT:")
+                            print(result.stdout)
+                        if result.stderr.strip():
+                            print("STDERR:")
+                            print(result.stderr)
+                        print("─" * 80)
                         return True, result.stdout.strip()
                     else:
-                        error_msg = result.stderr.strip()
-                        print(f"   ❌ Failed (exit code: {result.returncode})")
-                        if error_msg:
-                            print(f"   📤 Error Output:")
-                            self._display_detailed_output(error_msg, show_output_lines)
+                        print(f"❌ FAILED (exit code: {result.returncode})")
                         if result.stdout.strip():
-                            print(f"   📤 Standard Output:")
-                            self._display_detailed_output(result.stdout.strip(), show_output_lines)
+                            print("STDOUT:")
+                            print(result.stdout)
+                        if result.stderr.strip():
+                            print("STDERR:")
+                            print(result.stderr)
+                        print("─" * 80)
+                        return False, result.stderr.strip()
                         
                         # Check if it's a connection issue that we should retry
                         if max_retries > 1 and self._is_connection_error(error_msg):
@@ -500,15 +505,17 @@ class LightsailBase:
         # Execute each command individually
         all_output = []
         for i, cmd in enumerate(commands, 1):
-            print(f"\n   🔸 Command {i}/{len(commands)}:")
+            print(f"\n🔸 Step {i}/{len(commands)}: Executing individual command")
             
             # Show the command being executed
             cmd_lines = cmd.split('\n')
+            print(f"📋 Command to execute:")
             for j, cmd_line in enumerate(cmd_lines):
                 if cmd_line.strip():
-                    print(f"      {j+1}: {cmd_line.strip()}")
+                    print(f"   {j+1}: {cmd_line.strip()}")
             
             # Execute the command
+            print(f"🚀 Sending to Lightsail host...")
             success, output = self.run_command(cmd, timeout=60, verbose=False)
             
             if success:
