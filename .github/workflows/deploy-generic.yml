@@ -184,6 +184,16 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Debug Deployment Decision
+      run: |
+        echo "🔍 Deployment Debug Information:"
+        echo "Should Deploy: ${{ needs.load-config.outputs.should_deploy }}"
+        echo "Instance Name: ${{ needs.load-config.outputs.instance_name }}"
+        echo "AWS Region: ${{ needs.load-config.outputs.aws_region }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Event: ${{ github.event_name }}"
+        echo "Dependencies: ${{ needs.load-config.outputs.enabled_dependencies }}"
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -200,14 +210,22 @@ jobs:
     - name: Generic Environment Preparation & Dependency Installation
       run: |
         echo "🔧 Running generic pre-deployment steps (SSH check, directories, dependencies)..."
+        echo "🌍 Instance: ${{ needs.load-config.outputs.instance_name }}"
+        echo "📍 Region: ${{ needs.load-config.outputs.aws_region }}"
+        echo "📦 Dependencies: ${{ needs.load-config.outputs.enabled_dependencies }}"
+        
+        # Set GitHub Actions environment for enhanced logging
+        export GITHUB_ACTIONS=true
+        
         python3 workflows/deploy-pre-steps-generic.py \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
           --config-file deployment-generic.config.yml
 
   application-package:
-    needs: [load-config, pre-steps-generic]
+    needs: [load-config]
     runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -267,8 +285,9 @@ jobs:
         retention-days: 1
 
   post-steps-generic:
-    needs: [load-config, application-package]
+    needs: [load-config, pre-steps-generic, application-package]
     runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -293,6 +312,18 @@ jobs:
     - name: Generic Application Deployment & Configuration
       run: |
         echo "🚀 Running generic application deployment and configuration..."
+        echo "🌍 Instance: ${{ needs.load-config.outputs.instance_name }}"
+        echo "📍 Region: ${{ needs.load-config.outputs.aws_region }}"
+        echo "📦 Package: app.tar.gz"
+        echo "🔍 Verification: Enabled"
+        echo "🧹 Cleanup: Enabled"
+        
+        # Set GitHub Actions environment for enhanced logging
+        export GITHUB_ACTIONS=true
+        
+        # Show package info
+        ls -la app.tar.gz
+        
         python3 workflows/deploy-post-steps-generic.py \
           app.tar.gz \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
