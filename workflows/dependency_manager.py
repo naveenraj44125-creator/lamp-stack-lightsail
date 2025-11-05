@@ -170,7 +170,7 @@ sudo systemctl reload apache2
 echo "✅ Apache installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command_with_live_output(script, timeout=180)
         return success
     
     def _install_nginx(self, config: Dict[str, Any]) -> bool:
@@ -235,7 +235,7 @@ fi
 echo "✅ MySQL installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=300)
+        success, output = self.client.run_command_with_live_output(script, timeout=300)
         return success
     
     def _install_postgresql(self, config: Dict[str, Any]) -> bool:

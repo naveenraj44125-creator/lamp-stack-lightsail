@@ -617,7 +617,7 @@ sudo chmod 644 /var/www/html/.env
 echo "✅ Local MySQL database setup completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command_with_live_output(script, timeout=180)
         return success
 
     def _configure_local_postgresql(self) -> bool:

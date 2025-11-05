@@ -25,7 +25,7 @@ class LightsailBase:
             print("❌ AWS credentials not found. Please configure AWS credentials.")
             sys.exit(1)
     
-    def run_command(self, command, timeout=300, max_retries=1, show_output_lines=20):
+    def run_command(self, command, timeout=300, max_retries=1, show_output_lines=20, verbose=False):
         """
         Execute command on Lightsail instance using get_instance_access_details
         
@@ -34,6 +34,7 @@ class LightsailBase:
             timeout (int): Command timeout in seconds
             max_retries (int): Maximum number of retry attempts
             show_output_lines (int): Number of output lines to display
+            verbose (bool): Show detailed command execution
             
         Returns:
             tuple: (success: bool, output: str)
@@ -51,7 +52,18 @@ class LightsailBase:
                     if not self.test_network_connectivity():
                         print("   ⚠️ Network connectivity still failing, continuing retry...")
                 
-                print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
+                # Show command being executed
+                if verbose or "GITHUB_ACTIONS" in os.environ:
+                    print(f"🔧 Executing command on {self.instance_name}:")
+                    # Show first few lines of the command for context
+                    cmd_lines = command.split('\n')
+                    for i, line in enumerate(cmd_lines[:5]):
+                        if line.strip():
+                            print(f"   {i+1}: {line.strip()}")
+                    if len(cmd_lines) > 5:
+                        print(f"   ... ({len(cmd_lines)-5} more lines)")
+                else:
+                    print(f"🔧 Running: {command[:100]}{'...' if len(command) > 100 else ''}")
                 
                 # Get SSH access details
                 ssh_response = self.lightsail.get_instance_access_details(instanceName=self.instance_name)
@@ -62,18 +74,31 @@ class LightsailBase:
                 
                 try:
                     ssh_cmd = self._build_ssh_command(key_path, cert_path, ssh_details, command)
+                    
+                    # Show SSH command in verbose mode
+                    if verbose or "GITHUB_ACTIONS" in os.environ:
+                        print(f"📡 SSH Command: ssh {ssh_details['username']}@{ssh_details['ipAddress']}")
+                    
                     result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
                     
                     if result.returncode == 0:
-                        print(f"   ✅ Success")
+                        print(f"   ✅ Success (exit code: 0)")
                         if result.stdout.strip():
-                            self._display_output(result.stdout.strip(), show_output_lines)
+                            if verbose or "GITHUB_ACTIONS" in os.environ:
+                                print(f"   📤 Output:")
+                                self._display_detailed_output(result.stdout.strip(), show_output_lines)
+                            else:
+                                self._display_output(result.stdout.strip(), show_output_lines)
                         return True, result.stdout.strip()
                     else:
                         error_msg = result.stderr.strip()
                         print(f"   ❌ Failed (exit code: {result.returncode})")
                         if error_msg:
-                            print(f"   Error: {error_msg}")
+                            print(f"   📤 Error Output:")
+                            self._display_detailed_output(error_msg, show_output_lines)
+                        if result.stdout.strip():
+                            print(f"   📤 Standard Output:")
+                            self._display_detailed_output(result.stdout.strip(), show_output_lines)
                         
                         # Check if it's a connection issue that we should retry
                         if max_retries > 1 and self._is_connection_error(error_msg):
@@ -357,6 +382,29 @@ class LightsailBase:
             print(f"   {line}")
         if len(lines) > max_lines:
             print(f"   ... ({len(lines) - max_lines} more lines)")
+    
+    def _display_detailed_output(self, output, max_lines):
+        """Display command output with detailed formatting for GitHub Actions"""
+        lines = output.split('\n')
+        for i, line in enumerate(lines[:max_lines], 1):
+            if line.strip():
+                print(f"   {i:3d}: {line}")
+            else:
+                print(f"   {i:3d}:")
+        if len(lines) > max_lines:
+            print(f"   ... ({len(lines) - max_lines} more lines truncated)")
+    
+    def run_command_with_live_output(self, command, timeout=300):
+        """
+        Execute command with live output streaming - shows each command as it executes
+        """
+        print(f"🔧 Executing with live output on {self.instance_name}:")
+        
+        # Break down complex scripts into individual commands
+        if 'set -e' in command and '\n' in command:
+            return self._run_script_with_individual_commands(command, timeout)
+        else:
+            return self.run_command(command, timeout, verbose=True)
 
     def _is_connection_error(self, error_msg):
         """Check if error message indicates a connection issue"""
@@ -378,6 +426,109 @@ class LightsailBase:
                 os.unlink(cert_path)
         except Exception:
             pass  # Ignore cleanup errors
+    
+    def _run_script_with_individual_commands(self, script, timeout=300):
+        """
+        Run a bash script by executing individual commands and showing each one
+        """
+        print("📋 Breaking down script into individual commands:")
+        
+        # Parse the script into individual commands
+        lines = script.split('\n')
+        commands = []
+        current_command = []
+        in_heredoc = False
+        heredoc_delimiter = None
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # Skip empty lines and comments at the start
+            if not stripped or stripped.startswith('#'):
+                if current_command:  # Only add if we're building a command
+                    current_command.append(line)
+                continue
+            
+            # Skip 'set -e' as it's just error handling
+            if stripped == 'set -e':
+                continue
+            
+            # Handle heredoc start
+            if '<<' in line and not in_heredoc:
+                heredoc_delimiter = line.split('<<')[-1].strip().strip("'\"")
+                current_command.append(line)
+                in_heredoc = True
+                continue
+            
+            # Handle heredoc end
+            if in_heredoc:
+                current_command.append(line)
+                if stripped == heredoc_delimiter or stripped.endswith(heredoc_delimiter):
+                    in_heredoc = False
+                    heredoc_delimiter = None
+                continue
+            
+            # Handle line continuations
+            if line.endswith('\\'):
+                current_command.append(line)
+                continue
+            
+            # Add current line to command
+            current_command.append(line)
+            
+            # If this looks like a complete command, save it
+            if (stripped.endswith(';') or 
+                not stripped.endswith('\\') and 
+                not stripped.endswith('|') and
+                not stripped.endswith('&&') and
+                not stripped.endswith('||')):
+                
+                if current_command:
+                    cmd_text = '\n'.join(current_command).strip()
+                    if cmd_text and not cmd_text.startswith('#'):
+                        commands.append(cmd_text)
+                current_command = []
+        
+        # Add any remaining command
+        if current_command:
+            cmd_text = '\n'.join(current_command).strip()
+            if cmd_text and not cmd_text.startswith('#'):
+                commands.append(cmd_text)
+        
+        print(f"   📊 Found {len(commands)} individual commands to execute")
+        
+        # Execute each command individually
+        all_output = []
+        for i, cmd in enumerate(commands, 1):
+            print(f"\n   🔸 Command {i}/{len(commands)}:")
+            
+            # Show the command being executed
+            cmd_lines = cmd.split('\n')
+            for j, cmd_line in enumerate(cmd_lines):
+                if cmd_line.strip():
+                    print(f"      {j+1}: {cmd_line.strip()}")
+            
+            # Execute the command
+            success, output = self.run_command(cmd, timeout=60, verbose=False)
+            
+            if success:
+                print(f"      ✅ Command {i} completed successfully")
+                if output.strip():
+                    # Show key output lines
+                    output_lines = output.split('\n')
+                    for line in output_lines[:10]:  # Show first 10 lines
+                        if line.strip():
+                            print(f"         {line}")
+                    if len(output_lines) > 10:
+                        print(f"         ... ({len(output_lines)-10} more lines)")
+                all_output.append(output)
+            else:
+                print(f"      ❌ Command {i} failed")
+                if output:
+                    print(f"         Error: {output}")
+                return False, f"Command {i} failed: {output}"
+        
+        return True, '\n'.join(all_output)
 
 
 class LightsailSSHManager(LightsailBase):
