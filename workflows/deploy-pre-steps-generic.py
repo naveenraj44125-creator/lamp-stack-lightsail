@@ -28,17 +28,33 @@ class GenericPreDeployer:
 
     def prepare_environment(self):
         """Prepare generic application environment"""
-        print(f"🔧 Preparing application environment")
+        print("="*60)
+        print("🔧 PREPARING APPLICATION ENVIRONMENT")
+        print("="*60)
         
-        # Get application type and enabled dependencies
+        # Get application configuration
+        app_name = self.config.get('application.name', 'Generic Application')
+        app_version = self.config.get('application.version', '1.0.0')
         app_type = self.config.get('application.type', 'web')
         enabled_deps = self.dependency_manager.get_enabled_dependencies()
         
-        print(f"📋 Application Type: {app_type}")
-        print(f"📦 Enabled Dependencies: {', '.join(enabled_deps) if enabled_deps else 'None'}")
+        print(f"📋 Application: {app_name} v{app_version}")
+        print(f"🏷️  Type: {app_type}")
+        print(f"🌍 Instance: {self.client.instance_name}")
+        print(f"📍 Region: {self.client.region}")
+        print(f"📦 Dependencies to Install: {len(enabled_deps)}")
+        
+        if enabled_deps:
+            print("   Dependencies:")
+            for i, dep in enumerate(enabled_deps, 1):
+                print(f"   {i}. {dep}")
+        else:
+            print("   No dependencies configured")
         
         # Install all enabled dependencies
-        print("\n🚀 Starting dependency installation...")
+        print("\n" + "="*60)
+        print("🚀 INSTALLING DEPENDENCIES")
+        print("="*60)
         success, installed, failed = self.dependency_manager.install_all_dependencies()
         
         if not success:
@@ -49,25 +65,33 @@ class GenericPreDeployer:
         
         # Configure installed services
         if installed:
-            print(f"\n🔧 Configuring {len(installed)} installed dependencies...")
+            print(f"\n" + "="*60)
+            print(f"🔧 CONFIGURING {len(installed)} INSTALLED SERVICES")
+            print("="*60)
             config_success = self.dependency_manager.configure_services()
             if not config_success:
                 print("⚠️  Some service configurations failed")
         
         # Prepare application directory structure
-        print("\n📁 Preparing application directory structure...")
+        print("\n" + "="*60)
+        print("📁 PREPARING DIRECTORY STRUCTURE")
+        print("="*60)
         success = self._prepare_app_directories()
         if not success:
             print("❌ Failed to prepare application directories")
             return False
         
         # Set up environment variables
-        print("🌍 Setting up environment variables...")
+        print("\n" + "="*60)
+        print("🌍 SETTING UP ENVIRONMENT VARIABLES")
+        print("="*60)
         success = self._setup_environment_variables()
         if not success:
             print("⚠️  Failed to set up some environment variables")
         
-        print("✅ Generic pre-deployment steps completed successfully!")
+        print("\n" + "="*60)
+        print("✅ PRE-DEPLOYMENT COMPLETED SUCCESSFULLY!")
+        print("="*60)
         
         # Print installation summary
         summary = self.dependency_manager.get_installation_summary()

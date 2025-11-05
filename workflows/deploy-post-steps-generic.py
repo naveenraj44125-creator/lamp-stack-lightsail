@@ -71,31 +71,48 @@ echo "Service check completed"
     def deploy_application(self, package_file, verify=False, cleanup=False, env_vars=None):
         """Deploy application and configure services"""
         print(f"🚀 Starting generic application deployment")
+        print(f"📦 Package File: {package_file}")
+        print(f"🔍 Verify: {verify}")
+        print(f"🧹 Cleanup: {cleanup}")
         
         app_type = self.config.get('application.type', 'web')
-        print(f"📋 Application Type: {app_type}")
+        app_name = self.config.get('application.name', 'Generic Application')
+        app_version = self.config.get('application.version', '1.0.0')
+        
+        print(f"📋 Application: {app_name} v{app_version}")
+        print(f"🏷️  Type: {app_type}")
+        print(f"🌍 Instance: {self.client.instance_name}")
+        print(f"📍 Region: {self.client.region}")
         
         # Deploy application files
-        print("\n📦 Deploying application files...")
+        print("\n" + "="*60)
+        print("📦 DEPLOYING APPLICATION FILES")
+        print("="*60)
         success = self._deploy_application_files(package_file)
         if not success:
             print("❌ Failed to deploy application files")
             return False
         
         # Configure application based on type and dependencies
-        print("\n🔧 Configuring application...")
+        print("\n" + "="*60)
+        print("🔧 CONFIGURING APPLICATION")
+        print("="*60)
         success = self._configure_application()
         if not success:
             print("⚠️  Application configuration had some issues")
         
         # Set up application-specific configurations
-        print("\n⚙️  Setting up application-specific configurations...")
+        print("\n" + "="*60)
+        print("⚙️  APPLICATION-SPECIFIC CONFIGURATIONS")
+        print("="*60)
         success = self._setup_app_specific_config()
         if not success:
             print("⚠️  Some application-specific configurations failed")
         
         # Restart services
-        print("\n🔄 Restarting services...")
+        print("\n" + "="*60)
+        print("🔄 RESTARTING SERVICES")
+        print("="*60)
         success = self.dependency_manager.restart_services()
         if not success:
             print("⚠️  Some services failed to restart")
@@ -107,21 +124,33 @@ echo "Service check completed"
         
         # Verify deployment if requested
         if verify:
-            print("\n🔍 Verifying deployment...")
+            print("\n" + "="*60)
+            print("🔍 VERIFYING DEPLOYMENT")
+            print("="*60)
             success = self._verify_deployment()
             if not success:
                 print("⚠️  Deployment verification had issues")
         
         # Cleanup if requested
         if cleanup:
-            print("\n🧹 Cleaning up temporary files...")
+            print("\n" + "="*60)
+            print("🧹 CLEANING UP TEMPORARY FILES")
+            print("="*60)
             self._cleanup_deployment()
         
         # Optimize performance
-        print("\n⚡ Optimizing performance...")
+        print("\n" + "="*60)
+        print("⚡ OPTIMIZING PERFORMANCE")
+        print("="*60)
         self._optimize_performance()
         
-        print("✅ Generic application deployment completed!")
+        print("\n" + "="*60)
+        print("🎉 DEPLOYMENT COMPLETED SUCCESSFULLY!")
+        print("="*60)
+        print(f"✅ Application: {app_name} v{app_version}")
+        print(f"🌐 Instance: {self.client.instance_name}")
+        print(f"📍 Region: {self.client.region}")
+        print(f"🏷️  Type: {app_type}")
         return True
 
     def _deploy_application_files(self, package_file) -> bool:
@@ -777,36 +806,93 @@ echo "✅ Cleanup completed"
         """Optimize system and application performance"""
         script = '''
 set -e
-echo "Optimizing performance..."
+echo "🔧 Starting performance optimization..."
 
 # Optimize Apache if running
 if systemctl is-active --quiet apache2; then
+    echo "⚡ Optimizing Apache web server..."
     # Enable compression
     sudo a2enmod deflate
     sudo a2enmod expires
+    sudo a2enmod headers
     sudo systemctl reload apache2
     echo "✅ Apache performance optimized"
 fi
 
 # Optimize PHP if installed
 if which php > /dev/null 2>&1; then
+    echo "⚡ Optimizing PHP configuration..."
     # Enable OPcache if available
     PHP_INI="/etc/php/8.1/apache2/php.ini"
     if [ -f "$PHP_INI" ]; then
         sudo sed -i 's/;opcache.enable=1/opcache.enable=1/' "$PHP_INI" || true
         sudo sed -i 's/;opcache.memory_consumption=128/opcache.memory_consumption=128/' "$PHP_INI" || true
+        sudo sed -i 's/;opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/' "$PHP_INI" || true
+        sudo sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/' "$PHP_INI" || true
     fi
     echo "✅ PHP performance optimized"
 fi
 
 # System-level optimizations
-echo "Applying system optimizations..."
+echo "⚡ Applying system-level optimizations..."
 sudo sysctl -w vm.swappiness=10 || true
+sudo sysctl -w net.core.rmem_max=16777216 || true
+sudo sysctl -w net.core.wmem_max=16777216 || true
 
-echo "✅ Performance optimization completed"
+# Clear system caches
+echo "🧹 Clearing system caches..."
+sudo apt-get clean || true
+sudo apt-get autoremove -y || true
+
+echo "✅ Performance optimization completed successfully"
 '''
         
         success, output = self.client.run_command(script, timeout=60)
+    
+    def _print_deployment_summary(self):
+        """Print deployment summary information"""
+        print("\n" + "="*60)
+        print("📊 DEPLOYMENT SUMMARY")
+        print("="*60)
+        
+        # Get instance info
+        instance_info = self.client.get_instance_info()
+        if instance_info:
+            print(f"🖥️  Instance Name: {instance_info['name']}")
+            print(f"🌐 Public IP: {instance_info.get('public_ip', 'N/A')}")
+            print(f"🔒 Private IP: {instance_info.get('private_ip', 'N/A')}")
+            print(f"📦 Blueprint: {instance_info.get('blueprint', 'N/A')}")
+            print(f"💾 Bundle: {instance_info.get('bundle', 'N/A')}")
+            print(f"⚡ State: {instance_info.get('state', 'N/A')}")
+        
+        # Show installed dependencies
+        if hasattr(self.dependency_manager, 'installed_dependencies'):
+            installed = self.dependency_manager.installed_dependencies
+            if installed:
+                print(f"\n🔧 Installed Dependencies ({len(installed)}):")
+                for dep in installed:
+                    print(f"   ✅ {dep}")
+        
+        # Show application configuration
+        app_config = {
+            'Name': self.config.get('application.name', 'Generic Application'),
+            'Version': self.config.get('application.version', '1.0.0'),
+            'Type': self.config.get('application.type', 'web'),
+            'PHP Version': self.config.get('application.php_version', '8.1'),
+        }
+        
+        print(f"\n📋 Application Configuration:")
+        for key, value in app_config.items():
+            print(f"   {key}: {value}")
+        
+        print("\n🎯 Next Steps:")
+        if instance_info and instance_info.get('public_ip'):
+            print(f"   🌐 Visit: http://{instance_info['public_ip']}")
+        print("   📝 Check logs: /var/log/apache2/")
+        print("   🔧 Config files: /var/www/html/.env")
+        print("   📊 Monitor: systemctl status apache2 mysql")
+        
+        print("="*60)
 
 def main():
     parser = argparse.ArgumentParser(description='Generic post-deployment steps for AWS Lightsail')
@@ -856,6 +942,8 @@ def main():
             cleanup=args.cleanup,
             env_vars=env_vars
         ):
+            # Print deployment summary
+            post_deployer._print_deployment_summary()
             print("🎉 Generic post-deployment steps completed successfully!")
             sys.exit(0)
         else:
