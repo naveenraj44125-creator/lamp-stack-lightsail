@@ -450,24 +450,47 @@ class LightsailBase:
             
             # Format command for logging - handle multi-line commands better
             if '\n' in command:
-                # For multi-line commands, show first line + summary
-                first_line = command.split('\n')[0].strip()
-                line_count = len([line for line in command.split('\n') if line.strip()])
-                if first_line.startswith('set -e'):
-                    # Skip 'set -e' and get the actual first command
-                    actual_lines = [line.strip() for line in command.split('\n') if line.strip() and not line.strip().startswith('#') and line.strip() != 'set -e']
-                    if actual_lines:
-                        first_line = actual_lines[0]
-                        if first_line.startswith('echo '):
-                            # Extract the echo message
-                            echo_msg = first_line.replace('echo "', '').replace('"', '').replace("echo '", "").replace("'", "")
-                            log_entry = f"[{timestamp}] SCRIPT: {echo_msg} ({line_count} commands)"
+                # For multi-line commands, find the best descriptive line
+                lines = [line.strip() for line in command.split('\n') if line.strip()]
+                line_count = len(lines)
+                
+                # Look for descriptive echo statements
+                description = None
+                for line in lines:
+                    if line.startswith('echo ') and ('"' in line or "'" in line):
+                        # Extract echo message
+                        if line.startswith('echo "'):
+                            description = line.replace('echo "', '').replace('"', '').strip()
+                        elif line.startswith("echo '"):
+                            description = line.replace("echo '", "").replace("'", "").strip()
                         else:
-                            log_entry = f"[{timestamp}] SCRIPT: {first_line[:50]}... ({line_count} commands)"
-                    else:
-                        log_entry = f"[{timestamp}] SCRIPT: Multi-line script ({line_count} commands)"
-                else:
-                    log_entry = f"[{timestamp}] SCRIPT: {first_line[:50]}... ({line_count} commands)"
+                            # Handle echo without quotes
+                            description = line.replace('echo ', '').strip()
+                        
+                        # Clean up common patterns
+                        if description.startswith('✅') or description.startswith('🔧') or description.startswith('📦'):
+                            description = description[2:].strip()  # Remove emoji and space
+                        break
+                
+                # If no echo found, look for comments that describe the script
+                if not description:
+                    for line in lines:
+                        if line.startswith('# ') and len(line) > 3:
+                            description = line[2:].strip()
+                            break
+                
+                # If still no description, use the first meaningful command
+                if not description:
+                    for line in lines:
+                        if not line.startswith('#') and line != 'set -e' and len(line) > 5:
+                            description = line[:40] + ('...' if len(line) > 40 else '')
+                            break
+                
+                # Fallback to generic description
+                if not description:
+                    description = "Multi-line script"
+                
+                log_entry = f"[{timestamp}] SCRIPT: {description} ({line_count} commands)"
             else:
                 # Single line command
                 log_entry = f"[{timestamp}] COMMAND: {command[:100]}{'...' if len(command) > 100 else ''}"
