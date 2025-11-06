@@ -443,59 +443,71 @@ class LightsailBase:
         try:
             # Show that we're logging (only in GitHub Actions for visibility)
             if "GITHUB_ACTIONS" in os.environ:
-                print(f"📝 Logging command to instance log file...")
+                print(f"📝 Logging detailed commands to instance log file...")
             
             # Create log entry with timestamp
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
             
-            # Format command for logging - handle multi-line commands better
+            # For detailed logging, we want to log each individual command
             if '\n' in command:
-                # For multi-line commands, find the best descriptive line
-                lines = [line.strip() for line in command.split('\n') if line.strip()]
-                line_count = len(lines)
+                # Multi-line script - log each command separately
+                lines = command.split('\n')
                 
-                # Look for descriptive echo statements
+                # First, find script description for the header
                 description = None
                 for line in lines:
-                    if line.startswith('echo ') and ('"' in line or "'" in line):
+                    line_stripped = line.strip()
+                    if line_stripped.startswith('echo ') and ('"' in line_stripped or "'" in line_stripped):
                         # Extract echo message
-                        if line.startswith('echo "'):
-                            description = line.replace('echo "', '').replace('"', '').strip()
-                        elif line.startswith("echo '"):
-                            description = line.replace("echo '", "").replace("'", "").strip()
+                        if line_stripped.startswith('echo "'):
+                            description = line_stripped.replace('echo "', '').replace('"', '').strip()
+                        elif line_stripped.startswith("echo '"):
+                            description = line_stripped.replace("echo '", "").replace("'", "").strip()
                         else:
-                            # Handle echo without quotes
-                            description = line.replace('echo ', '').strip()
+                            description = line_stripped.replace('echo ', '').strip()
                         
                         # Clean up common patterns
                         if description.startswith('✅') or description.startswith('🔧') or description.startswith('📦'):
-                            description = description[2:].strip()  # Remove emoji and space
+                            description = description[2:].strip()
                         break
                 
-                # If no echo found, look for comments that describe the script
-                if not description:
-                    for line in lines:
-                        if line.startswith('# ') and len(line) > 3:
-                            description = line[2:].strip()
-                            break
-                
-                # If still no description, use the first meaningful command
-                if not description:
-                    for line in lines:
-                        if not line.startswith('#') and line != 'set -e' and len(line) > 5:
-                            description = line[:40] + ('...' if len(line) > 40 else '')
-                            break
-                
-                # Fallback to generic description
                 if not description:
                     description = "Multi-line script"
                 
-                log_entry = f"[{timestamp}] SCRIPT: {description} ({line_count} commands)"
+                # Log script header
+                script_header = f"[{timestamp}] SCRIPT_START: {description}"
+                self._write_log_entry(ssh_details, script_header)
+                
+                # Log each individual command
+                command_num = 1
+                for line in lines:
+                    line_stripped = line.strip()
+                    if line_stripped and not line_stripped.startswith('#'):
+                        if line_stripped != 'set -e':  # Skip error handling directive
+                            individual_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                            log_entry = f"[{individual_timestamp}] CMD_{command_num:02d}: {line_stripped}"
+                            self._write_log_entry(ssh_details, log_entry)
+                            command_num += 1
+                
+                # Log script end
+                end_timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                script_end = f"[{end_timestamp}] SCRIPT_END: {description} (executed {command_num-1} commands)"
+                self._write_log_entry(ssh_details, script_end)
+                
             else:
                 # Single line command
-                log_entry = f"[{timestamp}] COMMAND: {command[:100]}{'...' if len(command) > 100 else ''}"
-            
-            # Create the logging command (ensure directory exists and append to log file)
+                log_entry = f"[{timestamp}] COMMAND: {command}"
+                self._write_log_entry(ssh_details, log_entry)
+                
+        except Exception as e:
+            # Show logging errors in GitHub Actions for debugging
+            if "GITHUB_ACTIONS" in os.environ:
+                print(f"   ⚠️ Logging exception: {str(e)}")
+            pass
+
+    def _write_log_entry(self, ssh_details, log_entry):
+        """Write a single log entry to the instance log file"""
+        try:
             # Escape single quotes in the log entry
             escaped_log_entry = log_entry.replace("'", "'\"'\"'")
             log_command = f"sudo mkdir -p /var/log && echo '{escaped_log_entry}' | sudo tee -a /var/log/deployment-commands.log > /dev/null"
@@ -515,23 +527,11 @@ class LightsailBase:
                 # Execute logging command
                 result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=15)
                 
-                # Show logging result in GitHub Actions for debugging
-                if "GITHUB_ACTIONS" in os.environ:
-                    if result.returncode == 0:
-                        print(f"   ✅ Command logged successfully")
-                    else:
-                        print(f"   ⚠️ Logging failed (exit code: {result.returncode})")
-                        if result.stderr:
-                            print(f"   Error: {result.stderr.strip()}")
-                
             finally:
                 self._cleanup_ssh_files(key_path, cert_path)
                 
-        except Exception as e:
-            # Show logging errors in GitHub Actions for debugging
-            if "GITHUB_ACTIONS" in os.environ:
-                print(f"   ⚠️ Logging exception: {str(e)}")
-            pass
+        except Exception:
+            pass  # Ignore individual logging errors
 
     def get_command_log(self, lines=50):
         """
