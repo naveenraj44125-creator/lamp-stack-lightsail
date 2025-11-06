@@ -57,10 +57,23 @@ class LightsailBase:
                 ssh_details = ssh_response['accessDetails']
                 
                 # Show EXACT command being sent to host
-                print(f"📡 Sending command to host {ssh_details['username']}@{ssh_details['ipAddress']}, command:")
+                print(f"📡 Sending command to {ssh_details['username']}@{ssh_details['ipAddress']}:")
                 print("─" * 80)
                 print("COMMAND START:")
-                print(command)
+                
+                # Format command display for better readability
+                if '\n' in command and len(command.split('\n')) > 3:
+                    # Multi-line command - show it formatted
+                    lines = command.split('\n')
+                    for i, line in enumerate(lines, 1):
+                        if line.strip():
+                            print(f"{i:2d}: {line}")
+                        else:
+                            print(f"{i:2d}:")
+                else:
+                    # Single line or short command
+                    print(command)
+                
                 print("COMMAND END:")
                 print("─" * 80)
                 
@@ -434,10 +447,35 @@ class LightsailBase:
             
             # Create log entry with timestamp
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-            log_entry = f"[{timestamp}] COMMAND: {command.replace(chr(10), ' | ')}"
+            
+            # Format command for logging - handle multi-line commands better
+            if '\n' in command:
+                # For multi-line commands, show first line + summary
+                first_line = command.split('\n')[0].strip()
+                line_count = len([line for line in command.split('\n') if line.strip()])
+                if first_line.startswith('set -e'):
+                    # Skip 'set -e' and get the actual first command
+                    actual_lines = [line.strip() for line in command.split('\n') if line.strip() and not line.strip().startswith('#') and line.strip() != 'set -e']
+                    if actual_lines:
+                        first_line = actual_lines[0]
+                        if first_line.startswith('echo '):
+                            # Extract the echo message
+                            echo_msg = first_line.replace('echo "', '').replace('"', '').replace("echo '", "").replace("'", "")
+                            log_entry = f"[{timestamp}] SCRIPT: {echo_msg} ({line_count} commands)"
+                        else:
+                            log_entry = f"[{timestamp}] SCRIPT: {first_line[:50]}... ({line_count} commands)"
+                    else:
+                        log_entry = f"[{timestamp}] SCRIPT: Multi-line script ({line_count} commands)"
+                else:
+                    log_entry = f"[{timestamp}] SCRIPT: {first_line[:50]}... ({line_count} commands)"
+            else:
+                # Single line command
+                log_entry = f"[{timestamp}] COMMAND: {command[:100]}{'...' if len(command) > 100 else ''}"
             
             # Create the logging command (ensure directory exists and append to log file)
-            log_command = f"sudo mkdir -p /var/log && echo '{log_entry}' | sudo tee -a /var/log/deployment-commands.log > /dev/null"
+            # Escape single quotes in the log entry
+            escaped_log_entry = log_entry.replace("'", "'\"'\"'")
+            log_command = f"sudo mkdir -p /var/log && echo '{escaped_log_entry}' | sudo tee -a /var/log/deployment-commands.log > /dev/null"
             
             # Create temporary SSH key files for logging
             key_path, cert_path = self.create_ssh_files(ssh_details)
