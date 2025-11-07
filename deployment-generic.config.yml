@@ -52,7 +52,7 @@ dependencies:
   # Database Dependencies
   mysql:
     enabled: true
-    external: false  # Changed to false to force local MySQL setup
+    external: true  # Set to true to use external RDS database (only installs mysql-client)
     rds:
       database_name: "lamp-app-db"  # Name of your Lightsail RDS instance
       region: "us-east-1"
