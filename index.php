@@ -15,14 +15,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (isset($_POST['action'])) {
             switch ($_POST['action']) {
                 case 'create_table':
-                    // Create a sample table for demonstration
-                    $sql = "CREATE TABLE IF NOT EXISTS user_visits (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        visitor_name VARCHAR(100) NOT NULL,
-                        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        ip_address VARCHAR(45),
-                        user_agent TEXT
-                    )";
+                    // Create a sample table for demonstration (supports both MySQL and PostgreSQL)
+                    if (DB_TYPE === 'POSTGRESQL') {
+                        $sql = "CREATE TABLE IF NOT EXISTS user_visits (
+                            id SERIAL PRIMARY KEY,
+                            visitor_name VARCHAR(100) NOT NULL,
+                            visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            ip_address VARCHAR(45),
+                            user_agent TEXT
+                        )";
+                    } else {
+                        $sql = "CREATE TABLE IF NOT EXISTS user_visits (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            visitor_name VARCHAR(100) NOT NULL,
+                            visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            ip_address VARCHAR(45),
+                            user_agent TEXT
+                        )";
+                    }
                     $pdo->exec($sql);
                     $message = "✅ Table 'user_visits' created successfully!";
                     break;
@@ -89,8 +99,16 @@ function tableExists() {
         if ($pdo === null) {
             return false;
         }
-        $stmt = $pdo->query("SHOW TABLES LIKE 'user_visits'");
-        return $stmt->rowCount() > 0;
+        
+        // Different query for MySQL vs PostgreSQL
+        if (DB_TYPE === 'POSTGRESQL') {
+            $stmt = $pdo->query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'user_visits')");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result['exists'] === 't' || $result['exists'] === true;
+        } else {
+            $stmt = $pdo->query("SHOW TABLES LIKE 'user_visits'");
+            return $stmt->rowCount() > 0;
+        }
     } catch (PDOException $e) {
         return false;
     } catch (Exception $e) {
