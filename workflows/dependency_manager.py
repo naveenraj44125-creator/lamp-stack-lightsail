@@ -329,7 +329,9 @@ echo "✅ PostgreSQL installation completed"
             if ext == 'pdo':
                 continue  # PDO is included in php{version}-common, no separate package
             elif ext == 'pdo_mysql':
+                # Install both generic and version-specific MySQL packages
                 ext_packages.append('php-mysql')
+                ext_packages.append(f'php{version}-mysql')
             elif ext == 'json':
                 continue  # JSON is built into PHP 8.0+, no separate package needed
             else:
