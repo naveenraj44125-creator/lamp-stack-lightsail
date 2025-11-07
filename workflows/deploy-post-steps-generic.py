@@ -720,11 +720,17 @@ echo "✅ Application-specific configurations completed"
 set -e
 echo "Setting deployment environment variables..."
 
-# Create .env file with proper permissions if it doesn't exist
-if [ ! -f /var/www/html/.env ]; then
+# Ensure database configuration exists in .env file
+if [ -f /opt/app/database.env ] && [ ! -f /var/www/html/.env ]; then
+    echo "Copying database configuration to .env file..."
+    sudo cp /opt/app/database.env /var/www/html/.env
+    sudo chown www-data:www-data /var/www/html/.env
+    sudo chmod 640 /var/www/html/.env
+elif [ ! -f /var/www/html/.env ]; then
+    # Create empty .env file if neither exists
     sudo touch /var/www/html/.env
     sudo chown www-data:www-data /var/www/html/.env
-    sudo chmod 644 /var/www/html/.env
+    sudo chmod 640 /var/www/html/.env
 fi
 
 # Create temporary file with deployment variables
