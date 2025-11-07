@@ -237,8 +237,14 @@ echo "✅ Nginx installation completed"
         return success
     
     def _install_mysql(self, config: Dict[str, Any]) -> bool:
-        """Install and configure MySQL database"""
+        """Install and configure MySQL database (local only, not for external RDS)"""
+        # This method should only be called for local MySQL installations
+        # External databases are handled by _install_external_database
+        
         mysql_config = config.get('config', {})
+        
+        print("📦 Installing local MySQL database server...")
+        print("⚠️  Note: For external RDS databases, only the MySQL client will be installed")
         
         script = f'''
 set -e
@@ -274,8 +280,14 @@ echo "✅ MySQL installation completed"
         return success
     
     def _install_postgresql(self, config: Dict[str, Any]) -> bool:
-        """Install and configure PostgreSQL database"""
+        """Install and configure PostgreSQL database (local only, not for external RDS)"""
+        # This method should only be called for local PostgreSQL installations
+        # External databases are handled by _install_external_database
+        
         pg_config = config.get('config', {})
+        
+        print("📦 Installing local PostgreSQL database server...")
+        print("⚠️  Note: For external RDS databases, only the PostgreSQL client will be installed")
         
         script = f'''
 set -e
