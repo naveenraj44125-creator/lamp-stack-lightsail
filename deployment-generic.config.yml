@@ -51,7 +51,7 @@ dependencies:
   
   # Database Dependencies
   mysql:
-    enabled: false  # Disabled - switching to PostgreSQL
+    enabled: true  # Using MySQL RDS
     external: true  # Set to true to use external RDS database (only installs mysql-client)
     rds:
       database_name: "lamp-app-db"  # Name of your Lightsail RDS instance
@@ -64,10 +64,10 @@ dependencies:
         DB_CHARSET: "utf8mb4"
   
   postgresql:
-    enabled: true  # Enabled - using PostgreSQL instead of MySQL
+    enabled: false  # Disabled - using MySQL RDS instead
     external: true  # Using external RDS PostgreSQL
     rds:
-      database_name: "lamp-app-db"  # Name of your Lightsail PostgreSQL RDS instance
+      database_name: "lamp-app-postgres-db"  # Name of your Lightsail PostgreSQL RDS instance
       region: "us-east-1"
       master_database: "app_db"  # Database name within RDS
       environment:
@@ -81,7 +81,7 @@ dependencies:
     config:
       extensions:
         # Note: pdo and json are built into PHP 8.3, no separate packages needed
-        - "pgsql"      # Provides PDO PostgreSQL driver (php-pgsql)
+        - "mysql"      # Provides PDO MySQL driver (php8.3-mysql)
         - "curl"       # HTTP client (php-curl)
         - "mbstring"   # Multibyte string support (php-mbstring)
         - "xml"        # XML support (php-xml)
