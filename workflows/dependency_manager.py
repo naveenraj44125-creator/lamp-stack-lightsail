@@ -762,11 +762,11 @@ echo "✅ {service_name} restarted"
                 return False
             
             # Initialize RDS manager
+            # Note: Uses the same AWS credentials that GitHub Actions configured
+            # No need to pass separate credentials - boto3 will use the environment
             rds_manager = LightsailRDSManager(
                 instance_name=self.client.instance_name,
-                region=rds_config.get('region', 'us-east-1'),
-                aws_access_key_id=rds_config.get('access_key'),
-                aws_secret_access_key=rds_config.get('secret_key')
+                region=rds_config.get('region', 'us-east-1')
             )
             
             # Get RDS connection details

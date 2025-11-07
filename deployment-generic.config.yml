@@ -56,8 +56,9 @@ dependencies:
     rds:
       database_name: "lamp-app-db"  # Name of your Lightsail RDS instance
       region: "us-east-1"
-      access_key: "${AWS_ACCESS_KEY_ID}"     # GitHub Secret
-      secret_key: "${AWS_SECRET_ACCESS_KEY}" # GitHub Secret
+      # Note: AWS credentials are automatically used from GitHub Actions
+      # No need to specify access_key/secret_key here
+      master_database: "app_db"  # Database name within RDS
       environment:
         DB_CONNECTION_TIMEOUT: "30"
         DB_CHARSET: "utf8mb4"
