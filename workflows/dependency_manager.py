@@ -867,21 +867,24 @@ echo "✅ PostgreSQL client installation completed"
 set -e
 echo "Configuring database environment variables..."
 
-# Create environment file
+# Create environment file in /opt/app
 sudo mkdir -p /opt/app
 cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
 {env_content}
 EOF
 
-# Set proper permissions
-sudo chmod 600 /opt/app/database.env
-sudo chown root:root /opt/app/database.env
+# Set proper permissions for /opt/app/database.env (readable by www-data group)
+sudo chmod 640 /opt/app/database.env
+sudo chown root:www-data /opt/app/database.env
 
-# Create symlink for easy access
-sudo ln -sf /opt/app/database.env /var/www/html/.env 2>/dev/null || true
+# Also create a copy in web directory for direct access
+sudo cp /opt/app/database.env /var/www/html/.env
+sudo chmod 640 /var/www/html/.env
+sudo chown www-data:www-data /var/www/html/.env
 
 echo "✅ Database environment configuration completed"
 echo "Environment file created at: /opt/app/database.env"
+echo "Environment file copied to: /var/www/html/.env"
 '''
             
             success, output = self.client.run_command(script, timeout=60)
@@ -925,21 +928,24 @@ echo "Environment file created at: /opt/app/database.env"
 set -e
 echo "Configuring database environment variables..."
 
-# Create environment file
+# Create environment file in /opt/app
 sudo mkdir -p /opt/app
 cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
 {env_content}
 EOF
 
-# Set proper permissions
-sudo chmod 600 /opt/app/database.env
-sudo chown root:root /opt/app/database.env
+# Set proper permissions for /opt/app/database.env (readable by www-data group)
+sudo chmod 640 /opt/app/database.env
+sudo chown root:www-data /opt/app/database.env
 
-# Create symlink for easy access
-sudo ln -sf /opt/app/database.env /var/www/html/.env 2>/dev/null || true
+# Also create a copy in web directory for direct access
+sudo cp /opt/app/database.env /var/www/html/.env
+sudo chmod 640 /var/www/html/.env
+sudo chown www-data:www-data /var/www/html/.env
 
 echo "✅ Database environment configuration completed"
 echo "Environment file created at: /opt/app/database.env"
+echo "Environment file copied to: /var/www/html/.env"
 '''
             
             success, output = self.client.run_command(script, timeout=60)
