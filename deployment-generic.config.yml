@@ -76,11 +76,12 @@ dependencies:
     version: "8.3"  # Updated to match Ubuntu 24.04 default
     config:
       extensions:
-        - "pdo"
-        - "pdo_mysql"
-        - "curl"
-        - "json"
-        - "mbstring"
+        # Note: pdo and json are built into PHP 8.3, no separate packages needed
+        - "mysql"      # Provides PDO MySQL driver (php-mysql)
+        - "curl"       # HTTP client (php-curl)
+        - "mbstring"   # Multibyte string support (php-mbstring)
+        - "xml"        # XML support (php-xml)
+        - "zip"        # ZIP archive support (php-zip)
       enable_composer: true
   
   python:

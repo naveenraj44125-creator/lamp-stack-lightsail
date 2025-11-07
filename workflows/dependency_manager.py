@@ -325,14 +325,17 @@ echo "✅ PostgreSQL installation completed"
         # Build extension list
         ext_packages = []
         for ext in extensions:
+            # Skip 'pdo' as it's built into PHP (part of php-common)
             if ext == 'pdo':
-                ext_packages.append('php-pdo')
+                continue  # PDO is included in php{version}-common, no separate package
             elif ext == 'pdo_mysql':
                 ext_packages.append('php-mysql')
+            elif ext == 'json':
+                continue  # JSON is built into PHP 8.0+, no separate package needed
             else:
                 ext_packages.append(f'php-{ext}')
         
-        ext_list = ' '.join(ext_packages)
+        ext_list = ' '.join(ext_packages) if ext_packages else ''
         
         script = f'''
 set -e
