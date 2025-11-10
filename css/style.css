@@ -316,3 +316,35 @@ footer {
         gap: 10px;
     }
 }
+
+
+/* Cache Status Badges */
+.cache-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.cache-hit {
+    background-color: #28a745;
+    color: white;
+}
+
+.cache-miss {
+    background-color: #6c757d;
+    color: white;
+}
+
+.query-time {
+    display: inline-block;
+    padding: 4px 8px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #495057;
+    font-family: 'Courier New', monospace;
+}

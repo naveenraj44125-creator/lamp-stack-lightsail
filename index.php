@@ -78,55 +78,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Function to get visit records (with caching)
-function getVisitRecords() {
+function getVisitRecords(&$fromCache = false, &$queryTime = 0) {
+    $startTime = microtime(true);
+    
     // Try to get from cache first
     $cached = cache_get('recent_visits');
     if ($cached !== null) {
+        $fromCache = true;
+        $queryTime = (microtime(true) - $startTime) * 1000; // Convert to milliseconds
         return json_decode($cached, true);
     }
     
     try {
         $pdo = getDatabaseConnection();
         if ($pdo === null) {
+            $queryTime = (microtime(true) - $startTime) * 1000;
             return [];
         }
         $stmt = $pdo->query("SELECT * FROM user_visits ORDER BY visit_time DESC LIMIT 10");
         $visits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $queryTime = (microtime(true) - $startTime) * 1000;
+        $fromCache = false;
         
         // Cache for 60 seconds
         cache_set('recent_visits', json_encode($visits), 60);
         
         return $visits;
     } catch (PDOException $e) {
+        $queryTime = (microtime(true) - $startTime) * 1000;
         return [];
     } catch (Exception $e) {
+        $queryTime = (microtime(true) - $startTime) * 1000;
         return [];
     }
 }
 
 // Function to get visit statistics (with caching)
-function getVisitStats() {
+function getVisitStats(&$fromCache = false, &$queryTime = 0) {
+    $startTime = microtime(true);
+    
     // Try to get from cache first
     $cached = cache_get('visit_stats');
     if ($cached !== null) {
+        $fromCache = true;
+        $queryTime = (microtime(true) - $startTime) * 1000; // Convert to milliseconds
         return json_decode($cached, true);
     }
     
     try {
         $pdo = getDatabaseConnection();
         if ($pdo === null) {
+            $queryTime = (microtime(true) - $startTime) * 1000;
             return ['total_visits' => 0, 'unique_visitors' => 0];
         }
         $stmt = $pdo->query("SELECT COUNT(*) as total_visits, COUNT(DISTINCT ip_address) as unique_visitors FROM user_visits");
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $queryTime = (microtime(true) - $startTime) * 1000;
+        $fromCache = false;
         
         // Cache for 60 seconds
         cache_set('visit_stats', json_encode($stats), 60);
         
         return $stats;
     } catch (PDOException $e) {
+        $queryTime = (microtime(true) - $startTime) * 1000;
         return ['total_visits' => 0, 'unique_visitors' => 0];
     } catch (Exception $e) {
+        $queryTime = (microtime(true) - $startTime) * 1000;
         return ['total_visits' => 0, 'unique_visitors' => 0];
     }
 }
@@ -301,7 +321,20 @@ function tableExists() {
                     <!-- Visit Statistics -->
                     <div class="db-stats">
                         <h4>📊 Visit Statistics</h4>
-                        <?php $stats = getVisitStats(); ?>
+                        <?php 
+                        $statsFromCache = false;
+                        $statsQueryTime = 0;
+                        $stats = getVisitStats($statsFromCache, $statsQueryTime); 
+                        ?>
+                        <div style="margin-bottom: 10px;">
+                            <?php if ($statsFromCache): ?>
+                                <span class="cache-badge cache-hit">⚡ FROM CACHE</span>
+                                <span class="query-time">Query time: <?php echo number_format($statsQueryTime, 2); ?>ms</span>
+                            <?php else: ?>
+                                <span class="cache-badge cache-miss">🗄️ FROM DATABASE</span>
+                                <span class="query-time">Query time: <?php echo number_format($statsQueryTime, 2); ?>ms</span>
+                            <?php endif; ?>
+                        </div>
                         <ul>
                             <li><strong>Total Visits:</strong> <?php echo $stats['total_visits']; ?></li>
                             <li><strong>Unique Visitors:</strong> <?php echo $stats['unique_visitors']; ?></li>
@@ -311,7 +344,20 @@ function tableExists() {
                     <!-- Recent Visits Display -->
                     <div class="db-records">
                         <h4>📋 Recent Visits (Last 10)</h4>
-                        <?php $visits = getVisitRecords(); ?>
+                        <?php 
+                        $visitsFromCache = false;
+                        $visitsQueryTime = 0;
+                        $visits = getVisitRecords($visitsFromCache, $visitsQueryTime); 
+                        ?>
+                        <div style="margin-bottom: 10px;">
+                            <?php if ($visitsFromCache): ?>
+                                <span class="cache-badge cache-hit">⚡ FROM CACHE</span>
+                                <span class="query-time">Query time: <?php echo number_format($visitsQueryTime, 2); ?>ms</span>
+                            <?php else: ?>
+                                <span class="cache-badge cache-miss">🗄️ FROM DATABASE</span>
+                                <span class="query-time">Query time: <?php echo number_format($visitsQueryTime, 2); ?>ms</span>
+                            <?php endif; ?>
+                        </div>
                         <?php if (empty($visits)): ?>
                             <p><em>No visits recorded yet. Add your first visit above!</em></p>
                         <?php else: ?>
