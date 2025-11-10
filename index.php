@@ -1,6 +1,7 @@
 <?php
 // Include database configuration
 require_once 'config/database.php';
+require_once 'config/cache.php';
 
 // Handle form submissions for database operations
 $message = '';
@@ -44,12 +45,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $stmt = $pdo->prepare("INSERT INTO user_visits (visitor_name, ip_address, user_agent) VALUES (?, ?, ?)");
                     $stmt->execute([$name, $ip, $userAgent]);
+                    
+                    // Clear cache when data changes
+                    cache_delete('visit_stats');
+                    cache_delete('recent_visits');
+                    
                     $message = "✅ Visit recorded for: " . htmlspecialchars($name);
                     break;
 
                 case 'clear_visits':
                     $pdo->exec("DELETE FROM user_visits");
+                    // Clear cache when data changes
+                    cache_delete('visit_stats');
+                    cache_delete('recent_visits');
                     $message = "✅ All visit records cleared!";
+                    break;
+                
+                case 'clear_cache':
+                    if (cache_flush()) {
+                        $message = "✅ Redis cache cleared successfully!";
+                    } else {
+                        $error = "❌ Failed to clear cache (Redis may not be enabled)";
+                    }
                     break;
             }
         }
@@ -60,15 +77,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Function to get visit records
+// Function to get visit records (with caching)
 function getVisitRecords() {
+    // Try to get from cache first
+    $cached = cache_get('recent_visits');
+    if ($cached !== null) {
+        return json_decode($cached, true);
+    }
+    
     try {
         $pdo = getDatabaseConnection();
         if ($pdo === null) {
             return [];
         }
         $stmt = $pdo->query("SELECT * FROM user_visits ORDER BY visit_time DESC LIMIT 10");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $visits = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Cache for 60 seconds
+        cache_set('recent_visits', json_encode($visits), 60);
+        
+        return $visits;
     } catch (PDOException $e) {
         return [];
     } catch (Exception $e) {
@@ -76,15 +104,26 @@ function getVisitRecords() {
     }
 }
 
-// Function to get visit statistics
+// Function to get visit statistics (with caching)
 function getVisitStats() {
+    // Try to get from cache first
+    $cached = cache_get('visit_stats');
+    if ($cached !== null) {
+        return json_decode($cached, true);
+    }
+    
     try {
         $pdo = getDatabaseConnection();
         if ($pdo === null) {
             return ['total_visits' => 0, 'unique_visitors' => 0];
         }
         $stmt = $pdo->query("SELECT COUNT(*) as total_visits, COUNT(DISTINCT ip_address) as unique_visitors FROM user_visits");
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Cache for 60 seconds
+        cache_set('visit_stats', json_encode($stats), 60);
+        
+        return $stats;
     } catch (PDOException $e) {
         return ['total_visits' => 0, 'unique_visitors' => 0];
     } catch (Exception $e) {
@@ -194,10 +233,36 @@ function tableExists() {
                     <li><strong>Web Server:</strong> ✅ Apache is running</li>
                     <li><strong>PHP Status:</strong> ✅ PHP <?php echo phpversion(); ?> is working</li>
                     <li><strong>Database:</strong> <?php echo getDatabaseStatus(); ?></li>
+                    <li><strong>Redis Cache:</strong> <?php echo cache_enabled() ? '✅ Connected' : '⚠️ Not available'; ?></li>
                     <li><strong>File Permissions:</strong> <?php echo is_writable('.') ? '✅ Writable' : '⚠️ Read-only'; ?></li>
                     <li><strong>Session Support:</strong> <?php echo function_exists('session_start') ? '✅ Available' : '❌ Not available'; ?></li>
                 </ul>
             </div>
+            
+            <!-- Redis Cache Status -->
+            <?php if (cache_enabled()): ?>
+            <div class="info-section">
+                <h3>⚡ Redis Cache Status</h3>
+                <?php $cacheStats = cache_stats(); ?>
+                <ul>
+                    <li><strong>Status:</strong> ✅ Connected and Running</li>
+                    <li><strong>Version:</strong> <?php echo $cacheStats['version'] ?? 'unknown'; ?></li>
+                    <li><strong>Uptime:</strong> <?php echo isset($cacheStats['uptime']) ? gmdate("H:i:s", $cacheStats['uptime']) : 'unknown'; ?></li>
+                    <li><strong>Memory Used:</strong> <?php echo $cacheStats['used_memory'] ?? 'unknown'; ?></li>
+                    <li><strong>Connected Clients:</strong> <?php echo $cacheStats['connected_clients'] ?? 0; ?></li>
+                    <li><strong>Total Commands:</strong> <?php echo number_format($cacheStats['total_commands'] ?? 0); ?></li>
+                    <li><strong>Cache Hits:</strong> <?php echo number_format($cacheStats['keyspace_hits'] ?? 0); ?></li>
+                    <li><strong>Cache Misses:</strong> <?php echo number_format($cacheStats['keyspace_misses'] ?? 0); ?></li>
+                    <?php 
+                    $hits = $cacheStats['keyspace_hits'] ?? 0;
+                    $misses = $cacheStats['keyspace_misses'] ?? 0;
+                    $total = $hits + $misses;
+                    $hitRate = $total > 0 ? round(($hits / $total) * 100, 2) : 0;
+                    ?>
+                    <li><strong>Hit Rate:</strong> <?php echo $hitRate; ?>%</li>
+                </ul>
+            </div>
+            <?php endif; ?>
 
             <!-- Database Operations Section -->
             <div class="info-section">
@@ -275,11 +340,18 @@ function tableExists() {
 
                     <!-- Clear Data Option -->
                     <div class="db-management">
-                        <h4>🗑️ Database Management</h4>
+                        <h4>🗑️ Database & Cache Management</h4>
                         <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to clear all visit records?');">
                             <input type="hidden" name="action" value="clear_visits">
                             <button type="submit" class="btn btn-danger">Clear All Visits</button>
                         </form>
+                        
+                        <?php if (cache_enabled()): ?>
+                        <form method="POST" style="display: inline; margin-left: 10px;" onsubmit="return confirm('Are you sure you want to clear the Redis cache?');">
+                            <input type="hidden" name="action" value="clear_cache">
+                            <button type="submit" class="btn btn-warning">⚡ Clear Redis Cache</button>
+                        </form>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>

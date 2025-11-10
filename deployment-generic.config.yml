@@ -86,6 +86,7 @@ dependencies:
         - "mbstring"   # Multibyte string support (php-mbstring)
         - "xml"        # XML support (php-xml)
         - "zip"        # ZIP archive support (php-zip)
+        - "redis"      # Redis client (php-redis)
       enable_composer: true
   
   python:
@@ -108,7 +109,7 @@ dependencies:
   
   # Additional Dependencies
   redis:
-    enabled: false
+    enabled: true
     version: "latest"
     config:
       bind_all_interfaces: false
