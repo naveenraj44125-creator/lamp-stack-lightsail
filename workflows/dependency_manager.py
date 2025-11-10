@@ -336,6 +336,10 @@ echo "✅ PostgreSQL installation completed"
                 # Install both generic and version-specific PostgreSQL packages
                 ext_packages.append('php-pgsql')
                 ext_packages.append(f'php{version}-pgsql')
+            elif ext == 'redis':
+                # Install both generic and version-specific Redis packages
+                ext_packages.append('php-redis')
+                ext_packages.append(f'php{version}-redis')
             elif ext == 'json':
                 continue  # JSON is built into PHP 8.0+, no separate package needed
             else:
