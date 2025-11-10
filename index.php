@@ -156,7 +156,7 @@ function tableExists() {
                     echo "<p><strong>⚡ CONFIGURATION-DRIVEN:</strong> Simple enabled: true/false flags control entire deployment stack!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 3.0.0 - Generic Deployment System at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 3.0.0 - Generic Deployment System with PostgreSQL at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
