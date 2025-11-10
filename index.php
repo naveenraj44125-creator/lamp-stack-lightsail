@@ -131,6 +131,17 @@ function tableExists() {
         </header>
         
         <main>
+            <!-- Database Type Banner -->
+            <?php $dbConfig = getDatabaseConfig(); ?>
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <h2 style="margin: 0 0 10px 0; font-size: 2em;">🗄️ Database: <?php echo strtoupper($dbConfig['type']); ?></h2>
+                <p style="margin: 0; font-size: 1.2em; opacity: 0.9;">
+                    <?php echo $dbConfig['external'] ? '☁️ AWS Lightsail RDS' : '💻 Local Server'; ?> | 
+                    <?php echo $dbConfig['host']; ?> | 
+                    <?php echo getDatabaseStatus(); ?>
+                </p>
+            </div>
+            
             <div class="welcome-message">
                 <?php
                     echo "<h2>🚀 Hello Welcome - Generic Deployment System v3.0.0!</h2>";
@@ -155,9 +166,11 @@ function tableExists() {
                 <ul>
                     <li><strong>Server:</strong> Apache</li>
                     <li><strong>Language:</strong> PHP <?php echo phpversion(); ?></li>
-                    <li><strong>Database:</strong> <?php echo $dbConfig['external'] ? 'AWS Lightsail RDS' : 'Local'; ?> <?php echo $dbConfig['type']; ?></li>
+                    <li><strong>🗄️ Database Type:</strong> <span style="color: #2563eb; font-weight: bold; font-size: 1.2em;"><?php echo strtoupper($dbConfig['type']); ?></span></li>
+                    <li><strong>Database Location:</strong> <?php echo $dbConfig['external'] ? '☁️ AWS Lightsail RDS (External)' : '💻 Local Server'; ?></li>
                     <li><strong>DB Host:</strong> <?php echo $dbConfig['host'] . ':' . $dbConfig['port']; ?></li>
                     <li><strong>DB Name:</strong> <?php echo $dbConfig['database']; ?></li>
+                    <li><strong>DB Driver:</strong> <?php echo $dbConfig['type'] === 'POSTGRESQL' ? 'pdo_pgsql' : 'pdo_mysql'; ?></li>
                     <li><strong>OS:</strong> Linux</li>
                     <li><strong>DB Status:</strong> <?php echo getDatabaseStatus(); ?></li>
                 </ul>
