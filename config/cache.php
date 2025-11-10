@@ -49,27 +49,43 @@ class RedisCache {
     
     public function get($key) {
         if (!$this->enabled) {
+            error_log("Redis get failed: Redis not enabled for key: $key");
             return null;
         }
         
         try {
             $value = $this->redis->get($key);
-            return $value === false ? null : $value;
+            if ($value === false) {
+                // Check if key exists - false could mean key doesn't exist or actual false value
+                if (!$this->redis->exists($key)) {
+                    error_log("Redis get: Key '$key' does not exist (cache miss)");
+                    return null;
+                }
+            }
+            error_log("Redis get: Successfully retrieved key '$key' (cache hit)");
+            return $value;
         } catch (Exception $e) {
-            error_log('Redis get error: ' . $e->getMessage());
+            error_log('Redis get error for key ' . $key . ': ' . $e->getMessage());
             return null;
         }
     }
     
     public function set($key, $value, $ttl = 3600) {
         if (!$this->enabled) {
+            error_log("Redis set failed: Redis not enabled for key: $key");
             return false;
         }
         
         try {
-            return $this->redis->setex($key, $ttl, $value);
+            $result = $this->redis->setex($key, $ttl, $value);
+            if ($result) {
+                error_log("Redis set: Successfully cached key '$key' with TTL $ttl seconds");
+            } else {
+                error_log("Redis set: Failed to cache key '$key'");
+            }
+            return $result;
         } catch (Exception $e) {
-            error_log('Redis set error: ' . $e->getMessage());
+            error_log('Redis set error for key ' . $key . ': ' . $e->getMessage());
             return false;
         }
     }

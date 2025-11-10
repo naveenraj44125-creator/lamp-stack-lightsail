@@ -68,6 +68,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = "❌ Failed to clear cache (Redis may not be enabled)";
                     }
                     break;
+                
+                case 'test_cache':
+                    $testKey = 'test_cache_key';
+                    $testValue = 'Hello from Redis! ' . date('H:i:s');
+                    
+                    // Try to set a value
+                    $setResult = cache_set($testKey, $testValue, 300);
+                    
+                    // Try to get it back
+                    $getValue = cache_get($testKey);
+                    
+                    if ($setResult && $getValue === $testValue) {
+                        $message = "✅ Cache test PASSED! Set and retrieved: '$testValue'";
+                    } else {
+                        $error = "❌ Cache test FAILED! Set result: " . ($setResult ? 'true' : 'false') . ", Retrieved: " . ($getValue ?: 'null');
+                    }
+                    break;
             }
         }
     } catch (PDOException $e) {
@@ -393,6 +410,10 @@ function tableExists() {
                         </form>
                         
                         <?php if (cache_enabled()): ?>
+                        <form method="POST" style="display: inline; margin-left: 10px;">
+                            <input type="hidden" name="action" value="test_cache">
+                            <button type="submit" class="btn btn-primary">🧪 Test Cache</button>
+                        </form>
                         <form method="POST" style="display: inline; margin-left: 10px;" onsubmit="return confirm('Are you sure you want to clear the Redis cache?');">
                             <input type="hidden" name="action" value="clear_cache">
                             <button type="submit" class="btn btn-warning">⚡ Clear Redis Cache</button>
