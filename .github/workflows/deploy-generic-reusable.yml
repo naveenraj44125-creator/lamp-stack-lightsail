@@ -209,8 +209,19 @@ jobs:
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     environment: ${{ inputs.environment }}
     steps:
-    - name: Checkout code
+    - name: Checkout application code
       uses: actions/checkout@v4
+    
+    - name: Checkout deployment scripts
+      uses: actions/checkout@v4
+      with:
+        repository: naveenraj44125-creator/lamp-stack-lightsail
+        path: .deployment-scripts
+    
+    - name: Copy deployment scripts
+      run: |
+        cp -r .deployment-scripts/workflows ./
+        echo "✅ Deployment scripts copied"
     
     - name: Debug Deployment Decision
       run: |
@@ -310,8 +321,19 @@ jobs:
       needs.application-package.result == 'success'
     environment: ${{ inputs.environment }}
     steps:
-    - name: Checkout code
+    - name: Checkout application code
       uses: actions/checkout@v4
+    
+    - name: Checkout deployment scripts
+      uses: actions/checkout@v4
+      with:
+        repository: naveenraj44125-creator/lamp-stack-lightsail
+        path: .deployment-scripts
+    
+    - name: Copy deployment scripts
+      run: |
+        cp -r .deployment-scripts/workflows ./
+        echo "✅ Deployment scripts copied"
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
