@@ -216,11 +216,15 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: naveenraj44125-creator/lamp-stack-lightsail
+        ref: main
         path: .deployment-scripts
+        token: ${{ github.token }}
     
     - name: Copy deployment scripts
       run: |
-        cp -r .deployment-scripts/workflows ./
+        mkdir -p workflows
+        cp -r .deployment-scripts/workflows/* ./workflows/
+        ls -la workflows/
         echo "✅ Deployment scripts copied"
     
     - name: Debug Deployment Decision

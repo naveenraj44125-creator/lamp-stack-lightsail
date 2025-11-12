@@ -159,7 +159,10 @@ echo "Service check completed"
         
         # Determine deployment target based on app type and installed dependencies
         if app_type == 'web':
-            if 'apache' in self.dependency_manager.installed_dependencies:
+            # For Node.js web apps, deploy to /opt/nodejs-app
+            if 'nodejs' in self.dependency_manager.installed_dependencies:
+                target_dir = '/opt/nodejs-app'
+            elif 'apache' in self.dependency_manager.installed_dependencies:
                 target_dir = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
             elif 'nginx' in self.dependency_manager.installed_dependencies:
                 target_dir = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
@@ -305,7 +308,48 @@ echo "✅ Apache configured for application"
         """Configure Nginx for the application"""
         document_root = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
         
-        script = f'''
+        # Check if Node.js is enabled - if so, configure as reverse proxy
+        if 'nodejs' in self.dependency_manager.installed_dependencies:
+            script = '''
+set -e
+echo "Configuring Nginx as reverse proxy for Node.js application..."
+
+# Create server block configuration for Node.js proxy
+cat > /tmp/app << 'EOF'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    
+    server_name _;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    # Security headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options DENY;
+    add_header X-XSS-Protection "1; mode=block";
+}
+EOF
+
+# Install the configuration
+sudo mv /tmp/app /etc/nginx/sites-available/app
+sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
+sudo rm -f /etc/nginx/sites-enabled/default
+
+echo "✅ Nginx configured as reverse proxy for Node.js"
+'''
+        else:
+            script = f'''
 set -e
 echo "Configuring Nginx for application..."
 
@@ -439,6 +483,14 @@ fi
 set -e
 echo "Configuring Node.js for application..."
 
+# Install dependencies if package.json exists
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    echo "📦 Installing Node.js dependencies..."
+    cd /opt/nodejs-app
+    sudo -u ubuntu npm install --production
+    echo "✅ Dependencies installed"
+fi
+
 # Create systemd service for Node.js app
 cat > /tmp/nodejs-app.service << 'EOF'
 [Unit]
@@ -452,6 +504,7 @@ WorkingDirectory=/opt/nodejs-app
 ExecStart=/usr/bin/node app.js
 Restart=always
 Environment=NODE_ENV=production
+Environment=PORT=3000
 
 [Install]
 WantedBy=multi-user.target
@@ -462,13 +515,22 @@ if [ -f "/opt/nodejs-app/app.js" ] || [ -f "/opt/nodejs-app/index.js" ]; then
     sudo mv /tmp/nodejs-app.service /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable nodejs-app.service
-    echo "✅ Node.js app service configured"
+    sudo systemctl start nodejs-app.service
+    
+    # Wait a moment and check if service started successfully
+    sleep 3
+    if systemctl is-active --quiet nodejs-app.service; then
+        echo "✅ Node.js app service started successfully"
+    else
+        echo "⚠️  Node.js app service failed to start"
+        sudo systemctl status nodejs-app.service || true
+    fi
 else
     echo "ℹ️  No app.js or index.js found, skipping service configuration"
 fi
 '''
         
-        success, output = self.client.run_command(script, timeout=60)
+        success, output = self.client.run_command(script, timeout=180)
         return success
 
     def _configure_database_connections(self) -> bool:
@@ -759,6 +821,12 @@ echo "✅ Deployment environment variables set"
 set -e
 echo "Verifying deployment..."
 
+# Check if Node.js app service is running
+if systemctl is-active --quiet nodejs-app.service; then
+    echo "✅ Node.js application service is running"
+    sudo systemctl status nodejs-app.service --no-pager || true
+fi
+
 # Check if web server is running
 if systemctl is-active --quiet apache2; then
     echo "✅ Apache is running"
@@ -769,7 +837,9 @@ else
 fi
 
 # Check if application files exist
-if [ -f "/var/www/html/index.php" ] || [ -f "/var/www/html/index.html" ]; then
+if [ -f "/opt/nodejs-app/app.js" ] || [ -f "/opt/nodejs-app/index.js" ]; then
+    echo "✅ Node.js application files found"
+elif [ -f "/var/www/html/index.php" ] || [ -f "/var/www/html/index.html" ]; then
     echo "✅ Application files found"
 else
     echo "⚠️  No main application files found"
@@ -777,11 +847,17 @@ fi
 
 # Test local HTTP response
 echo "Testing local HTTP response..."
-if curl -s http://localhost{endpoint} | grep -q "{expected_content}"; then
-    echo "✅ Application responds correctly"
-else
-    echo "⚠️  Application response test failed"
-fi
+for i in {{1..5}}; do
+    if curl -s http://localhost{endpoint} | grep -q "{expected_content}"; then
+        echo "✅ Application responds correctly"
+        exit 0
+    fi
+    echo "Waiting for application to respond... ($i/5)"
+    sleep 2
+done
+
+echo "⚠️  Application response test failed after 5 attempts"
+curl -v http://localhost{endpoint} || true
 
 echo "✅ Deployment verification completed"
 '''
