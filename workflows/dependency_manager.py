@@ -741,14 +741,29 @@ echo "✅ PostgreSQL application access configured"
                 restart_script = f'''
 set -e
 echo "Restarting {service_name}..."
-sudo systemctl restart {service_name}
-sudo systemctl enable {service_name}
-echo "✅ {service_name} restarted"
+
+# Check if service exists first
+if systemctl list-unit-files | grep -q "^{service_name}.service"; then
+    sudo systemctl restart {service_name}
+    sudo systemctl enable {service_name}
+    
+    # Wait a moment and verify it's running
+    sleep 2
+    if systemctl is-active --quiet {service_name}; then
+        echo "✅ {service_name} restarted and running"
+    else
+        echo "⚠️  {service_name} restarted but not active"
+        sudo systemctl status {service_name} --no-pager || true
+    fi
+else
+    echo "ℹ️  {service_name} service not found, skipping"
+fi
 '''
                 
                 svc_success, output = self.client.run_command(restart_script, timeout=60)
                 if not svc_success:
                     print(f"⚠️  Failed to restart {service_name}")
+                    print(f"Output: {output}")
                     success = False
         
         return success

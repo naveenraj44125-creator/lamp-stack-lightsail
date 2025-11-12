@@ -117,6 +117,27 @@ echo "Service check completed"
         if not success:
             print("⚠️  Some services failed to restart")
         
+        # For Node.js apps, verify the service is still running after restart
+        if 'nodejs' in self.dependency_manager.installed_dependencies:
+            print("\n🔍 Verifying Node.js service after restart...")
+            verify_script = '''
+if systemctl is-active --quiet nodejs-app.service; then
+    echo "✅ Node.js service is running"
+    # Test local connection
+    if curl -s http://localhost:3000/ > /dev/null 2>&1; then
+        echo "✅ Node.js app responding on port 3000"
+    else
+        echo "⚠️  Node.js service running but not responding on port 3000"
+    fi
+else
+    echo "❌ Node.js service is NOT running after restart!"
+    sudo systemctl status nodejs-app.service --no-pager || true
+    echo "=== Recent logs ==="
+    sudo journalctl -u nodejs-app.service -n 30 --no-pager || true
+fi
+'''
+            self.client.run_command(verify_script, timeout=30)
+        
         # Set environment variables if provided
         if env_vars:
             print("\n🌍 Setting deployment environment variables...")
