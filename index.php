@@ -197,7 +197,7 @@ function tableExists() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generic Application Deployment System v3.1.0 - Reusable Workflows</title>
+    <title>Generic Application Deployment System v3.1.1 - Streamlined</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -220,7 +220,7 @@ function tableExists() {
             
             <div class="welcome-message">
                 <?php
-                    echo "<h2>🚀 Hello Welcome - Generic Deployment System v3.1.0!</h2>";
+                    echo "<h2>🚀 Hello Welcome - Generic Deployment System v3.1.1!</h2>";
                     echo "<p>This application is deployed using the new <strong>Generic Deployment System</strong> that works with any application stack!</p>";
                     echo "<p><strong>🎯 NEW ARCHITECTURE:</strong> Fully configurable dependency system - no more LAMP-only limitations!</p>";
                     echo "<p><strong>🔥 MAJOR UPGRADE:</strong> Support for Apache, Nginx, MySQL, PostgreSQL, PHP, Python, Node.js, Redis, Docker & more!</p>";
@@ -228,12 +228,13 @@ function tableExists() {
                     echo "<p><strong>🎉 ADAPTIVE TESTING:</strong> Runs PHP, Python, or Node.js tests based on your configuration!</p>";
                     echo "<p><strong>🚀 MODULAR DESIGN:</strong> Each dependency is independent and reusable across different application types!</p>";
                     echo "<p><strong>🛠️ PRODUCTION READY:</strong> Comprehensive error handling, file upload, and service optimization!</p>";
-                    echo "<p><strong>🆕 VERSION 3.1.0:</strong> Now with REUSABLE WORKFLOWS & COMPOSITE ACTIONS for cross-repo deployment!</p>";
+                    echo "<p><strong>🆕 VERSION 3.1.1:</strong> Streamlined workflows - automatic deployment on push to main!</p>";
                     echo "<p><strong>⚡ CONFIGURATION-DRIVEN:</strong> Simple enabled: true/false flags control entire deployment stack!</p>";
                     echo "<p><strong>🔄 REUSABLE:</strong> Share workflows across multiple repositories with workflow_call!</p>";
+                    echo "<p><strong>🧹 CLEAN CODEBASE:</strong> Removed test files, keeping only production-ready code!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 3.1.0 - Generic Deployment System with Reusable Workflows at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 3.1.1 - Streamlined Deployment System at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
@@ -254,7 +255,7 @@ function tableExists() {
             </div>
             
             <div class="info-section">
-                <h3>🆕 System Status (Version 3.1.0 - Reusable Workflows)</h3>
+                <h3>🆕 System Status (Version 3.1.1 - Streamlined)</h3>
                 <ul>
                     <li><strong>Memory Usage:</strong> <?php echo round(memory_get_usage(true)/1024/1024, 2) . ' MB'; ?></li>
                     <li><strong>Peak Memory:</strong> <?php echo round(memory_get_peak_usage(true)/1024/1024, 2) . ' MB'; ?></li>
@@ -426,7 +427,7 @@ function tableExists() {
         </main>
         
         <footer>
-            <p>&copy; 2025 Generic Application Deployment System v3.1.0 - Reusable Workflows Edition</p>
+            <p>&copy; 2025 Generic Application Deployment System v3.1.1 - Streamlined Edition</p>
         </footer>
     </div>
 </body>
