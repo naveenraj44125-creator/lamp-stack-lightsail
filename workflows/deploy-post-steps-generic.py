@@ -210,7 +210,14 @@ sudo cp -r * {target_dir}/ || true
 # Set proper ownership based on application type
 '''
         
-        if app_type == 'web':
+        # For Node.js apps, always use ubuntu user
+        if 'nodejs' in self.dependency_manager.installed_dependencies:
+            script += f'''
+sudo chown -R ubuntu:ubuntu {target_dir}
+sudo chmod -R 755 {target_dir}
+echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
+'''
+        elif app_type == 'web':
             script += f'''
 sudo chown -R www-data:www-data {target_dir}
 sudo chmod -R 755 {target_dir}
@@ -483,13 +490,26 @@ fi
 set -e
 echo "Configuring Node.js for application..."
 
+# Check if app files exist
+if [ ! -f "/opt/nodejs-app/app.js" ] && [ ! -f "/opt/nodejs-app/index.js" ]; then
+    echo "❌ No app.js or index.js found in /opt/nodejs-app"
+    ls -la /opt/nodejs-app/ || echo "Directory does not exist"
+    exit 1
+fi
+
 # Install dependencies if package.json exists
 if [ -f "/opt/nodejs-app/package.json" ]; then
     echo "📦 Installing Node.js dependencies..."
     cd /opt/nodejs-app
-    sudo -u ubuntu npm install --production
+    sudo -u ubuntu npm install --production 2>&1 | tee /tmp/npm-install.log
     echo "✅ Dependencies installed"
+else
+    echo "ℹ️  No package.json found, skipping dependency installation"
 fi
+
+# Create log directory
+sudo mkdir -p /var/log/nodejs-app
+sudo chown ubuntu:ubuntu /var/log/nodejs-app
 
 # Create systemd service for Node.js app
 cat > /tmp/nodejs-app.service << 'EOF'
@@ -503,34 +523,62 @@ User=ubuntu
 WorkingDirectory=/opt/nodejs-app
 ExecStart=/usr/bin/node app.js
 Restart=always
+RestartSec=10
 Environment=NODE_ENV=production
 Environment=PORT=3000
+StandardOutput=append:/var/log/nodejs-app/output.log
+StandardError=append:/var/log/nodejs-app/error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Install and enable the service if app.js exists
-if [ -f "/opt/nodejs-app/app.js" ] || [ -f "/opt/nodejs-app/index.js" ]; then
-    sudo mv /tmp/nodejs-app.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable nodejs-app.service
-    sudo systemctl start nodejs-app.service
+# Install and enable the service
+sudo mv /tmp/nodejs-app.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable nodejs-app.service
+
+# Stop any existing instance
+sudo systemctl stop nodejs-app.service 2>/dev/null || true
+
+# Start the service
+echo "🚀 Starting Node.js application service..."
+sudo systemctl start nodejs-app.service
+
+# Wait and check if service started successfully
+sleep 5
+
+if systemctl is-active --quiet nodejs-app.service; then
+    echo "✅ Node.js app service started successfully"
+    sudo systemctl status nodejs-app.service --no-pager
     
-    # Wait a moment and check if service started successfully
-    sleep 3
-    if systemctl is-active --quiet nodejs-app.service; then
-        echo "✅ Node.js app service started successfully"
+    # Check if app is listening on port 3000
+    sleep 2
+    if netstat -tlnp 2>/dev/null | grep -q ":3000"; then
+        echo "✅ Application is listening on port 3000"
     else
-        echo "⚠️  Node.js app service failed to start"
-        sudo systemctl status nodejs-app.service || true
+        echo "⚠️  Application may not be listening on port 3000"
+        netstat -tlnp 2>/dev/null | grep node || echo "No node process found listening"
+    fi
+    
+    # Test local connection
+    if curl -s http://localhost:3000/ > /dev/null; then
+        echo "✅ Local connection to port 3000 successful"
+    else
+        echo "⚠️  Local connection to port 3000 failed"
     fi
 else
-    echo "ℹ️  No app.js or index.js found, skipping service configuration"
+    echo "❌ Node.js app service failed to start"
+    sudo systemctl status nodejs-app.service --no-pager || true
+    echo "=== Service Logs ==="
+    sudo journalctl -u nodejs-app.service -n 50 --no-pager || true
+    echo "=== Application Error Log ==="
+    sudo cat /var/log/nodejs-app/error.log 2>/dev/null || echo "No error log found"
+    exit 1
 fi
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command_with_live_output(script, timeout=180)
         return success
 
     def _configure_database_connections(self) -> bool:
