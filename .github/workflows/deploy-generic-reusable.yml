@@ -86,7 +86,8 @@ jobs:
         enabled_dependencies = ','.join(enabled_deps)
         
         # Check if testing is enabled
-        test_enabled = not ${{ inputs.skip_tests }} and config.get('github_actions', {}).get('jobs', {}).get('test', {}).get('enabled', True)
+        skip_tests = "${{ inputs.skip_tests }}" == "true"
+        test_enabled = not skip_tests and config.get('github_actions', {}).get('jobs', {}).get('test', {}).get('enabled', True)
         
         # Show configuration
         print(f"✅ Instance Name: {instance_name}")
