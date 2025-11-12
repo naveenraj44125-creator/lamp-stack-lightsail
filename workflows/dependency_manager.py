@@ -729,7 +729,8 @@ echo "✅ PostgreSQL application access configured"
             'postgresql': 'postgresql',
             'redis': 'redis-server',
             'memcached': 'memcached',
-            'docker': 'docker'
+            'docker': 'docker',
+            'nodejs': 'nodejs-app'
         }
         
         success = True
