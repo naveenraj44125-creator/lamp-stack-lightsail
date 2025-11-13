@@ -521,8 +521,7 @@ fi
 # Install dependencies if package.json exists
 if [ -f "/opt/nodejs-app/package.json" ]; then
     echo "📦 Installing Node.js dependencies..."
-    cd /opt/nodejs-app
-    sudo -u ubuntu npm install --production 2>&1 | tee /tmp/npm-install.log
+    cd /opt/nodejs-app && sudo -u ubuntu npm install --production 2>&1 | tee /tmp/npm-install.log
     echo "✅ Dependencies installed"
 else
     echo "ℹ️  No package.json found, skipping dependency installation"
@@ -533,7 +532,8 @@ sudo mkdir -p /var/log/nodejs-app
 sudo chown ubuntu:ubuntu /var/log/nodejs-app
 
 # Create systemd service for Node.js app
-cat > /tmp/nodejs-app.service << 'EOF'
+echo "📝 Creating systemd service file..."
+sudo tee /etc/systemd/system/nodejs-app.service > /dev/null << 'EOF'
 [Unit]
 Description=Node.js Application
 After=network.target
@@ -554,8 +554,8 @@ StandardError=append:/var/log/nodejs-app/error.log
 WantedBy=multi-user.target
 EOF
 
-# Install and enable the service
-sudo mv /tmp/nodejs-app.service /etc/systemd/system/
+# Reload systemd and enable the service
+echo "🔄 Reloading systemd..."
 sudo systemctl daemon-reload
 sudo systemctl enable nodejs-app.service
 
@@ -575,11 +575,11 @@ if systemctl is-active --quiet nodejs-app.service; then
     
     # Check if app is listening on port 3000
     sleep 2
-    if netstat -tlnp 2>/dev/null | grep -q ":3000"; then
+    if sudo ss -tlnp 2>/dev/null | grep -q ":3000" || sudo netstat -tlnp 2>/dev/null | grep -q ":3000"; then
         echo "✅ Application is listening on port 3000"
     else
         echo "⚠️  Application may not be listening on port 3000"
-        netstat -tlnp 2>/dev/null | grep node || echo "No node process found listening"
+        sudo ss -tlnp 2>/dev/null | grep node || sudo netstat -tlnp 2>/dev/null | grep node || echo "No node process found listening"
     fi
     
     # Test local connection
@@ -599,7 +599,8 @@ else
 fi
 '''
         
-        success, output = self.client.run_command_with_live_output(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=180)
+        print(output)
         return success
 
     def _configure_database_connections(self) -> bool:
