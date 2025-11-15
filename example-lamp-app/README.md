@@ -38,3 +38,4 @@ dependencies:
 1. Configure your deployment settings
 2. Push to trigger GitHub Actions deployment
 3. Access the application at your Lightsail instance IP
+# Updated Sat Nov 15 01:31:38 PST 2025
