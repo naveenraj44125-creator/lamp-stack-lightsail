@@ -7,7 +7,7 @@ aws:
 # Lightsail Instance Configuration
 lightsail:
   instance_name: nodejs-demo-app
-  static_ip: ""  # Will be assigned during instance creation
+  static_ip: "18.232.117.105"  # Public IP of the instance
   
 # Application Configuration
 application:

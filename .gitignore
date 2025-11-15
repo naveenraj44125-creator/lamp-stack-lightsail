@@ -30,3 +30,9 @@ package-lock.json
 
 # Ignore run-command folder (for temporary scripts and commands)
 run-command/
+
+# Ignore debug scripts
+debug-deployment.py
+fix-nodejs-deployment.py
+quick-debug.sh
+run-debug.sh
