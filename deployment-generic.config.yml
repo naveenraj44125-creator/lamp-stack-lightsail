@@ -18,9 +18,9 @@ application:
   
   # Files to include in deployment package
   package_files:
-    - "index.php"
-    - "css/"
-    - "config/"
+    - "example-lamp-app/index.php"
+    - "example-lamp-app/css/"
+    - "example-lamp-app/config/"
   
   # Fallback: include all files if specific files don't exist
   package_fallback: true

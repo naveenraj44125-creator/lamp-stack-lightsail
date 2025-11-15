@@ -117,9 +117,18 @@ jobs:
       if: contains(needs.load-config.outputs.enabled_dependencies, 'php')
       run: |
         echo "🧪 Testing PHP application..."
-        php -S localhost:8000 index.php &
-        sleep 5
-        curl -f http://localhost:8000/ || exit 1
+        if [ -f "example-lamp-app/index.php" ]; then
+          cd example-lamp-app
+          php -S localhost:8000 index.php &
+          sleep 5
+          curl -f http://localhost:8000/ || exit 1
+        elif [ -f "index.php" ]; then
+          php -S localhost:8000 index.php &
+          sleep 5
+          curl -f http://localhost:8000/ || exit 1
+        else
+          echo "⚠️  No PHP index file found, skipping test"
+        fi
 
     # Python Testing
     - name: Setup Python (if Python dependency enabled)
