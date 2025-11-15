@@ -201,7 +201,8 @@ fi
         
         # First, copy the package file to the remote instance
         print(f"📤 Uploading package file {package_file} to remote instance...")
-        remote_package_path = f"/tmp/{package_file}"
+        # Use home directory instead of /tmp to avoid permission issues
+        remote_package_path = f"~/{package_file}"
         
         if not self.client.copy_file_to_instance(package_file, remote_package_path):
             print(f"❌ Failed to upload package file to remote instance")
@@ -219,10 +220,10 @@ if [ -d "{target_dir}" ] && [ "$(ls -A {target_dir})" ]; then
     echo "✅ Backup created at $BACKUP_DIR"
 fi
 
-# Extract application package
+# Extract application package from home directory
 echo "Extracting application package..."
-cd /tmp
-sudo tar -xzf {package_file}
+cd ~
+tar -xzf {package_file}
 
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
