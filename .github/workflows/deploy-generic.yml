@@ -31,10 +31,10 @@ jobs:
         import yaml
         import os
         
-        print("🔧 Loading configuration from deployment-generic.config.yml...")
+        print("🔧 Loading configuration from deployment-lamp-stack.config.yml...")
         
         # Load configuration
-        with open('deployment-generic.config.yml', 'r') as f:
+        with open('deployment-lamp-stack.config.yml', 'r') as f:
             config = yaml.safe_load(f)
         
         # Extract values from config
@@ -181,8 +181,8 @@ jobs:
         fi
         
         # Validate configuration files
-        if [ -f "deployment-generic.config.yml" ]; then
-          python3 -c "import yaml; yaml.safe_load(open('deployment-generic.config.yml'))"
+        if [ -f "deployment-lamp-stack.config.yml" ]; then
+          python3 -c "import yaml; yaml.safe_load(open('deployment-lamp-stack.config.yml'))"
           echo "✅ Configuration file is valid YAML"
         fi
 
@@ -229,7 +229,7 @@ jobs:
         python3 workflows/deploy-pre-steps-generic.py \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file deployment-generic.config.yml
+          --config-file deployment-lamp-stack.config.yml
 
   application-package:
     needs: [load-config]
@@ -256,7 +256,7 @@ jobs:
         import os
         import subprocess
         
-        with open('deployment-generic.config.yml', 'r') as f:
+        with open('deployment-lamp-stack.config.yml', 'r') as f:
             config = yaml.safe_load(f)
         
         package_files = config.get('application', {}).get('package_files', [])
@@ -337,7 +337,7 @@ jobs:
           app.tar.gz \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file deployment-generic.config.yml \
+          --config-file deployment-lamp-stack.config.yml \
           --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
@@ -415,7 +415,7 @@ jobs:
       if: always()
       run: |
         echo "## 🚀 Generic Application Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Configuration (from deployment-generic.config.yml)" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Configuration (from deployment-lamp-stack.config.yml)" >> $GITHUB_STEP_SUMMARY
         echo "- **Application**: ${{ needs.load-config.outputs.app_name }} v${{ needs.load-config.outputs.app_version }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Type**: ${{ needs.load-config.outputs.app_type }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Instance**: ${{ needs.load-config.outputs.instance_name }}" >> $GITHUB_STEP_SUMMARY
