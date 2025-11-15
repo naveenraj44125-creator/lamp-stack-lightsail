@@ -106,12 +106,21 @@ jobs:
         echo "🧪 Starting Node.js application..."
         node app.js &
         APP_PID=$!
-        sleep 5
+        
+        echo "⏳ Waiting for application to start..."
+        for i in {1..30}; do
+          if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+            echo "✅ Application started successfully!"
+            break
+          fi
+          echo "Waiting... ($i/30)"
+          sleep 1
+        done
         
         echo "🔍 Testing endpoints..."
-        curl -f http://localhost:3000/ || exit 1
-        curl -f http://localhost:3000/api/health || exit 1
-        curl -f http://localhost:3000/api/info || exit 1
+        curl -f http://localhost:3000/ || (echo "❌ Root endpoint failed" && kill $APP_PID && exit 1)
+        curl -f http://localhost:3000/api/health || (echo "❌ Health endpoint failed" && kill $APP_PID && exit 1)
+        curl -f http://localhost:3000/api/info || (echo "❌ Info endpoint failed" && kill $APP_PID && exit 1)
         
         echo "✅ All tests passed!"
         kill $APP_PID
