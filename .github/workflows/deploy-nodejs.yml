@@ -1,0 +1,266 @@
+name: Node.js Application Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'example-nodejs-app/**'
+      - 'deployment-nodejs.config.yml'
+      - '.github/workflows/deploy-nodejs.yml'
+  workflow_dispatch:
+
+jobs:
+  load-config:
+    runs-on: ubuntu-latest
+    outputs:
+      instance_name: ${{ steps.config.outputs.instance_name }}
+      static_ip: ${{ steps.config.outputs.static_ip }}
+      aws_region: ${{ steps.config.outputs.aws_region }}
+      app_name: ${{ steps.config.outputs.app_name }}
+      app_type: ${{ steps.config.outputs.app_type }}
+      app_version: ${{ steps.config.outputs.app_version }}
+      should_deploy: ${{ steps.config.outputs.should_deploy }}
+      enabled_dependencies: ${{ steps.config.outputs.enabled_dependencies }}
+      test_enabled: ${{ steps.config.outputs.test_enabled }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Load Configuration
+      id: config
+      run: |
+        python3 << 'EOF'
+        import yaml
+        import os
+        
+        print("🔧 Loading configuration from deployment-nodejs.config.yml...")
+        
+        with open('deployment-nodejs.config.yml', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        instance_name = config['lightsail']['instance_name']
+        static_ip = config['lightsail']['static_ip']
+        aws_region = config['aws']['region']
+        app_name = config['application']['name']
+        app_type = config['application']['type']
+        app_version = config['application']['version']
+        
+        enabled_deps = []
+        for dep_name, dep_config in config.get('dependencies', {}).items():
+            if isinstance(dep_config, dict) and dep_config.get('enabled', False):
+                enabled_deps.append(dep_name)
+        
+        enabled_dependencies = ','.join(enabled_deps)
+        test_enabled = config.get('github_actions', {}).get('jobs', {}).get('test', {}).get('enabled', True)
+        
+        print(f"✅ Instance Name: {instance_name}")
+        print(f"✅ AWS Region: {aws_region}")
+        print(f"✅ Application: {app_name} v{app_version}")
+        print(f"✅ Enabled Dependencies: {enabled_dependencies}")
+        
+        branch = os.environ.get('GITHUB_REF_NAME', 'main')
+        event_name = os.environ.get('GITHUB_EVENT_NAME', 'push')
+        should_deploy = (branch in config['github_actions']['triggers']['push_branches'] and 
+                        (event_name == 'push' or event_name == 'workflow_dispatch'))
+        
+        print(f"🚀 Should Deploy: {should_deploy}")
+        
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"instance_name={instance_name}\n")
+            f.write(f"static_ip={static_ip}\n")
+            f.write(f"aws_region={aws_region}\n")
+            f.write(f"app_name={app_name}\n")
+            f.write(f"app_type={app_type}\n")
+            f.write(f"app_version={app_version}\n")
+            f.write(f"should_deploy={str(should_deploy).lower()}\n")
+            f.write(f"enabled_dependencies={enabled_dependencies}\n")
+            f.write(f"test_enabled={str(test_enabled).lower()}\n")
+        EOF
+
+  test:
+    needs: load-config
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.test_enabled == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        cd example-nodejs-app
+        npm install
+
+    - name: Run tests
+      run: |
+        cd example-nodejs-app
+        npm test
+
+    - name: Test Node.js application
+      run: |
+        cd example-nodejs-app
+        echo "🧪 Starting Node.js application..."
+        node app.js &
+        APP_PID=$!
+        sleep 5
+        
+        echo "🔍 Testing endpoints..."
+        curl -f http://localhost:3000/ || exit 1
+        curl -f http://localhost:3000/api/health || exit 1
+        curl -f http://localhost:3000/api/info || exit 1
+        
+        echo "✅ All tests passed!"
+        kill $APP_PID
+
+  pre-steps-generic:
+    needs: [load-config, test]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Environment Preparation & Dependency Installation
+      run: |
+        echo "🔧 Running pre-deployment steps..."
+        export GITHUB_ACTIONS=true
+        
+        python3 workflows/deploy-pre-steps-generic.py \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --config-file deployment-nodejs.config.yml
+
+  application-package:
+    needs: [load-config]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create deployment package
+      run: |
+        echo "📦 Creating Node.js application package..."
+        cd example-nodejs-app
+        tar -czf ../app.tar.gz .
+        cd ..
+        ls -la app.tar.gz
+
+    - name: Upload application package
+      uses: actions/upload-artifact@v4
+      with:
+        name: application-package
+        path: app.tar.gz
+        retention-days: 1
+
+  post-steps-generic:
+    needs: [load-config, pre-steps-generic, application-package]
+    runs-on: ubuntu-latest
+    if: needs.load-config.outputs.should_deploy == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Download application package
+      uses: actions/download-artifact@v4
+      with:
+        name: application-package
+
+    - name: Deploy Application
+      run: |
+        echo "🚀 Deploying Node.js application..."
+        export GITHUB_ACTIONS=true
+        
+        python3 workflows/deploy-post-steps-generic.py \
+          app.tar.gz \
+          --instance-name ${{ needs.load-config.outputs.instance_name }} \
+          --region ${{ needs.load-config.outputs.aws_region }} \
+          --config-file deployment-nodejs.config.yml \
+          --verify \
+          --cleanup \
+          --env GITHUB_SHA=${{ github.sha }} \
+          --env GITHUB_REF=${{ github.ref_name }} \
+          --env NODE_ENV=production
+
+  verification:
+    needs: [load-config, post-steps-generic]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ needs.load-config.outputs.aws_region }}
+
+    - name: Setup Python environment
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install boto3
+
+    - name: Health Check
+      run: |
+        echo "🔍 Running health checks..."
+        sleep 30
+
+        for i in {1..10}; do
+          if curl -f -s http://${{ needs.load-config.outputs.static_ip }}/api/health | grep -q "healthy"; then
+            echo "✅ Application is healthy!"
+            echo "🌐 Application URL: http://${{ needs.load-config.outputs.static_ip }}/"
+            exit 0
+          fi
+          echo "Waiting for application... ($i/10)"
+          sleep 10
+        done
+
+        echo "❌ Health check failed"
+        exit 1
+
+    - name: Deployment Summary
+      if: always()
+      run: |
+        echo "## 🚀 Node.js Application Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- **Application**: ${{ needs.load-config.outputs.app_name }} v${{ needs.load-config.outputs.app_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Instance**: ${{ needs.load-config.outputs.instance_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **IP Address**: ${{ needs.load-config.outputs.static_ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Application URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Stack" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependencies**: ${{ needs.load-config.outputs.enabled_dependencies }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📡 Endpoints" >> $GITHUB_STEP_SUMMARY
+        echo "- **Home**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Health**: http://${{ needs.load-config.outputs.static_ip }}/api/health" >> $GITHUB_STEP_SUMMARY
+        echo "- **Info**: http://${{ needs.load-config.outputs.static_ip }}/api/info" >> $GITHUB_STEP_SUMMARY

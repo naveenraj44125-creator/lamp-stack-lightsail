@@ -1,0 +1,203 @@
+# Node.js Application Deployment Configuration for AWS Lightsail
+
+# AWS Configuration
+aws:
+  region: us-east-1
+  
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: nodejs-demo-app
+  static_ip: ""  # Will be assigned during instance creation
+  
+# Application Configuration
+application:
+  name: nodejs-demo-app
+  version: "1.0.0"
+  type: web
+  
+  # Files to include in deployment package
+  package_files:
+    - "example-nodejs-app/app.js"
+    - "example-nodejs-app/package.json"
+    - "example-nodejs-app/package-lock.json"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
+  
+  # Environment variables to set on the instance
+  environment_variables:
+    NODE_ENV: production
+    PORT: 3000
+    APP_NAME: "Node.js Demo App"
+
+# Dependencies Configuration
+dependencies:
+  # Web Server
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+      proxy_pass: "http://localhost:3000"  # Proxy to Node.js app
+  
+  apache:
+    enabled: false
+  
+  # Database (disabled for this simple demo)
+  mysql:
+    enabled: false
+  
+  postgresql:
+    enabled: false
+  
+  # Programming Language
+  nodejs:
+    enabled: true
+    version: "18"
+    config:
+      npm_packages:
+        - "pm2"  # Process manager for Node.js
+      package_manager: "npm"
+  
+  php:
+    enabled: false
+  
+  python:
+    enabled: false
+  
+  # Additional Services
+  redis:
+    enabled: false
+  
+  memcached:
+    enabled: false
+  
+  docker:
+    enabled: false
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  # System
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+      deny_all_other: true
+  
+  ssl_certificates:
+    enabled: false
+  
+  monitoring:
+    enabled: false
+
+# Deployment Configuration
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+        - "/api/health"
+
+# GitHub Actions Configuration
+github_actions:
+  triggers:
+    push_branches:
+      - main
+    pull_request_branches:
+      - main
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      language_specific_tests: true
+      local_server_test: true
+      test_port: 3000
+    
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/api/health"
+    expected_content: "healthy"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+  
+  performance:
+    response_time_check: true
+    http_headers_check: true
+  
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+  
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false
