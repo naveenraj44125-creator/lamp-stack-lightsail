@@ -26,12 +26,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Setup Python
+      run: python3 -m pip install --upgrade pip boto3
+
     - name: Load Configuration
       id: config
       run: |
         python3 << 'EOF'
         import yaml
         import os
+        import boto3
         
         print("🔧 Loading configuration from deployment-nodejs.config.yml...")
         
@@ -41,6 +52,27 @@ jobs:
         instance_name = config['lightsail']['instance_name']
         static_ip = config['lightsail']['static_ip']
         aws_region = config['aws']['region']
+        
+        # If static IP is empty, try to get it from AWS
+        if not static_ip or static_ip == "":
+            print("⚠️  Static IP not configured, fetching from AWS...")
+            try:
+                lightsail = boto3.client('lightsail', region_name=aws_region)
+                
+                # Get instance details
+                response = lightsail.get_instance(instanceName=instance_name)
+                instance = response['instance']
+                
+                # Try to get static IP from instance
+                if 'publicIpAddress' in instance:
+                    static_ip = instance['publicIpAddress']
+                    print(f"✅ Found public IP: {static_ip}")
+                else:
+                    print("❌ No public IP found for instance")
+                    static_ip = ""
+            except Exception as e:
+                print(f"⚠️  Could not fetch IP from AWS: {e}")
+                static_ip = ""
         app_name = config['application']['name']
         app_type = config['application']['type']
         app_version = config['application']['version']
