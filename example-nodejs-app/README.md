@@ -2,6 +2,8 @@
 
 A simple Node.js Express application demonstrating deployment to AWS Lightsail using the generic deployment system.
 
+**Status**: Ready for deployment
+
 ## Features
 
 - Express.js web server
