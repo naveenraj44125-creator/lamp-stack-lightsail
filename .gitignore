@@ -33,6 +33,8 @@ run-command/
 
 # Ignore debug scripts
 debug-deployment.py
+debug-python-deployment.py
 fix-nodejs-deployment.py
+fix-python-deployment.py
 quick-debug.sh
 run-debug.sh
