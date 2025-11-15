@@ -318,13 +318,16 @@ jobs:
       run: |
         echo "🧪 Running generic application tests..."
         
-        if [ -f "index.html" ] || [ -f "index.php" ] || [ -f "app.py" ] || [ -f "app.js" ]; then
+        # Check for main application files in subdirectories
+        if [ -f "index.html" ] || [ -f "index.php" ] || [ -f "app.py" ] || [ -f "app.js" ] || \
+           [ -f "example-lamp-app/index.php" ] || [ -f "example-nodejs-app/app.js" ] || [ -f "example-python-app/app.py" ]; then
           echo "✅ Main application file found"
         else
           echo "⚠️  No main application file detected"
         fi
         
         if [ -f "${{ inputs.config_file }}" ]; then
+          pip install PyYAML
           python3 -c "import yaml; yaml.safe_load(open('${{ inputs.config_file }}'))"
           echo "✅ Configuration file is valid YAML"
         fi
