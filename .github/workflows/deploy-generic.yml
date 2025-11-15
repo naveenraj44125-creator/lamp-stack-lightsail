@@ -8,10 +8,6 @@ on:
       - 'deployment-lamp-stack.config.yml'
       - '.github/workflows/deploy-generic.yml'
       - 'workflows/**'
-    paths-ignore:
-      - 'example-nodejs-app/**'
-      - 'deployment-nodejs.config.yml'
-      - '.github/workflows/deploy-nodejs.yml'
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
