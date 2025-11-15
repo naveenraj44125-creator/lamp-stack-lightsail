@@ -261,23 +261,32 @@ echo "✅ Application files deployed successfully"
         """Configure application based on installed dependencies"""
         success = True
         
+        print(f"🔍 Detected installed dependencies: {self.dependency_manager.installed_dependencies}")
+        
         # Configure web server if installed
         if 'apache' in self.dependency_manager.installed_dependencies:
+            print("🔧 Configuring Apache...")
             success &= self._configure_apache_for_app()
         
         if 'nginx' in self.dependency_manager.installed_dependencies:
+            print("🔧 Configuring Nginx...")
             success &= self._configure_nginx_for_app()
         
         # Configure PHP if installed
         if 'php' in self.dependency_manager.installed_dependencies:
+            print("🔧 Configuring PHP...")
             success &= self._configure_php_for_app()
         
         # Configure Python if installed
         if 'python' in self.dependency_manager.installed_dependencies:
+            print("🔧 Configuring Python...")
             success &= self._configure_python_for_app()
+        else:
+            print("⚠️  Python not detected in installed dependencies, skipping Python configuration")
         
         # Configure Node.js if installed
         if 'nodejs' in self.dependency_manager.installed_dependencies:
+            print("🔧 Configuring Node.js...")
             success &= self._configure_nodejs_for_app()
         
         # Configure database connections
