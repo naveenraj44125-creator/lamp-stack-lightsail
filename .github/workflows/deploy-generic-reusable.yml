@@ -55,12 +55,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Load Configuration
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Setup Python
+      run: python3 -m pip install --upgrade pip boto3
+
+    - name: Load Configuration and Setup Instance
       id: config
       run: |
         python3 << 'EOF'
         import yaml
         import os
+        import boto3
+        import time
         
         config_file = "${{ inputs.config_file }}"
         print(f"🔧 Loading configuration from {config_file}...")
@@ -71,11 +83,95 @@ jobs:
         
         # Extract values from config (allow input overrides)
         instance_name = "${{ inputs.instance_name }}" or config['lightsail']['instance_name']
-        static_ip = config['lightsail']['static_ip']
         aws_region = "${{ inputs.aws_region }}" or config['aws']['region']
         app_name = config['application']['name']
         app_type = config['application']['type']
         app_version = config['application']['version']
+        
+        print(f"✅ Instance Name: {instance_name}")
+        print(f"✅ AWS Region: {aws_region}")
+        print(f"✅ Application: {app_name} v{app_version}")
+        print(f"✅ App Type: {app_type}")
+        
+        # Initialize Lightsail client
+        lightsail = boto3.client('lightsail', region_name=aws_region)
+        
+        # Check if instance exists, create if not
+        static_ip = ""
+        try:
+            print(f"\n🔍 Checking if instance '{instance_name}' exists...")
+            response = lightsail.get_instance(instanceName=instance_name)
+            instance = response['instance']
+            print(f"✅ Instance exists with state: {instance['state']['name']}")
+            
+            # Get public IP
+            if 'publicIpAddress' in instance:
+                static_ip = instance['publicIpAddress']
+                print(f"✅ Public IP: {static_ip}")
+            else:
+                print("⚠️  No public IP found yet")
+                
+        except lightsail.exceptions.NotFoundException:
+            print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")
+            
+            # Create instance with default settings
+            try:
+                response = lightsail.create_instances(
+                    instanceNames=[instance_name],
+                    availabilityZone=f'{aws_region}a',
+                    blueprintId='ubuntu_22_04',
+                    bundleId='nano_3_0',  # 512 MB RAM, 1 vCPU, 20 GB SSD
+                    tags=[
+                        {'key': 'Application', 'value': app_name},
+                        {'key': 'ManagedBy', 'value': 'GitHub-Actions'},
+                        {'key': 'Type', 'value': app_type}
+                    ]
+                )
+                print(f"✅ Instance creation initiated")
+                
+                # Wait for instance to be running
+                print("⏳ Waiting for instance to be running...")
+                max_wait = 300  # 5 minutes
+                wait_interval = 10
+                elapsed = 0
+                
+                while elapsed < max_wait:
+                    time.sleep(wait_interval)
+                    elapsed += wait_interval
+                    
+                    try:
+                        response = lightsail.get_instance(instanceName=instance_name)
+                        instance = response['instance']
+                        state = instance['state']['name']
+                        print(f"   Instance state: {state} ({elapsed}s elapsed)")
+                        
+                        if state == 'running':
+                            if 'publicIpAddress' in instance:
+                                static_ip = instance['publicIpAddress']
+                                print(f"✅ Instance is running with IP: {static_ip}")
+                                break
+                    except Exception as e:
+                        print(f"   Waiting... {e}")
+                
+                if not static_ip:
+                    print("❌ Instance did not get a public IP within timeout")
+                    exit(1)
+                    
+                # Open firewall ports
+                print("\n🔥 Configuring firewall...")
+                lightsail.put_instance_public_ports(
+                    portInfos=[
+                        {'fromPort': 22, 'toPort': 22, 'protocol': 'tcp'},
+                        {'fromPort': 80, 'toPort': 80, 'protocol': 'tcp'},
+                        {'fromPort': 443, 'toPort': 443, 'protocol': 'tcp'}
+                    ],
+                    instanceName=instance_name
+                )
+                print("✅ Firewall configured (ports 22, 80, 443)")
+                
+            except Exception as e:
+                print(f"❌ Failed to create instance: {e}")
+                exit(1)
         
         # Get enabled dependencies
         enabled_deps = []
@@ -89,12 +185,7 @@ jobs:
         skip_tests = "${{ inputs.skip_tests }}" == "true"
         test_enabled = not skip_tests and config.get('github_actions', {}).get('jobs', {}).get('test', {}).get('enabled', True)
         
-        # Show configuration
-        print(f"✅ Instance Name: {instance_name}")
-        print(f"✅ AWS Region: {aws_region}")
-        print(f"✅ Application: {app_name} v{app_version}")
-        print(f"✅ App Type: {app_type}")
-        print(f"✅ Static IP: {static_ip}")
+        print(f"\n✅ Static IP: {static_ip}")
         print(f"✅ Enabled Dependencies: {enabled_dependencies}")
         print(f"✅ Testing Enabled: {test_enabled}")
         
