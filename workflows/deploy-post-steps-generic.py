@@ -541,6 +541,15 @@ fi
 if [ -f "/opt/app/requirements.txt" ]; then
     echo "📦 Installing Python dependencies..."
     cd /opt/app
+    
+    # Ensure pip is installed
+    if ! command -v pip3 &> /dev/null; then
+        echo "Installing pip3..."
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+    fi
+    
+    # Install dependencies
     sudo pip3 install -r requirements.txt 2>&1 | tee /tmp/pip-install.log
     echo "✅ Dependencies installed"
 else
