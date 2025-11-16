@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Flask API Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐍 Python Flask API Dashboard</h1>
+            <p class="subtitle">Real-time System Monitoring & API Testing</p>
+        </header>
+
+        <div class="grid">
+            <!-- System Info Card -->
+            <div class="card">
+                <h2>📊 System Information</h2>
+                <div id="system-info" class="info-grid">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Health Status Card -->
+            <div class="card">
+                <h2>💚 Health Status</h2>
+                <div id="health-status" class="status-box">
+                    <div class="loading">Checking...</div>
+                </div>
+            </div>
+
+            <!-- CPU & Memory Card -->
+            <div class="card">
+                <h2>⚡ Performance Metrics</h2>
+                <div id="performance-metrics">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <!-- API Tester Card -->
+            <div class="card">
+                <h2>🧪 API Tester</h2>
+                <div class="api-tester">
+                    <label for="endpoint-select">Select Endpoint:</label>
+                    <select id="endpoint-select">
+                        <option value="/">Home</option>
+                        <option value="/api/health">Health Check</option>
+                        <option value="/api/info">App Info</option>
+                        <option value="/api/system">System Metrics</option>
+                    </select>
+                    <button onclick="testEndpoint()" class="btn">Test Endpoint</button>
+                    <div id="api-response" class="response-box"></div>
+                </div>
+            </div>
+
+            <!-- Echo Test Card -->
+            <div class="card full-width">
+                <h2>📡 Echo Test (POST)</h2>
+                <div class="echo-tester">
+                    <textarea id="echo-input" placeholder='{"message": "Hello World", "test": true}'></textarea>
+                    <button onclick="testEcho()" class="btn">Send Echo Request</button>
+                    <div id="echo-response" class="response-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Version: {{ version }} | Environment: {{ environment }}</p>
+            <p>Deployed on AWS Lightsail with GitHub Actions</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

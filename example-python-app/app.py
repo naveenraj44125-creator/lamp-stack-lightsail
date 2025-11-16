@@ -3,7 +3,7 @@
 Flask API Application for AWS Lightsail Deployment
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import os
 import platform
 import psutil
@@ -15,21 +15,12 @@ app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 PORT = int(os.environ.get('PORT', 5000))
 ENV = os.environ.get('FLASK_ENV', 'production')
+VERSION = '1.0.5'
 
 @app.route('/')
 def home():
-    """Home page with API information"""
-    return jsonify({
-        'message': 'Welcome to Python Flask API',
-        'version': '1.0.4',
-        'environment': ENV,
-        'endpoints': {
-            'health': '/api/health',
-            'info': '/api/info',
-            'system': '/api/system',
-            'echo': '/api/echo (POST)'
-        }
-    })
+    """Home page with web UI dashboard"""
+    return render_template('index.html', version=VERSION, environment=ENV)
 
 @app.route('/api/health')
 def health():
@@ -45,7 +36,7 @@ def info():
     """Application information"""
     return jsonify({
         'application': 'Python Flask API',
-        'version': '1.0.0',
+        'version': VERSION,
         'python_version': platform.python_version(),
         'platform': platform.platform(),
         'environment': ENV,
