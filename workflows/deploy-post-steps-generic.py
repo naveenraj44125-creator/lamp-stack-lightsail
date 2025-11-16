@@ -225,9 +225,21 @@ echo "Extracting application package..."
 cd ~
 tar -xzf {package_file}
 
+# Find the extracted directory (usually example-*-app or just files)
+EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
+
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
-sudo cp -r * {target_dir}/ || true
+
+if [ -n "$EXTRACTED_DIR" ]; then
+    echo "Found extracted directory: $EXTRACTED_DIR"
+    # Copy contents of the extracted directory
+    sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
+else
+    echo "No example-*-app directory found, copying all files"
+    # Copy all files directly
+    sudo cp -r * {target_dir}/ || true
+fi
 
 # Set proper ownership based on application type
 '''
