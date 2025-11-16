@@ -21,7 +21,7 @@ def home():
     """Home page with API information"""
     return jsonify({
         'message': 'Welcome to Python Flask API',
-        'version': '1.0.1',
+        'version': '1.0.2',
         'environment': ENV,
         'endpoints': {
             'health': '/api/health',
