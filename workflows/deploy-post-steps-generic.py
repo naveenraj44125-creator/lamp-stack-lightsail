@@ -537,6 +537,16 @@ if [ ! -f "/opt/app/app.py" ]; then
     exit 1
 fi
 
+# Install Python dependencies if requirements.txt exists
+if [ -f "/opt/app/requirements.txt" ]; then
+    echo "📦 Installing Python dependencies..."
+    cd /opt/app
+    sudo pip3 install -r requirements.txt 2>&1 | tee /tmp/pip-install.log
+    echo "✅ Dependencies installed"
+else
+    echo "ℹ️  No requirements.txt found, skipping dependency installation"
+fi
+
 # Create log directory
 sudo mkdir -p /var/log/python-app
 sudo chown ubuntu:ubuntu /var/log/python-app
