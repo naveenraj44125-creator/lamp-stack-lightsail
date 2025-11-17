@@ -233,12 +233,25 @@ sudo mkdir -p {target_dir}
 
 if [ -n "$EXTRACTED_DIR" ]; then
     echo "Found extracted directory: $EXTRACTED_DIR"
-    # Copy contents of the extracted directory
-    sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
+    
+    # Check if this is a React app with build directory
+    if [ -d "$EXTRACTED_DIR/build" ]; then
+        echo "React build directory detected, deploying build files..."
+        sudo cp -r "$EXTRACTED_DIR/build"/* {target_dir}/ || true
+    else
+        # Copy contents of the extracted directory
+        sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
+    fi
 else
     echo "No example-*-app directory found, copying all files"
-    # Copy all files directly
-    sudo cp -r * {target_dir}/ || true
+    # Check if build directory exists at root level
+    if [ -d "build" ]; then
+        echo "Build directory detected at root, deploying build files..."
+        sudo cp -r build/* {target_dir}/ || true
+    else
+        # Copy all files directly
+        sudo cp -r * {target_dir}/ || true
+    fi
 fi
 
 # Set proper ownership based on application type
@@ -367,9 +380,7 @@ echo "Configuring Nginx as reverse proxy for Node.js application..."
 # Create server block configuration for Node.js proxy
 cat > /tmp/app << 'EOF'
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    
+    listen 80;
     server_name _;
     
     location / {
@@ -407,9 +418,7 @@ echo "Configuring Nginx as reverse proxy for Python application..."
 # Create server block configuration for Python proxy
 cat > /tmp/app << 'EOF'
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    
+    listen 80;
     server_name _;
     
     location / {
@@ -447,20 +456,48 @@ sudo rm -f /etc/nginx/sites-enabled/default
 echo "✅ Nginx configured as reverse proxy for Python"
 '''
         else:
+            # Check if this is a React app (has index.html but no index.php)
+            app_type = self.config.get('application.type', 'web')
             script = f'''
 set -e
 echo "Configuring Nginx for application..."
 
-# Create server block configuration
-cat > /tmp/app << 'EOF'
+# Check if this is a React/SPA application
+if [ -f "{document_root}/index.html" ] && [ ! -f "{document_root}/index.php" ]; then
+    echo "Detected React/SPA application"
+    cat > /tmp/app << 'EOF'
 server {{
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen 80;
+    server_name _;
+    
+    root {document_root};
+    index index.html;
+    
+    location / {{
+        try_files $uri $uri/ /index.html;
+    }}
+    
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {{
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }}
+    
+    # Security headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options DENY;
+    add_header X-XSS-Protection "1; mode=block";
+}}
+EOF
+else
+    echo "Detected PHP/traditional web application"
+    cat > /tmp/app << 'EOF'
+server {{
+    listen 80;
+    server_name _;
     
     root {document_root};
     index index.php index.html index.htm;
-    
-    server_name _;
     
     location / {{
         try_files $uri $uri/ /index.php?$query_string;
@@ -481,6 +518,7 @@ server {{
     add_header X-XSS-Protection "1; mode=block";
 }}
 EOF
+fi
 
 # Install the configuration
 sudo mv /tmp/app /etc/nginx/sites-available/app

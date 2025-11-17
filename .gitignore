@@ -34,7 +34,13 @@ run-command/
 # Ignore debug scripts
 debug-deployment.py
 debug-python-deployment.py
+debug-react-deployment.py
 fix-nodejs-deployment.py
 fix-python-deployment.py
+fix-react-deployment.py
 quick-debug.sh
 run-debug.sh
+
+# Ignore AWS credentials
+.aws-creds.sh
+aws-creds.sh
