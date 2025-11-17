@@ -1,0 +1,185 @@
+# React Application Deployment Configuration for AWS Lightsail
+
+# AWS Configuration
+aws:
+  region: us-east-1
+  
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: react-dashboard
+  static_ip: ""  # Will be fetched automatically from AWS
+  
+# Application Configuration
+application:
+  name: react-dashboard
+  version: "1.0.0"
+  type: web
+  
+  # Files to include in deployment package
+  package_files:
+    - "example-react-app/build/"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
+
+# Dependencies Configuration
+dependencies:
+  # Web Server
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+  
+  apache:
+    enabled: false
+  
+  # Database
+  mysql:
+    enabled: false
+  
+  postgresql:
+    enabled: false
+  
+  # Programming Languages
+  python:
+    enabled: false
+  
+  nodejs:
+    enabled: false
+  
+  php:
+    enabled: false
+  
+  # Additional Services
+  redis:
+    enabled: false
+  
+  memcached:
+    enabled: false
+  
+  docker:
+    enabled: false
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  # System
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+      deny_all_other: true
+  
+  ssl_certificates:
+    enabled: false
+  
+  monitoring:
+    enabled: false
+
+# Deployment Configuration
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+
+# GitHub Actions Configuration
+github_actions:
+  triggers:
+    push_branches:
+      - main
+    pull_request_branches:
+      - main
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      language_specific_tests: true
+      build_required: true
+    
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: "React"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+  
+  performance:
+    response_time_check: true
+    http_headers_check: true
+  
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+  
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false
