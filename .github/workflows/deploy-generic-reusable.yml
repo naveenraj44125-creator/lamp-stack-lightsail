@@ -409,7 +409,7 @@ jobs:
         if [ -f "example-react-app/package.json" ] && grep -q "example-react-app" "${{ inputs.config_file }}"; then
           echo "📦 Building React application..."
           cd example-react-app
-          npm ci
+          npm install
           npm run build
           echo "✅ React build completed"
         else
