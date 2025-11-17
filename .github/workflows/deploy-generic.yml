@@ -11,6 +11,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
+
 jobs:
   deploy:
     name: Deploy LAMP Stack Application
@@ -18,9 +22,6 @@ jobs:
     with:
       config_file: 'deployment-lamp-stack.config.yml'
       skip_tests: false
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   
   summary:
     name: Deployment Summary

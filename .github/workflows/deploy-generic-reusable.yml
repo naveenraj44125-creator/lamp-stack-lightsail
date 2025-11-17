@@ -25,11 +25,6 @@ on:
         description: 'GitHub environment to use'
         required: false
         type: string
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
     outputs:
       deployment_url:
         description: 'URL of deployed application'
@@ -37,6 +32,10 @@ on:
       deployment_status:
         description: 'Status of deployment'
         value: ${{ jobs.verification.outputs.status }}
+
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
 
 jobs:
   load-config:
@@ -58,8 +57,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
         aws-region: us-east-1
 
     - name: Setup Python
@@ -370,8 +368,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -400,8 +397,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Build React app if needed
@@ -486,8 +482,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -532,8 +527,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
