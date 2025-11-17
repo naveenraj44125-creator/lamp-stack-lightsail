@@ -404,6 +404,18 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
+    - name: Build React app if needed
+      run: |
+        if [ -f "example-react-app/package.json" ] && grep -q "example-react-app" "${{ inputs.config_file }}"; then
+          echo "📦 Building React application..."
+          cd example-react-app
+          npm ci
+          npm run build
+          echo "✅ React build completed"
+        else
+          echo "ℹ️  No React build needed"
+        fi
+
     - name: Create deployment package
       run: |
         echo "📦 Creating application package..."
@@ -431,7 +443,7 @@ jobs:
                 subprocess.run(cmd, check=True)
             elif package_fallback:
                 print("📦 Specific files not found, packaging all files as fallback")
-                subprocess.run(['tar', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=*.tar.gz', '.'], check=True)
+                subprocess.run(['tar', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=node_modules', '--exclude=*.tar.gz', '.'], check=True)
             else:
                 print("❌ Specific files not found and fallback disabled")
                 exit(1)
