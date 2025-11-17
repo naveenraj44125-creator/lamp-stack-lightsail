@@ -9,6 +9,10 @@ on:
       - '.github/workflows/deploy-python.yml'
   workflow_dispatch:
 
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
+
 jobs:
   deploy:
     name: Deploy Python Flask API
@@ -16,9 +20,6 @@ jobs:
     with:
       config_file: 'deployment-python.config.yml'
       skip_tests: false
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   
   summary:
     name: Deployment Summary
