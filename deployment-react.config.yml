@@ -12,7 +12,7 @@ lightsail:
 # Application Configuration
 application:
   name: react-dashboard
-  version: "1.0.0"
+  version: "1.0.1"
   type: web
   
   # Files to include in deployment package
