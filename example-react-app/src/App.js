@@ -58,7 +58,7 @@ function App() {
       </main>
 
       <footer className="App-footer">
-        <p>Version: 1.0.0 | Built with React 18</p>
+        <p>Version: 1.0.1 | Built with React 18</p>
         <p>Powered by AWS Lightsail & GitHub Actions CI/CD</p>
       </footer>
     </div>
