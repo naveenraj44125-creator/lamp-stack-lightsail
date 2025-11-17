@@ -19,6 +19,8 @@ application:
   package_files:
     - "example-python-app/app.py"
     - "example-python-app/requirements.txt"
+    - "example-python-app/templates/"
+    - "example-python-app/static/"
   
   # Fallback: include all files if specific files don't exist
   package_fallback: true
