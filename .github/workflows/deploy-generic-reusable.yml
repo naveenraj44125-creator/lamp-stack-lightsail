@@ -57,7 +57,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: us-east-1
 
     - name: Setup Python
@@ -368,7 +368,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -397,7 +397,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Build React app if needed
@@ -482,7 +482,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -527,7 +527,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRole
+        role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
