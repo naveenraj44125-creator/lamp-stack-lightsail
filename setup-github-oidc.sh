@@ -30,9 +30,9 @@ fi
 echo -e "${YELLOW}Enter your GitHub repository (format: owner/repo):${NC}"
 read -r GITHUB_REPO
 
-echo -e "${YELLOW}Enter IAM role name (default: GitHubActionsRole):${NC}"
+echo -e "${YELLOW}Enter IAM role name (default: GitHubActionsRoleNew):${NC}"
 read -r ROLE_NAME
-ROLE_NAME=${ROLE_NAME:-GitHubActionsRole}
+ROLE_NAME=${ROLE_NAME:-GitHubActionsRoleNew}
 
 echo -e "${YELLOW}Enter AWS region (default: us-east-1):${NC}"
 read -r AWS_REGION
