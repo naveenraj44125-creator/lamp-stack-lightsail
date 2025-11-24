@@ -149,11 +149,8 @@ echo "✅ Package lists updated"
         
         print("🔧 Installing Apache web server step by step...")
         
-        # Step 1: Update package list
-        print("\n📦 Step 1: Updating package list")
-#         success, output = self.client.run_command("sudo apt-get update")  # Removed: apt-get update now runs once at start
-        if not success:
-            return False
+        # Step 1: Update package list (now done once at start)
+        print("\n📦 Step 1: Package list already updated")
         
         # Step 2: Install Apache
         print("\n📦 Step 2: Installing Apache package")
