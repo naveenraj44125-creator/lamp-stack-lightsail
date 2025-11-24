@@ -478,7 +478,7 @@ server {{
     }}
     
     # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {{
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {{
         expires 1y;
         add_header Cache-Control "public, immutable";
     }}
@@ -503,12 +503,12 @@ server {{
         try_files $uri $uri/ /index.php?$query_string;
     }}
     
-    location ~ \\.php$ {{
+    location ~ \\\\.php$ {{
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
     }}
     
-    location ~ /\\.ht {{
+    location ~ /\\\\.ht {{
         deny all;
     }}
     
