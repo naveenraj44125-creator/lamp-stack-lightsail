@@ -61,7 +61,7 @@ echo "Running apt-get update..."
 sudo apt-get update -qq
 echo "✅ Package lists updated"
 '''
-        success, output = self.client.run_command(update_script, timeout=120)
+        success, output = self.client.run_command(update_script, timeout=300)
         if not success:
             print("⚠️  apt-get update failed, but continuing with installations...")
         else:
@@ -610,7 +610,7 @@ sudo ufw --force enable
 echo "✅ Firewall configuration completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=120)
+        success, output = self.client.run_command(script, timeout=300)
         return success
     
     def _install_ssl_certificates(self, config: Dict[str, Any]) -> bool:
