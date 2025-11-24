@@ -2,70 +2,48 @@ name: Nginx Static Site Deployment
 
 on:
   push:
-    branches: [main]
+    branches: [ main, master ]
     paths:
       - 'example-nginx-app/**'
       - 'deployment-nginx.config.yml'
       - '.github/workflows/deploy-nginx.yml'
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
 
 jobs:
   deploy:
+    name: Deploy Nginx Static Site
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-nginx.config.yml'
+      skip_tests: false
+  
+  summary:
+    name: Deployment Summary
+    needs: deploy
     runs-on: ubuntu-latest
-    
+    if: always()
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
-          aws-region: us-east-1
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
+      - name: Show Deployment Results
         run: |
-          pip install boto3 paramiko
-      
-      - name: Package application
-        run: |
-          cd example-nginx-app
-          tar -czf ../nginx-app.tar.gz .
-          cd ..
-      
-      - name: Run pre-deployment steps
-        run: |
-          echo "🔧 Running generic pre-deployment steps..."
-          python workflows/deploy-pre-steps-generic.py \
-            --config-file deployment-nginx.config.yml
-      
-      - name: Deploy application
-        run: |
-          echo "🚀 Running generic application deployment..."
-          python workflows/deploy-post-steps-generic.py \
-            --config-file deployment-nginx.config.yml \
-            --package-file nginx-app.tar.gz \
-            --verify \
-            --cleanup
-      
-      - name: Deployment summary
-        if: always()
-        run: |
-          echo "## 🎉 Nginx Static Site Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Nginx Static Site Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Application**: Nginx Static Website" >> $GITHUB_STEP_SUMMARY
-          echo "- **Instance**: nginx-static-demo" >> $GITHUB_STEP_SUMMARY
-          echo "- **Region**: us-east-1" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.deploy.outputs.deployment_status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🌐 Access Your Site" >> $GITHUB_STEP_SUMMARY
-          echo "Visit your deployed site at the instance's public IP address" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.deploy.outputs.deployment_status }}" = "success" ]; then
+            echo "✅ Static site deployed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🌐 Nginx Static Website" >> $GITHUB_STEP_SUMMARY
+            echo "- **Server**: Nginx" >> $GITHUB_STEP_SUMMARY
+            echo "- **Content**: HTML5, CSS3, JavaScript" >> $GITHUB_STEP_SUMMARY
+            echo "- **Features**: Responsive design, modern UI" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Deployment failed. Check logs above." >> $GITHUB_STEP_SUMMARY
+          fi
