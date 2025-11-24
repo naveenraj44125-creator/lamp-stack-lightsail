@@ -264,10 +264,13 @@ sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
 echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
 '''
-        elif app_type == 'web':
+        elif app_type in ['web', 'static'] or 'nginx' in self.dependency_manager.installed_dependencies or 'apache' in self.dependency_manager.installed_dependencies:
+            # Web servers need www-data ownership
             script += f'''
 sudo chown -R www-data:www-data {target_dir}
 sudo chmod -R 755 {target_dir}
+sudo find {target_dir} -type f -exec chmod 644 {{}} \\;
+echo "✅ Set ownership to www-data:www-data for web server"
 '''
         else:
             script += f'''
