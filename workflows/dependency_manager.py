@@ -53,6 +53,20 @@ class DependencyManager:
         
         print(f"📦 Installing {len(enabled_deps)} enabled dependencies: {', '.join(enabled_deps)}")
         
+        # Run apt-get update once at the beginning to avoid repeated updates
+        print("\n🔄 Updating package lists...")
+        update_script = '''
+set -e
+echo "Running apt-get update..."
+sudo apt-get update -qq
+echo "✅ Package lists updated"
+'''
+        success, output = self.client.run_command(update_script, timeout=120)
+        if not success:
+            print("⚠️  apt-get update failed, but continuing with installations...")
+        else:
+            print("✅ Package lists updated successfully")
+        
         # Install dependencies in order of priority
         dependency_order = [
             'git', 'firewall', 'apache', 'nginx', 'mysql', 'postgresql', 
@@ -137,7 +151,7 @@ class DependencyManager:
         
         # Step 1: Update package list
         print("\n📦 Step 1: Updating package list")
-        success, output = self.client.run_command("sudo apt-get update")
+#         success, output = self.client.run_command("sudo apt-get update")  # Removed: apt-get update now runs once at start
         if not success:
             return False
         
@@ -215,7 +229,7 @@ set -e
 echo "Installing Nginx web server..."
 
 # Install Nginx
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y nginx
 
 # Enable Nginx to start on boot
@@ -233,7 +247,7 @@ sudo systemctl start nginx
 echo "✅ Nginx installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _install_mysql(self, config: Dict[str, Any]) -> bool:
@@ -254,7 +268,7 @@ echo "Installing MySQL database server..."
 export DEBIAN_FRONTEND=noninteractive
 
 # Install MySQL
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y mysql-server
 
 # Enable MySQL to start on boot
@@ -294,7 +308,7 @@ set -e
 echo "Installing PostgreSQL database server..."
 
 # Install PostgreSQL
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y postgresql postgresql-contrib
 
 # Enable PostgreSQL to start on boot
@@ -352,7 +366,7 @@ set -e
 echo "Installing PHP {version}..."
 
 # Install PHP and extensions
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y php{version} php{version}-fpm {ext_list}
 
 # Install Composer if requested
@@ -386,7 +400,7 @@ set -e
 echo "Installing Python {version}..."
 
 # Install Python and pip
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y python{version} python{version}-pip python{version}-venv
 
 # Create virtual environment if requested
@@ -418,7 +432,7 @@ fi
 
 echo "✅ Python packages installed"
 '''
-            success, output = self.client.run_command(pip_script, timeout=180)
+            success, output = self.client.run_command(pip_script, timeout=420)
         
         return success
     
@@ -439,7 +453,7 @@ sudo apt-get install -y nodejs
 if [ "{node_config.get('package_manager', 'npm')}" = "yarn" ]; then
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
-    sudo apt-get update
+#     sudo apt-get update  # Removed: apt-get update now runs once at start
     sudo apt-get install -y yarn
 fi
 
@@ -458,7 +472,7 @@ echo "Installing Node.js packages: {' '.join(npm_packages)}"
 sudo {pkg_manager} install -g {' '.join(npm_packages)}
 echo "✅ Node.js packages installed"
 '''
-            success, output = self.client.run_command(npm_script, timeout=180)
+            success, output = self.client.run_command(npm_script, timeout=420)
         
         return success
     
@@ -469,7 +483,7 @@ set -e
 echo "Installing Redis..."
 
 # Install Redis
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y redis-server
 
 # Enable Redis to start on boot
@@ -481,7 +495,7 @@ sudo systemctl start redis-server
 echo "✅ Redis installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _install_memcached(self, config: Dict[str, Any]) -> bool:
@@ -491,7 +505,7 @@ set -e
 echo "Installing Memcached..."
 
 # Install Memcached
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y memcached
 
 # Enable Memcached to start on boot
@@ -503,7 +517,7 @@ sudo systemctl start memcached
 echo "✅ Memcached installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _install_docker(self, config: Dict[str, Any]) -> bool:
@@ -515,11 +529,11 @@ set -e
 echo "Installing Docker..."
 
 # Install Docker
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
 # Enable Docker to start on boot
@@ -550,7 +564,7 @@ set -e
 echo "Installing Git..."
 
 # Install Git
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y git
 
 # Install Git LFS if requested
@@ -563,7 +577,7 @@ fi
 echo "✅ Git installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _configure_firewall(self, config: Dict[str, Any]) -> bool:
@@ -576,7 +590,7 @@ set -e
 echo "Configuring firewall..."
 
 # Install UFW if not present
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y ufw
 
 # Reset UFW to defaults
@@ -613,7 +627,7 @@ set -e
 echo "Installing Certbot for Let's Encrypt..."
 
 # Install Certbot
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y certbot python3-certbot-apache
 
 echo "✅ Certbot installation completed"
@@ -623,7 +637,7 @@ echo "ℹ️  Run 'sudo certbot --apache' to obtain SSL certificates"
             print(f"⚠️  SSL provider '{provider}' not implemented")
             return True  # Don't fail deployment for this
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _install_monitoring_tools(self, config: Dict[str, Any]) -> bool:
@@ -636,13 +650,13 @@ set -e
 echo "Installing monitoring tools..."
 
 # Install monitoring tools
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y {' '.join(tools)}
 
 echo "✅ Monitoring tools installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def configure_services(self) -> bool:
@@ -856,7 +870,7 @@ set -e
 echo "Installing MySQL client..."
 
 # Install MySQL client
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y mysql-client
 
 echo "✅ MySQL client installation completed"
@@ -867,7 +881,7 @@ set -e
 echo "Installing PostgreSQL client..."
 
 # Install PostgreSQL client
-sudo apt-get update
+# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y postgresql-client
 
 echo "✅ PostgreSQL client installation completed"
@@ -876,7 +890,7 @@ echo "✅ PostgreSQL client installation completed"
             print(f"❌ Unsupported database type: {db_type}")
             return False
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _create_environment_file(self, env_vars: Dict[str, str], config: Dict[str, Any]) -> bool:

@@ -279,7 +279,7 @@ sudo chmod -R 755 {target_dir}
 echo "✅ Application files deployed successfully"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
 
     def _configure_application(self) -> bool:
@@ -779,7 +779,7 @@ else
 fi
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         print(output)
         return success
 
@@ -929,7 +929,7 @@ sudo chmod 644 /var/www/html/.env
 echo "✅ Local MySQL database setup completed"
 '''
         
-        success, output = self.client.run_command_with_live_output(script, timeout=180)
+        success, output = self.client.run_command_with_live_output(script, timeout=420)
         return success
 
     def _configure_local_postgresql(self) -> bool:
@@ -978,7 +978,7 @@ sudo chmod 644 /var/www/html/.env
 echo "✅ Local PostgreSQL database setup completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=180)
+        success, output = self.client.run_command(script, timeout=420)
         return success
 
     def _setup_app_specific_config(self) -> bool:

@@ -279,7 +279,7 @@ mysql -h {endpoint} -P {port} -u {username} -p{password} -e "CREATE DATABASE IF 
 echo "✅ MySQL client configured for RDS"
 '''
         
-        success, output = self.run_command(script, timeout=180)
+        success, output = self.run_command(script, timeout=420)
         return success
     
     def _install_postgres_client(self, connection_details: Dict[str, Any], database_name: str) -> bool:
@@ -315,7 +315,7 @@ PGPASSWORD={password} createdb -h {endpoint} -p {port} -U {username} {database_n
 echo "✅ PostgreSQL client configured for RDS"
 '''
         
-        success, output = self.run_command(script, timeout=180)
+        success, output = self.run_command(script, timeout=420)
         return success
     
     def create_database_env_vars(self, connection_details: Dict[str, Any], database_name: str) -> Dict[str, str]:
