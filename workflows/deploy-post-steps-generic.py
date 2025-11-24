@@ -56,6 +56,8 @@ which php > /dev/null 2>&1 && echo "php:installed" || true
 which python3 > /dev/null 2>&1 && echo "python:installed" || true
 which node > /dev/null 2>&1 && echo "nodejs:installed" || true
 which git > /dev/null 2>&1 && echo "git:installed" || true
+which nginx > /dev/null 2>&1 && echo "nginx:installed" || true
+which apache2 > /dev/null 2>&1 && echo "apache:installed" || true
 
 echo "Service check completed"
 '''
