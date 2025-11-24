@@ -1,0 +1,71 @@
+name: Nginx Static Site Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'example-nginx-app/**'
+      - 'deployment-nginx.config.yml'
+      - '.github/workflows/deploy-nginx.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
+          aws-region: us-east-1
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install boto3 paramiko
+      
+      - name: Package application
+        run: |
+          cd example-nginx-app
+          tar -czf ../nginx-app.tar.gz .
+          cd ..
+      
+      - name: Run pre-deployment steps
+        run: |
+          echo "🔧 Running generic pre-deployment steps..."
+          python workflows/deploy-pre-steps-generic.py \
+            --config-file deployment-nginx.config.yml
+      
+      - name: Deploy application
+        run: |
+          echo "🚀 Running generic application deployment..."
+          python workflows/deploy-post-steps-generic.py \
+            --config-file deployment-nginx.config.yml \
+            --package-file nginx-app.tar.gz \
+            --verify \
+            --cleanup
+      
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "## 🎉 Nginx Static Site Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application**: Nginx Static Website" >> $GITHUB_STEP_SUMMARY
+          echo "- **Instance**: nginx-static-demo" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: us-east-1" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Access Your Site" >> $GITHUB_STEP_SUMMARY
+          echo "Visit your deployed site at the instance's public IP address" >> $GITHUB_STEP_SUMMARY

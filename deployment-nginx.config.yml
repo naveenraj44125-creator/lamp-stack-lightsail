@@ -1,0 +1,30 @@
+application:
+  name: "nginx-static-site"
+  type: "static"
+  version: "1.0.0"
+  deploy_path: "/var/www/html"
+  
+instance:
+  name: "nginx-static-demo"
+  region: "us-east-1"
+
+dependencies:
+  nginx:
+    enabled: true
+    config:
+      document_root: "/var/www/html"
+      enable_gzip: true
+      enable_caching: true
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"
+        - "80"
+        - "443"
