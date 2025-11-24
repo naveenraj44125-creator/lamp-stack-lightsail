@@ -1,16 +1,29 @@
+# AWS Configuration
+aws:
+  region: us-east-1
+
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: nginx-static-demo
+  
+# Application Configuration
 application:
   name: "nginx-static-site"
   type: "static"
   version: "1.0.0"
-  deploy_path: "/var/www/html"
   
-instance:
-  name: "nginx-static-demo"
-  region: "us-east-1"
+  # Files to include in deployment package
+  package_files:
+    - "example-nginx-app/"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
 
+# Dependencies Configuration
 dependencies:
   nginx:
     enabled: true
+    version: "latest"
     config:
       document_root: "/var/www/html"
       enable_gzip: true
@@ -28,3 +41,73 @@ dependencies:
         - "22"
         - "80"
         - "443"
+
+# Deployment Configuration
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - "/"
+
+# GitHub Actions Configuration
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+    
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: "Nginx"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
