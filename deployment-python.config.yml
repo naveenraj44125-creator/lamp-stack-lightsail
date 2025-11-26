@@ -55,7 +55,7 @@ dependencies:
   # Programming Language
   python:
     enabled: true
-    version: "3.11"
+    version: "3.10"  # Ubuntu 22.04 default Python version
     config:
       pip_packages:
         - "virtualenv"
