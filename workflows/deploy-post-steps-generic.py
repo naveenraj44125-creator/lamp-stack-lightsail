@@ -197,6 +197,12 @@ fi
                 target_dir = '/opt/nodejs-app'
             else:
                 target_dir = '/opt/app'
+        elif app_type == 'static':
+            # For static sites, use nginx document_root if nginx is enabled
+            if 'nginx' in self.dependency_manager.installed_dependencies:
+                target_dir = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
+            else:
+                target_dir = '/var/www/html'
         else:
             target_dir = '/opt/app'
         
