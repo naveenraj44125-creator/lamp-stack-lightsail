@@ -397,13 +397,26 @@ set -e
 echo "Installing Python {version}..."
 
 # Install Python and pip
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y python{version} python{version}-pip python{version}-venv
+# For Ubuntu 22.04, python3 is already installed, just install additional tools
+if [ "{version}" = "3.10" ] || [ "{version}" = "3" ]; then
+    # Use system Python3
+    sudo apt-get install -y python3 python3-pip python3-venv python3-dev
+else
+    # Try to install specific version
+    sudo apt-get install -y python{version} python{version}-pip python{version}-venv python{version}-dev || {{
+        echo "⚠️  Python {version} not available, using system python3"
+        sudo apt-get install -y python3 python3-pip python3-venv python3-dev
+    }}
+fi
 
 # Create virtual environment if requested
 if [ "{python_config.get('virtual_env', True)}" = "True" ]; then
     sudo mkdir -p /opt/python-venv
-    sudo python{version} -m venv /opt/python-venv/app
+    if [ "{version}" = "3.10" ] || [ "{version}" = "3" ]; then
+        sudo python3 -m venv /opt/python-venv/app
+    else
+        sudo python{version} -m venv /opt/python-venv/app || sudo python3 -m venv /opt/python-venv/app
+    fi
     sudo chown -R www-data:www-data /opt/python-venv
     echo "✅ Python virtual environment created"
 fi
@@ -422,9 +435,14 @@ echo "Installing Python packages: {' '.join(pip_packages)}"
 
 if [ -d "/opt/python-venv/app" ]; then
     source /opt/python-venv/app/bin/activate
+    pip install --upgrade pip
     pip install {' '.join(pip_packages)}
 else
-    sudo pip{version} install {' '.join(pip_packages)}
+    if [ "{version}" = "3.10" ] || [ "{version}" = "3" ]; then
+        sudo pip3 install {' '.join(pip_packages)}
+    else
+        sudo pip{version} install {' '.join(pip_packages)} || sudo pip3 install {' '.join(pip_packages)}
+    fi
 fi
 
 echo "✅ Python packages installed"
