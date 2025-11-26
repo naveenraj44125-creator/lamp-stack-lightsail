@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Version: 1.0.1
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));

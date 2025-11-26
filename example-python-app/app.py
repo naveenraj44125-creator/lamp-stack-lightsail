@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask API Application for AWS Lightsail Deployment
+Version: 1.0.1
 """
 
 from flask import Flask, jsonify, request, render_template

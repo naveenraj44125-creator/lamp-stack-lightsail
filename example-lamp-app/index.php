@@ -1,4 +1,5 @@
 <?php
+// Version: 1.0.1
 // Include database configuration
 require_once 'config/database.php';
 require_once 'config/cache.php';
