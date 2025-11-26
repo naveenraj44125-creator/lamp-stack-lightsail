@@ -380,6 +380,7 @@ jobs:
       run: |
         echo "🔧 Running generic pre-deployment steps..."
         export GITHUB_ACTIONS=true
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)/workflows"
         
         python3 workflows/deploy-pre-steps-generic.py \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
@@ -499,6 +500,7 @@ jobs:
       run: |
         echo "🚀 Running generic application deployment..."
         export GITHUB_ACTIONS=true
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)/workflows"
         
         python3 workflows/deploy-post-steps-generic.py \
           app.tar.gz \
