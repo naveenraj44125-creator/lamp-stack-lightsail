@@ -259,14 +259,22 @@ fi
 # Set proper ownership based on application type
 '''
         
+        # Check if nginx or apache are enabled in config
+        nginx_enabled = self.config.get('dependencies.nginx.enabled', False)
+        apache_enabled = self.config.get('dependencies.apache.enabled', False)
+        nodejs_enabled = self.config.get('dependencies.nodejs.enabled', False)
+        
         # For Node.js apps, always use ubuntu user
-        if 'nodejs' in self.dependency_manager.installed_dependencies:
+        if 'nodejs' in self.dependency_manager.installed_dependencies or nodejs_enabled:
             script += f'''
 sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
 echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
 '''
-        elif app_type in ['web', 'static'] or 'nginx' in self.dependency_manager.installed_dependencies or 'apache' in self.dependency_manager.installed_dependencies:
+        elif (app_type in ['web', 'static'] or 
+              'nginx' in self.dependency_manager.installed_dependencies or 
+              'apache' in self.dependency_manager.installed_dependencies or
+              nginx_enabled or apache_enabled):
             # Web servers need www-data ownership
             script += f'''
 sudo chown -R www-data:www-data {target_dir}
