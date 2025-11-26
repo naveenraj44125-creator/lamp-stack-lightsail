@@ -399,13 +399,13 @@ echo "Installing Python {version}..."
 # Install Python and pip
 # For Ubuntu 22.04, python3 is already installed, just install additional tools
 if [ "{version}" = "3.10" ] || [ "{version}" = "3" ]; then
-    # Use system Python3
-    sudo apt-get install -y python3 python3-pip python3-venv python3-dev
+    # Use system Python3 - install version-specific venv package
+    sudo apt-get install -y python3 python3-pip python3-dev python3.10-venv
 else
     # Try to install specific version
     sudo apt-get install -y python{version} python{version}-pip python{version}-venv python{version}-dev || {{
         echo "⚠️  Python {version} not available, using system python3"
-        sudo apt-get install -y python3 python3-pip python3-venv python3-dev
+        sudo apt-get install -y python3 python3-pip python3-dev python3.10-venv
     }}
 fi
 
