@@ -56,7 +56,6 @@ which php > /dev/null 2>&1 && echo "php:installed" || true
 which python3 > /dev/null 2>&1 && echo "python:installed" || true
 which node > /dev/null 2>&1 && echo "nodejs:installed" || true
 which git > /dev/null 2>&1 && echo "git:installed" || true
-which nginx > /dev/null 2>&1 && echo "nginx:installed" || true
 which apache2 > /dev/null 2>&1 && echo "apache:installed" || true
 
 echo "Service check completed"
@@ -228,13 +227,17 @@ cd ~
 tar -xzf {package_file}
 
 # Find the extracted directory (usually example-*-app or just files)
+echo "🔍 Looking for extracted directories..."
+ls -la
 EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
 
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
 
 if [ -n "$EXTRACTED_DIR" ]; then
-    echo "Found extracted directory: $EXTRACTED_DIR"
+    echo "✅ Found extracted directory: $EXTRACTED_DIR"
+    echo "📋 Contents of $EXTRACTED_DIR:"
+    ls -la "$EXTRACTED_DIR" | head -20
     
     # Check if this is a React app with build directory
     if [ -d "$EXTRACTED_DIR/build" ]; then
@@ -242,19 +245,29 @@ if [ -n "$EXTRACTED_DIR" ]; then
         sudo cp -r "$EXTRACTED_DIR/build"/* {target_dir}/ || true
     else
         # Copy contents of the extracted directory
+        echo "📦 Copying $EXTRACTED_DIR/* to {target_dir}/"
         sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
     fi
 else
-    echo "No example-*-app directory found, copying all files"
+    echo "⚠️  No example-*-app directory found, copying all files"
+    echo "📋 Current directory contents:"
+    ls -la | head -20
+    
     # Check if build directory exists at root level
     if [ -d "build" ]; then
         echo "Build directory detected at root, deploying build files..."
         sudo cp -r build/* {target_dir}/ || true
     else
         # Copy all files directly
+        echo "📦 Copying all files to {target_dir}/"
         sudo cp -r * {target_dir}/ || true
     fi
 fi
+
+# Verify files were copied
+echo ""
+echo "📋 Files in {target_dir} after deployment:"
+ls -la {target_dir}/ | head -20
 
 # Set proper ownership based on application type
 '''
