@@ -264,9 +264,20 @@ fi
         apache_enabled = self.config.get('dependencies.apache.enabled', False)
         nodejs_enabled = self.config.get('dependencies.nodejs.enabled', False)
         
+        # Debug logging
+        script += f'''
+echo "🔍 Permission Debug Info:"
+echo "  App Type: {app_type}"
+echo "  Nginx Enabled: {nginx_enabled}"
+echo "  Apache Enabled: {apache_enabled}"
+echo "  Node.js Enabled: {nodejs_enabled}"
+echo "  Installed Dependencies: {','.join(self.dependency_manager.installed_dependencies)}"
+'''
+        
         # For Node.js apps, always use ubuntu user
         if 'nodejs' in self.dependency_manager.installed_dependencies or nodejs_enabled:
             script += f'''
+echo "📝 Setting Node.js app permissions (ubuntu:ubuntu)"
 sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
 echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
@@ -277,13 +288,16 @@ echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
               nginx_enabled or apache_enabled):
             # Web servers need www-data ownership
             script += f'''
+echo "📝 Setting web server permissions (www-data:www-data)"
 sudo chown -R www-data:www-data {target_dir}
 sudo chmod -R 755 {target_dir}
 sudo find {target_dir} -type f -exec chmod 644 {{}} \\;
 echo "✅ Set ownership to www-data:www-data for web server"
+ls -la {target_dir}/ | head -10
 '''
         else:
             script += f'''
+echo "📝 Setting default permissions (ubuntu:ubuntu)"
 sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
 '''
