@@ -53,6 +53,25 @@ class DependencyManager:
         
         print(f"📦 Installing {len(enabled_deps)} enabled dependencies: {', '.join(enabled_deps)}")
         
+        # First, check and fix dpkg if it's in a broken state
+        print("\n🔧 Checking dpkg state...")
+        dpkg_check_script = '''
+# Check if dpkg is in a broken state
+if sudo dpkg --audit 2>&1 | grep -q "broken"; then
+    echo "⚠️  dpkg is in a broken state, fixing..."
+    sudo dpkg --configure -a
+    sudo apt-get install -f -y
+    echo "✅ dpkg fixed"
+else
+    echo "✅ dpkg is healthy"
+fi
+'''
+        success, output = self.client.run_command(dpkg_check_script, timeout=180)
+        if not success:
+            print("⚠️  dpkg check/fix failed, but continuing...")
+        else:
+            print("✅ dpkg state verified")
+        
         # Run apt-get update once at the beginning to avoid repeated updates
         print("\n🔄 Updating package lists...")
         update_script = '''
@@ -102,8 +121,32 @@ echo "✅ Package lists updated"
         return overall_success, self.installed_dependencies, self.failed_dependencies
     
     def _install_dependency(self, dep_name: str) -> bool:
-        """Install a specific dependency"""
+        """Install a specific dependency with retry logic"""
         dep_config = self.config.get(f'dependencies.{dep_name}', {})
+        
+        # Try installation with retry on failure
+        max_retries = 2
+        for attempt in range(max_retries):
+            if attempt > 0:
+                print(f"🔄 Retry attempt {attempt + 1}/{max_retries} for {dep_name}...")
+                # On retry, try to fix dpkg again
+                fix_script = '''
+sudo dpkg --configure -a 2>/dev/null || true
+sudo apt-get install -f -y 2>/dev/null || true
+'''
+                self.client.run_command(fix_script, timeout=60)
+            
+            success = self._do_install_dependency(dep_name, dep_config)
+            if success:
+                return True
+            
+            if attempt < max_retries - 1:
+                print(f"⚠️  Installation failed, will retry...")
+        
+        return False
+    
+    def _do_install_dependency(self, dep_name: str, dep_config: dict) -> bool:
+        """Perform the actual dependency installation"""
 
         # Check if this is an external RDS database
         if dep_name in ['mysql', 'postgresql'] and dep_config.get('external', False):

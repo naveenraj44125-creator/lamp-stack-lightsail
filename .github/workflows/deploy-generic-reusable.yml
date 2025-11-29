@@ -376,6 +376,45 @@ jobs:
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3 pyyaml
 
+    - name: Pre-flight Instance Health Check
+      run: |
+        echo "🏥 Running pre-flight health check..."
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)/workflows"
+        
+        python3 << 'EOF'
+        import sys
+        sys.path.insert(0, 'workflows')
+        from lightsail_common import LightsailBase
+        
+        instance_name = "${{ needs.load-config.outputs.instance_name }}"
+        region = "${{ needs.load-config.outputs.aws_region }}"
+        
+        client = LightsailBase(instance_name, region)
+        
+        print(f"🔍 Checking {instance_name}...")
+        
+        # Quick dpkg check and fix
+        script = '''
+        if sudo dpkg --audit 2>&1 | grep -q "broken"; then
+            echo "⚠️  dpkg broken, fixing..."
+            sudo dpkg --configure -a
+            sudo apt-get install -f -y
+            echo "✅ dpkg fixed"
+        else
+            echo "✅ dpkg healthy"
+        fi
+        '''
+        
+        success, output = client.run_command(script, timeout=120)
+        print(output)
+        
+        if not success:
+            print("⚠️  Health check had issues, but continuing...")
+            sys.exit(0)  # Don't fail the workflow
+        else:
+            print("✅ Pre-flight check passed")
+        EOF
+
     - name: Generic Environment Preparation & Dependency Installation
       run: |
         echo "🔧 Running generic pre-deployment steps..."

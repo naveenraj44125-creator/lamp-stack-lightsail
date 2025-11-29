@@ -51,6 +51,16 @@ class GenericPreDeployer:
         else:
             print("   No dependencies configured")
         
+        # Pre-flight health check
+        print("\n" + "="*60)
+        print("🏥 SYSTEM HEALTH CHECK")
+        print("="*60)
+        health_ok = self._system_health_check()
+        if not health_ok:
+            print("⚠️  System health check found issues, but continuing with deployment...")
+        else:
+            print("✅ System health check passed")
+        
         # Install all enabled dependencies
         print("\n" + "="*60)
         print("🚀 INSTALLING DEPENDENCIES")
@@ -187,6 +197,58 @@ echo "✅ Application directories prepared"
 '''
         
         success, output = self.client.run_command(script, timeout=120)
+        return success
+
+    def _system_health_check(self) -> bool:
+        """Perform system health checks before deployment"""
+        print("🔍 Checking system health...")
+        
+        health_script = '''
+#!/bin/bash
+set +e  # Don't exit on error, we want to check everything
+
+echo "Checking disk space..."
+df -h / | tail -1 | awk '{print "Disk usage: " $5 " used of " $2}'
+
+echo ""
+echo "Checking memory..."
+free -h | grep Mem | awk '{print "Memory: " $3 " used of " $2}'
+
+echo ""
+echo "Checking dpkg state..."
+if sudo dpkg --audit 2>&1 | grep -q "broken"; then
+    echo "❌ dpkg is in broken state"
+    echo "Attempting to fix..."
+    sudo dpkg --configure -a
+    sudo apt-get install -f -y
+    echo "✅ dpkg fixed"
+else
+    echo "✅ dpkg is healthy"
+fi
+
+echo ""
+echo "Checking apt locks..."
+if sudo lsof /var/lib/dpkg/lock-frontend 2>/dev/null; then
+    echo "⚠️  apt is locked by another process"
+    echo "Waiting for lock to be released..."
+    sleep 10
+else
+    echo "✅ No apt locks detected"
+fi
+
+echo ""
+echo "Checking connectivity..."
+if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+    echo "✅ Internet connectivity OK"
+else
+    echo "⚠️  Internet connectivity issue"
+fi
+
+echo ""
+echo "✅ Health check completed"
+'''
+        
+        success, output = self.client.run_command(health_script, timeout=120)
         return success
 
     def _setup_environment_variables(self) -> bool:
