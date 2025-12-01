@@ -179,14 +179,20 @@ sudo chown -R ubuntu:ubuntu /opt/nodejs-app
         
         # Add database-specific directories
         if 'mysql' in self.dependency_manager.installed_dependencies:
-            script += '''
+            # Only create mysql directories if using local MySQL (not external RDS)
+            mysql_config = self.config.get('dependencies', {}).get('mysql', {})
+            if not mysql_config.get('external', False):
+                script += '''
 # MySQL backup directory
 sudo mkdir -p /var/backups/mysql
 sudo chown -R mysql:mysql /var/backups/mysql
 '''
         
         if 'postgresql' in self.dependency_manager.installed_dependencies:
-            script += '''
+            # Only create postgres directories if using local PostgreSQL (not external RDS)
+            pg_config = self.config.get('dependencies', {}).get('postgresql', {})
+            if not pg_config.get('external', False):
+                script += '''
 # PostgreSQL backup directory
 sudo mkdir -p /var/backups/postgresql
 sudo chown -R postgres:postgres /var/backups/postgresql

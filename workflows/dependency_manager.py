@@ -405,8 +405,18 @@ echo "✅ PostgreSQL installation completed"
 set -e
 echo "Installing PHP {version}..."
 
+# Add Ondrej PPA for PHP (required for PHP 8.1+ on Ubuntu 22.04)
+if ! grep -q "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+    echo "Adding Ondrej PHP PPA..."
+    sudo apt-get install -y software-properties-common
+    sudo add-apt-repository -y ppa:ondrej/php
+    sudo apt-get update -qq
+    echo "✅ Ondrej PHP PPA added"
+else
+    echo "✅ Ondrej PHP PPA already present"
+fi
+
 # Install PHP and extensions
-# sudo apt-get update  # Removed: apt-get update now runs once at start
 sudo apt-get install -y php{version} php{version}-fpm {ext_list}
 
 # Install Composer if requested
@@ -758,6 +768,12 @@ echo "✅ Web server configuration completed"
     
     def _configure_mysql_app_access(self) -> bool:
         """Configure MySQL for application access"""
+        # Skip configuration if using external RDS database
+        mysql_config = self.config.get('dependencies', {}).get('mysql', {})
+        if mysql_config.get('external', False):
+            print("ℹ️  Skipping local MySQL configuration (using external RDS)")
+            return True
+        
         script = '''
 set -e
 echo "Configuring MySQL for application access..."
@@ -776,6 +792,12 @@ echo "✅ MySQL application access configured"
     
     def _configure_postgresql_app_access(self) -> bool:
         """Configure PostgreSQL for application access"""
+        # Skip configuration if using external RDS database
+        pg_config = self.config.get('dependencies', {}).get('postgresql', {})
+        if pg_config.get('external', False):
+            print("ℹ️  Skipping local PostgreSQL configuration (using external RDS)")
+            return True
+        
         script = '''
 set -e
 echo "Configuring PostgreSQL for application access..."
