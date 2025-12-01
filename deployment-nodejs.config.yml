@@ -6,7 +6,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: nodejs-demo-app
+  instance_name: nodejs-demo-app-v2
   static_ip: ""  # Will be fetched automatically from AWS
   
 # Application Configuration

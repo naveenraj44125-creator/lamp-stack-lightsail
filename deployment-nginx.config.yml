@@ -4,7 +4,7 @@ aws:
 
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: nginx-static-demo
+  instance_name: nginx-static-demo-v2
   
 # Application Configuration
 application:
