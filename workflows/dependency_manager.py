@@ -120,16 +120,39 @@ echo "✅ Package lists updated"
         
         return overall_success, self.installed_dependencies, self.failed_dependencies
     
+    def _wait_for_dpkg_lock(self, timeout=300):
+        """Wait for dpkg lock to be released"""
+        wait_script = '''
+# Wait for dpkg lock to be released
+echo "Waiting for dpkg lock to be released..."
+timeout=300
+elapsed=0
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    if [ $elapsed -ge $timeout ]; then
+        echo "⚠️  Timeout waiting for dpkg lock"
+        break
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+echo "✅ dpkg lock is available"
+'''
+        self.client.run_command(wait_script, timeout=timeout + 10)
+    
     def _install_dependency(self, dep_name: str) -> bool:
         """Install a specific dependency with retry logic"""
         dep_config = self.config.get(f'dependencies.{dep_name}', {})
+        
+        # Wait for any existing dpkg locks before starting
+        self._wait_for_dpkg_lock()
         
         # Try installation with retry on failure
         max_retries = 2
         for attempt in range(max_retries):
             if attempt > 0:
                 print(f"🔄 Retry attempt {attempt + 1}/{max_retries} for {dep_name}...")
-                # On retry, try to fix dpkg again
+                # On retry, wait for locks and try to fix dpkg
+                self._wait_for_dpkg_lock()
                 fix_script = '''
 sudo dpkg --configure -a 2>/dev/null || true
 sudo apt-get install -f -y 2>/dev/null || true
