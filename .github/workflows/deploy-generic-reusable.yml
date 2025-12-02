@@ -96,10 +96,12 @@ jobs:
         
         # Check if instance exists, create if not
         static_ip = ""
+        instance_exists = False
         try:
             print(f"\n🔍 Checking if instance '{instance_name}' exists...")
             response = lightsail.get_instance(instanceName=instance_name)
             instance = response['instance']
+            instance_exists = True
             print(f"✅ Instance exists with state: {instance['state']['name']}")
             
             # Get public IP
@@ -108,6 +110,21 @@ jobs:
                 print(f"✅ Public IP: {static_ip}")
             else:
                 print("⚠️  No public IP found yet")
+            
+            # Ensure firewall ports are open for existing instances
+            print("\n🔥 Ensuring firewall ports are open...")
+            try:
+                lightsail.put_instance_public_ports(
+                    portInfos=[
+                        {'fromPort': 22, 'toPort': 22, 'protocol': 'tcp'},
+                        {'fromPort': 80, 'toPort': 80, 'protocol': 'tcp'},
+                        {'fromPort': 443, 'toPort': 443, 'protocol': 'tcp'}
+                    ],
+                    instanceName=instance_name
+                )
+                print("✅ Firewall ports ensured (22, 80, 443)")
+            except Exception as e:
+                print(f"⚠️  Could not update firewall: {e}")
                 
         except lightsail.exceptions.NotFoundException:
             print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")
