@@ -31,15 +31,12 @@ package-lock.json
 # Ignore run-command folder (for temporary scripts and commands)
 run-command/
 
-# Ignore debug scripts
-debug-deployment.py
-debug-python-deployment.py
-debug-react-deployment.py
-fix-nodejs-deployment.py
-fix-python-deployment.py
-fix-react-deployment.py
+# Ignore debug and fix scripts (keep local only)
+debug-*.py
+fix-*.py
+fix-*.sh
+run-*.sh
 quick-debug.sh
-run-debug.sh
 
 # Ignore AWS credentials
 .aws-creds.sh
