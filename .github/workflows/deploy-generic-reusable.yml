@@ -50,6 +50,7 @@ jobs:
       should_deploy: ${{ steps.config.outputs.should_deploy }}
       enabled_dependencies: ${{ steps.config.outputs.enabled_dependencies }}
       test_enabled: ${{ steps.config.outputs.test_enabled }}
+      is_ubuntu: ${{ steps.config.outputs.is_ubuntu }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -103,6 +104,30 @@ jobs:
             instance = response['instance']
             instance_exists = True
             print(f"✅ Instance exists with state: {instance['state']['name']}")
+            
+            # Validate blueprint is Ubuntu
+            blueprint_id = instance.get('blueprintId', '')
+            blueprint_name = instance.get('blueprintName', '')
+            print(f"📋 Blueprint: {blueprint_name} ({blueprint_id})")
+            
+            is_ubuntu = 'ubuntu' in blueprint_id.lower() or 'ubuntu' in blueprint_name.lower()
+            
+            if not is_ubuntu:
+                print(f"⚠️  WARNING: Instance is not running Ubuntu blueprint!")
+                print(f"   Current blueprint: {blueprint_name} ({blueprint_id})")
+                print(f"   This deployment system only supports Ubuntu instances.")
+                print(f"   Skipping deployment for this instance.")
+                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                    f.write(f"is_ubuntu=false\n")
+                    f.write(f"instance_name={instance_name}\n")
+                    f.write(f"aws_region={aws_region}\n")
+                    f.write(f"app_name={app_name}\n")
+                    f.write(f"app_type={app_type}\n")
+                    f.write(f"app_version={app_version}\n")
+                    f.write(f"should_deploy=false\n")
+                exit(0)
+            else:
+                print(f"✅ Ubuntu blueprint confirmed: {blueprint_name}")
             
             # Get public IP
             if 'publicIpAddress' in instance:
@@ -219,12 +244,13 @@ jobs:
             f.write(f"should_deploy={str(should_deploy).lower()}\n")
             f.write(f"enabled_dependencies={enabled_dependencies}\n")
             f.write(f"test_enabled={str(test_enabled).lower()}\n")
+            f.write(f"is_ubuntu=true\n")
         EOF
 
   test:
     needs: load-config
     runs-on: ubuntu-latest
-    if: needs.load-config.outputs.test_enabled == 'true'
+    if: needs.load-config.outputs.test_enabled == 'true' && needs.load-config.outputs.is_ubuntu == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -353,6 +379,7 @@ jobs:
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&
+      needs.load-config.outputs.is_ubuntu == 'true' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     environment: ${{ inputs.environment }}
     steps:
@@ -446,7 +473,7 @@ jobs:
   application-package:
     needs: [load-config]
     runs-on: ubuntu-latest
-    if: needs.load-config.outputs.should_deploy == 'true'
+    if: needs.load-config.outputs.should_deploy == 'true' && needs.load-config.outputs.is_ubuntu == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -518,6 +545,7 @@ jobs:
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&
+      needs.load-config.outputs.is_ubuntu == 'true' &&
       needs.pre-steps-generic.result == 'success' &&
       needs.application-package.result == 'success'
     environment: ${{ inputs.environment }}
@@ -575,25 +603,39 @@ jobs:
   verification:
     needs: [load-config, post-steps-generic]
     runs-on: ubuntu-latest
+    if: always()
     outputs:
       app_url: ${{ steps.set-outputs.outputs.app_url }}
       status: ${{ steps.set-outputs.outputs.status }}
     steps:
+    - name: Check if Ubuntu
+      if: needs.load-config.outputs.is_ubuntu != 'true'
+      id: set-outputs
+      run: |
+        echo "⚠️ Deployment skipped - Instance is not running Ubuntu"
+        echo "This deployment system only supports Ubuntu Lightsail instances"
+        echo "status=skipped" >> $GITHUB_OUTPUT
+        echo "app_url=N/A" >> $GITHUB_OUTPUT
+    
     - name: Checkout code
+      if: needs.load-config.outputs.is_ubuntu == 'true'
       uses: actions/checkout@v4
 
     - name: Configure AWS credentials
+      if: needs.load-config.outputs.is_ubuntu == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: arn:aws:iam::257429339749:role/GitHubActionsRoleNew
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
+      if: needs.load-config.outputs.is_ubuntu == 'true'
       run: |
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3 pyyaml
 
     - name: External Connectivity Test
+      if: needs.load-config.outputs.is_ubuntu == 'true'
       id: connectivity
       run: |
         echo "🌐 Testing external connectivity..."
@@ -631,8 +673,7 @@ jobs:
         exit 1
 
     - name: Set Outputs
-      id: set-outputs
-      if: always()
+      if: always() && needs.load-config.outputs.is_ubuntu == 'true' && steps.set-outputs.outcome != 'success'
       run: |
         echo "app_url=http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_OUTPUT
         echo "status=${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_OUTPUT
@@ -642,5 +683,14 @@ jobs:
       run: |
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Application**: ${{ needs.load-config.outputs.app_name }} v${{ needs.load-config.outputs.app_version }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
-        echo "- **Status**: ${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.load-config.outputs.is_ubuntu }}" != "true" ]; then
+          echo "- **Status**: ⚠️ Skipped (Non-Ubuntu instance)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "This deployment system only supports Ubuntu Lightsail instances." >> $GITHUB_STEP_SUMMARY
+          echo "The target instance is not running an Ubuntu blueprint." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_STEP_SUMMARY
+        fi
