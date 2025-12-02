@@ -109,17 +109,63 @@ case $APP_TYPE_CHOICE in
 esac
 
 echo ""
+echo -e "${BLUE}Database Configuration:${NC}"
+echo "1) No database"
+echo "2) MySQL (internal - on same instance)"
+echo "3) MySQL (external - AWS RDS)"
+echo "4) PostgreSQL (internal - on same instance)"
+echo "5) PostgreSQL (external - AWS RDS)"
+read -p "Choose database option (1-5): " DB_CHOICE
+
+DB_TYPE="none"
+DB_EXTERNAL="false"
+DB_RDS_NAME=""
+DB_NAME=""
+
+case $DB_CHOICE in
+    2)
+        DB_TYPE="mysql"
+        DB_EXTERNAL="false"
+        ;;
+    3)
+        DB_TYPE="mysql"
+        DB_EXTERNAL="true"
+        read -p "RDS instance name: " DB_RDS_NAME
+        read -p "Database name (default: app_db): " DB_NAME
+        DB_NAME=${DB_NAME:-app_db}
+        ;;
+    4)
+        DB_TYPE="postgresql"
+        DB_EXTERNAL="false"
+        ;;
+    5)
+        DB_TYPE="postgresql"
+        DB_EXTERNAL="true"
+        read -p "RDS instance name: " DB_RDS_NAME
+        read -p "Database name (default: app_db): " DB_NAME
+        DB_NAME=${DB_NAME:-app_db}
+        ;;
+esac
+
+if [[ "$DB_TYPE" != "none" ]]; then
+    DEPENDENCIES="$DEPENDENCIES,$DB_TYPE"
+fi
+
+echo ""
 echo -e "${BLUE}Additional Dependencies:${NC}"
+read -p "Enable Redis cache? (y/N): " ENABLE_REDIS
+if [[ "$ENABLE_REDIS" =~ ^[Yy]$ ]]; then
+    DEPENDENCIES="$DEPENDENCIES,redis"
+fi
+
 read -p "Enable Git? (Y/n): " ENABLE_GIT
 ENABLE_GIT=${ENABLE_GIT:-Y}
 if [[ "$ENABLE_GIT" =~ ^[Yy]$ ]]; then
     DEPENDENCIES="$DEPENDENCIES,git"
 fi
 
-read -p "Enable Certbot (SSL)? (y/N): " ENABLE_CERTBOT
-if [[ "$ENABLE_CERTBOT" =~ ^[Yy]$ ]]; then
-    DEPENDENCIES="$DEPENDENCIES,certbot"
-fi
+read -p "Enable SSL certificates (Let's Encrypt)? (y/N): " ENABLE_SSL
+ENABLE_SSL=${ENABLE_SSL:-N}
 
 echo ""
 echo -e "${YELLOW}Summary:${NC}"
@@ -128,6 +174,11 @@ echo "Application: $APP_NAME ($APP_TYPE_NAME)"
 echo "Instance: $INSTANCE_NAME"
 echo "Region: $AWS_REGION"
 echo "Dependencies: $DEPENDENCIES"
+if [[ "$DB_TYPE" != "none" ]]; then
+    echo "Database: $DB_TYPE ($([ "$DB_EXTERNAL" = "true" ] && echo "external RDS" || echo "internal"))"
+    [[ "$DB_EXTERNAL" = "true" ]] && echo "  RDS Instance: $DB_RDS_NAME"
+    [[ "$DB_EXTERNAL" = "true" ]] && echo "  Database Name: $DB_NAME"
+fi
 echo ""
 read -p "Proceed with setup? (Y/n): " CONFIRM
 CONFIRM=${CONFIRM:-Y}
@@ -162,12 +213,19 @@ application:
   
   # Fallback to packaging all files if specific files not found
   package_fallback: true
+  
+  # Environment variables
+  environment_variables:
+    APP_ENV: production
+    APP_DEBUG: false
+    APP_NAME: "${APP_NAME}"
 
 aws:
   region: "${AWS_REGION}"
 
 lightsail:
   instance_name: "${INSTANCE_NAME}"
+  static_ip: ""  # Will be assigned automatically
   
   # Instance will be auto-created if it doesn't exist
   auto_create: true
@@ -181,25 +239,242 @@ EOF
 IFS=',' read -ra DEPS <<< "$DEPENDENCIES"
 for dep in "${DEPS[@]}"; do
     dep=$(echo "$dep" | xargs) # trim whitespace
-    cat >> "deployment-${APP_TYPE}.config.yml" << EOF
-  ${dep}:
+    
+    # Skip database dependencies - they'll be added separately
+    if [[ "$dep" == "mysql" ]] || [[ "$dep" == "postgresql" ]]; then
+        continue
+    fi
+    
+    case $dep in
+        apache)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  apache:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+      enable_rewrite: true
+EOF
+            ;;
+        nginx)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+EOF
+            ;;
+        php)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  php:
+    enabled: true
+    version: "8.3"
+    config:
+      extensions:
+        - "curl"
+        - "mbstring"
+        - "xml"
+        - "zip"
+EOF
+            [[ "$DB_TYPE" == "mysql" ]] && echo "        - \"mysql\"" >> "deployment-${APP_TYPE}.config.yml"
+            [[ "$DB_TYPE" == "postgresql" ]] && echo "        - \"pgsql\"" >> "deployment-${APP_TYPE}.config.yml"
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+      enable_composer: true
+EOF
+            ;;
+        nodejs)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  nodejs:
+    enabled: true
+    version: "18"
+    config:
+      npm_packages:
+        - "express"
+      package_manager: "npm"
+EOF
+            ;;
+        pm2)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  pm2:
     enabled: true
 EOF
+            ;;
+        python)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  python:
+    enabled: true
+    version: "3.9"
+    config:
+      pip_packages:
+        - "flask"
+        - "gunicorn"
+      virtual_env: true
+EOF
+            ;;
+        redis)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  redis:
+    enabled: true
+    version: "latest"
+    config:
+      bind_all_interfaces: false
+EOF
+            ;;
+        git)
+            cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+EOF
+            ;;
+    esac
 done
 
-# Add deployment directory
-cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+# Add database configuration
+if [[ "$DB_TYPE" != "none" ]]; then
+    cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  
+  # Database Configuration
+  ${DB_TYPE}:
+    enabled: true
+    external: ${DB_EXTERNAL}
+EOF
+    
+    if [[ "$DB_EXTERNAL" == "true" ]]; then
+        cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+    rds:
+      database_name: "${DB_RDS_NAME}"
+      region: "${AWS_REGION}"
+      master_database: "${DB_NAME}"
+      environment:
+        DB_CONNECTION_TIMEOUT: "30"
+        DB_CHARSET: "utf8mb4"
+EOF
+    fi
+fi
 
+# Add SSL configuration if enabled
+if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
+    cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  
+  ssl_certificates:
+    enabled: true
+    config:
+      provider: "letsencrypt"
+      domains: []  # Add your domains here
+EOF
+fi
+
+# Add firewall configuration
+cat >> "deployment-${APP_TYPE}.config.yml" << EOF
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+      deny_all_other: true
+
+# Deployment Configuration
 deployment:
   target_directory: "/var/www/${APP_TYPE}-app"
   
+  # Timeout settings (in seconds)
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+  
+  # Retry settings
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
   # Post-deployment commands (optional)
   post_deploy_commands: []
+  
+  # Deployment steps
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - "/"
 
+# GitHub Actions Configuration
 github_actions:
+  triggers:
+    push_branches:
+      - main
+    workflow_dispatch: true
+  
   jobs:
     test:
       enabled: true
+      language_specific_tests: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: ""
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+  
+  logging:
+    level: INFO
+    include_timestamps: true
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+  
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false
 EOF
 
 # Create main workflow file
