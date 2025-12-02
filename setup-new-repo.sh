@@ -65,7 +65,27 @@ echo -e "${BLUE}AWS Configuration:${NC}"
 read -p "AWS Region (default: us-east-1): " AWS_REGION
 AWS_REGION=${AWS_REGION:-us-east-1}
 read -p "Lightsail Instance Name: " INSTANCE_NAME
-read -p "AWS IAM Role ARN for GitHub Actions: " AWS_ROLE_ARN
+
+echo ""
+echo -e "${BLUE}GitHub Actions OIDC Setup:${NC}"
+echo "1) Use existing IAM role (provide ARN)"
+echo "2) Create new IAM role with OIDC"
+read -p "Choose option (1-2): " OIDC_CHOICE
+
+if [[ "$OIDC_CHOICE" == "2" ]]; then
+    SETUP_OIDC=true
+    read -p "IAM role name (default: GitHubActionsRole-${REPO_NAME}): " ROLE_NAME
+    ROLE_NAME=${ROLE_NAME:-GitHubActionsRole-${REPO_NAME}}
+    
+    echo "Trust scope:"
+    echo "1) Any branch (repo:OWNER/${REPO_NAME}:*)"
+    echo "2) Main branch only (repo:OWNER/${REPO_NAME}:ref:refs/heads/main)"
+    read -p "Choose trust scope (1-2, default: 2): " TRUST_SCOPE
+    TRUST_SCOPE=${TRUST_SCOPE:-2}
+else
+    SETUP_OIDC=false
+    read -p "AWS IAM Role ARN for GitHub Actions: " AWS_ROLE_ARN
+fi
 
 echo ""
 echo -e "${BLUE}Select Application Type:${NC}"
@@ -178,6 +198,12 @@ if [[ "$DB_TYPE" != "none" ]]; then
     echo "Database: $DB_TYPE ($([ "$DB_EXTERNAL" = "true" ] && echo "external RDS" || echo "internal"))"
     [[ "$DB_EXTERNAL" = "true" ]] && echo "  RDS Instance: $DB_RDS_NAME"
     [[ "$DB_EXTERNAL" = "true" ]] && echo "  Database Name: $DB_NAME"
+fi
+if [[ "$SETUP_OIDC" == "true" ]]; then
+    echo "OIDC: Will create new IAM role ($ROLE_NAME)"
+else
+    echo "OIDC: Using existing role"
+    echo "  Role ARN: $AWS_ROLE_ARN"
 fi
 echo ""
 read -p "Proceed with setup? (Y/n): " CONFIRM
@@ -796,6 +822,116 @@ echo -e "${GREEN}Creating GitHub repository...${NC}"
 gh repo create "$REPO_NAME" $VISIBILITY --source=. --remote=origin --description="$REPO_DESC"
 
 echo ""
+if [[ "$SETUP_OIDC" == "true" ]]; then
+    echo -e "${GREEN}Setting up OIDC and IAM role...${NC}"
+    
+    # Get AWS account ID
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Could not get AWS account ID. Make sure AWS credentials are configured.${NC}"
+        echo "Run: source .aws-creds.sh"
+        exit 1
+    fi
+    
+    GITHUB_OWNER=$(gh api user -q .login)
+    GITHUB_REPO="${GITHUB_OWNER}/${REPO_NAME}"
+    
+    # Set trust condition based on choice
+    if [[ "$TRUST_SCOPE" == "1" ]]; then
+        TRUST_CONDITION="repo:${GITHUB_REPO}:*"
+    else
+        TRUST_CONDITION="repo:${GITHUB_REPO}:ref:refs/heads/main"
+    fi
+    
+    # Create OIDC Provider (if it doesn't exist)
+    OIDC_PROVIDER_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+    
+    if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" &> /dev/null; then
+        echo "✓ OIDC provider already exists"
+    else
+        aws iam create-open-id-connect-provider \
+            --url https://token.actions.githubusercontent.com \
+            --client-id-list sts.amazonaws.com \
+            --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+            --tags Key=ManagedBy,Value=setup-new-repo > /dev/null
+        echo "✓ OIDC provider created"
+    fi
+    
+    # Create trust policy
+    TRUST_POLICY=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "$OIDC_PROVIDER_ARN"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "$TRUST_CONDITION"
+        }
+      }
+    }
+  ]
+}
+EOF
+)
+    
+    echo "$TRUST_POLICY" > /tmp/trust-policy-${REPO_NAME}.json
+    
+    # Create or update IAM role
+    if aws iam get-role --role-name "$ROLE_NAME" &> /dev/null; then
+        echo "✓ Role exists, updating trust policy..."
+        aws iam update-assume-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-document file:///tmp/trust-policy-${REPO_NAME}.json > /dev/null
+    else
+        aws iam create-role \
+            --role-name "$ROLE_NAME" \
+            --assume-role-policy-document file:///tmp/trust-policy-${REPO_NAME}.json \
+            --description "Role for GitHub Actions OIDC - ${REPO_NAME}" \
+            --tags Key=ManagedBy,Value=setup-new-repo Key=Repository,Value=${REPO_NAME} > /dev/null
+        echo "✓ IAM role created"
+        
+        # Attach policies
+        echo "✓ Attaching IAM policies..."
+        aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess > /dev/null
+        
+        # Create Lightsail policy
+        LIGHTSAIL_POLICY_NAME="${ROLE_NAME}-LightsailAccess"
+        POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${LIGHTSAIL_POLICY_NAME}"
+        
+        if ! aws iam get-policy --policy-arn "$POLICY_ARN" &> /dev/null; then
+            LIGHTSAIL_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lightsail:*","Resource":"*"}]}'
+            aws iam create-policy \
+                --policy-name "$LIGHTSAIL_POLICY_NAME" \
+                --policy-document "$LIGHTSAIL_POLICY" \
+                --description "Full access to AWS Lightsail" \
+                --tags Key=ManagedBy,Value=setup-new-repo > /dev/null
+        fi
+        
+        aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn "$POLICY_ARN" > /dev/null
+        echo "✓ Lightsail policy attached"
+    fi
+    
+    AWS_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ROLE_NAME}"
+    
+    # Cleanup
+    rm /tmp/trust-policy-${REPO_NAME}.json
+    
+    echo "✓ OIDC setup complete"
+fi
+
+echo ""
 echo -e "${GREEN}Setting up GitHub variables...${NC}"
 
 # Set GitHub variables
@@ -819,10 +955,19 @@ echo ""
 echo -e "${BLUE}Repository URL:${NC} https://github.com/$(gh api user -q .login)/${REPO_NAME}"
 echo -e "${BLUE}Actions URL:${NC} https://github.com/$(gh api user -q .login)/${REPO_NAME}/actions"
 echo ""
+if [[ "$SETUP_OIDC" == "true" ]]; then
+    echo -e "${BLUE}IAM Role ARN:${NC} ${AWS_ROLE_ARN}"
+    echo -e "${BLUE}Trust Condition:${NC} ${TRUST_CONDITION}"
+    echo ""
+fi
 echo -e "${YELLOW}Next Steps:${NC}"
 echo "1. Review the generated files in your repository"
 echo "2. Customize example-${APP_TYPE}-app/ with your application code"
 echo "3. Push changes to trigger automatic deployment"
 echo "4. Monitor deployment in GitHub Actions"
+if [[ "$SETUP_OIDC" == "true" ]]; then
+    echo ""
+    echo -e "${GREEN}✓ OIDC is configured and ready to use!${NC}"
+fi
 echo ""
 echo -e "${GREEN}Happy deploying! 🚀${NC}"
