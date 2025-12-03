@@ -32,6 +32,6 @@ jobs:
     name: Deploy Basic Docker LAMP to Lightsail
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
-      config-file: deployment-docker.config.yml
+      config_file: deployment-docker.config.yml
       environment: ${{ github.event.inputs.environment || 'production' }}
     secrets: inherit

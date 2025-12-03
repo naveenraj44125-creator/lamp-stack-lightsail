@@ -35,6 +35,6 @@ jobs:
     name: Deploy Recipe Manager to Lightsail
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
-      config-file: deployment-recipe-docker.config.yml
+      config_file: deployment-recipe-docker.config.yml
       environment: ${{ github.event.inputs.environment || 'production' }}
     secrets: inherit
