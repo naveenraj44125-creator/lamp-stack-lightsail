@@ -150,6 +150,37 @@ jobs:
                 print("✅ Firewall ports ensured (22, 80, 443)")
             except Exception as e:
                 print(f"⚠️  Could not update firewall: {e}")
+            
+            # Setup Lightsail bucket if configured
+            bucket_config = config.get('lightsail', {}).get('bucket', {})
+            if bucket_config.get('enabled', False):
+                bucket_name = bucket_config.get('name', '')
+                if bucket_name:
+                    print(f"\n🪣 Setting up Lightsail bucket...")
+                    import sys
+                    sys.path.insert(0, 'workflows')
+                    from lightsail_bucket import LightsailBucket
+                    
+                    bucket_manager = LightsailBucket(region=aws_region)
+                    access_level = bucket_config.get('access_level', 'read_only')
+                    bundle_id = bucket_config.get('bundle_id', 'small_1_0')
+                    
+                    success, message = bucket_manager.setup_bucket_for_instance(
+                        bucket_name=bucket_name,
+                        instance_name=instance_name,
+                        access_level=access_level,
+                        bundle_id=bundle_id,
+                        create_if_missing=True
+                    )
+                    
+                    if success:
+                        print(f"✅ {message}")
+                    else:
+                        print(f"⚠️  {message}")
+                else:
+                    print("⚠️  Bucket enabled but no name specified")
+            else:
+                print("\nℹ️  Lightsail bucket not configured")
                 
         except lightsail.exceptions.NotFoundException:
             print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")

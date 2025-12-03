@@ -172,6 +172,41 @@ if [[ "$DB_TYPE" != "none" ]]; then
 fi
 
 echo ""
+echo -e "${BLUE}Lightsail Bucket Configuration:${NC}"
+read -p "Enable Lightsail bucket for object storage? (y/N): " ENABLE_BUCKET
+ENABLE_BUCKET=${ENABLE_BUCKET:-N}
+
+if [[ "$ENABLE_BUCKET" =~ ^[Yy]$ ]]; then
+    read -p "Bucket name (default: ${INSTANCE_NAME}-bucket): " BUCKET_NAME
+    BUCKET_NAME=${BUCKET_NAME:-${INSTANCE_NAME}-bucket}
+    
+    echo "Bucket access level:"
+    echo "1) Read-only (instance can download from bucket)"
+    echo "2) Read-write (instance can upload to bucket)"
+    read -p "Choose access level (1-2, default: 1): " BUCKET_ACCESS_CHOICE
+    BUCKET_ACCESS_CHOICE=${BUCKET_ACCESS_CHOICE:-1}
+    
+    if [[ "$BUCKET_ACCESS_CHOICE" == "2" ]]; then
+        BUCKET_ACCESS="read_write"
+    else
+        BUCKET_ACCESS="read_only"
+    fi
+    
+    echo "Bucket size:"
+    echo "1) Small (250GB storage, 100GB transfer/month)"
+    echo "2) Medium (500GB storage, 250GB transfer/month)"
+    echo "3) Large (1TB storage, 500GB transfer/month)"
+    read -p "Choose bucket size (1-3, default: 1): " BUCKET_SIZE_CHOICE
+    BUCKET_SIZE_CHOICE=${BUCKET_SIZE_CHOICE:-1}
+    
+    case $BUCKET_SIZE_CHOICE in
+        2) BUCKET_BUNDLE="medium_1_0" ;;
+        3) BUCKET_BUNDLE="large_1_0" ;;
+        *) BUCKET_BUNDLE="small_1_0" ;;
+    esac
+fi
+
+echo ""
 echo -e "${BLUE}Additional Dependencies:${NC}"
 read -p "Enable Redis cache? (y/N): " ENABLE_REDIS
 if [[ "$ENABLE_REDIS" =~ ^[Yy]$ ]]; then

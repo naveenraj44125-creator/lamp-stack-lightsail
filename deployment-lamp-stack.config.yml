@@ -10,6 +10,17 @@ lightsail:
   instance_name: lamp-stack-demo-v2
   static_ip: ""  # Will be assigned automatically
   
+  # Lightsail Bucket Configuration (optional)
+  bucket:
+    enabled: true  # Set to true to create/attach a bucket
+    name: "lamp-stack-demo-bucket"  # Bucket name (will be created if doesn't exist)
+    access_level: "read_write"  # read_only or read_write
+    # Bundle ID for bucket (optional, defaults to small_1_0)
+    # small_1_0: 250GB storage, 100GB transfer
+    # medium_1_0: 500GB storage, 250GB transfer
+    # large_1_0: 1TB storage, 500GB transfer
+    bundle_id: "small_1_0"
+  
 # Application Configuration
 application:
   name: generic-app
@@ -19,6 +30,7 @@ application:
   # Files to include in deployment package
   package_files:
     - "example-lamp-app/index.php"
+    - "example-lamp-app/bucket-demo.php"
     - "example-lamp-app/css/"
     - "example-lamp-app/config/"
   
