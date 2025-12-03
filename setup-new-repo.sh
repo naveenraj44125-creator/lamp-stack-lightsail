@@ -930,6 +930,7 @@ EOF
             --role-name "$ROLE_NAME" \
             --assume-role-policy-document file:///tmp/trust-policy-${REPO_NAME}.json \
             --description "Role for GitHub Actions OIDC - ${REPO_NAME}" \
+            --max-session-duration 3600 \
             --tags Key=ManagedBy,Value=setup-new-repo Key=Repository,Value=${REPO_NAME} > /dev/null
         echo "✓ IAM role created"
         

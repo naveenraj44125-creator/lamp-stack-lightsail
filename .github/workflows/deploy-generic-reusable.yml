@@ -59,6 +59,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600  # 1 hour session
         aws-region: us-east-1
 
     - name: Setup Python
@@ -444,6 +445,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600  # 1 hour session
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -513,6 +515,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600  # 1 hour session
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Build React app if needed
@@ -599,6 +602,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600  # 1 hour session
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -657,6 +661,7 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600  # 1 hour session
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
