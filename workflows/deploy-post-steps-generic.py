@@ -246,10 +246,12 @@ ENVEOF
 fi
 
 # Ensure Docker is available and add user to docker group
-if ! command -v docker &> /dev/null; then
-    echo "❌ Docker is not installed"
+if [ ! -f /usr/bin/docker ]; then
+    echo "❌ Docker is not installed at /usr/bin/docker"
     exit 1
 fi
+
+echo "✅ Docker found at /usr/bin/docker"
 
 # Add ubuntu user to docker group for non-sudo access
 sudo usermod -aG docker ubuntu || true
