@@ -235,7 +235,7 @@ function tableExists() {
                     echo "<p><strong>🧹 CLEAN CODEBASE:</strong> Removed test files, keeping only production-ready code!</p>";
                     echo "<p>Current date and time: " . date('Y-m-d H:i:s') . "</p>";
                     echo "<p>Server uptime: " . shell_exec('uptime') . "</p>";
-                    echo "<p><em>Version: 3.1.1 - Streamlined Deployment System at " . date('H:i:s') . "</em></p>";
+                    echo "<p><em>Version: 3.1.1 - Streamlined Deployment System with S3 Bucket Integration at " . date('H:i:s') . "</em></p>";
                 ?>
             </div>
             
