@@ -98,6 +98,9 @@ echo "Service check completed"
             if not success:
                 print("❌ Docker deployment failed")
                 return False
+            
+            # Skip traditional configuration for Docker deployments
+            print("\n✅ Docker deployment completed - skipping traditional service configuration")
         else:
             # Traditional deployment
             print("\n📦 Traditional deployment mode")
@@ -114,30 +117,32 @@ echo "Service check completed"
             print("\n" + "="*60)
             print("🔧 CONFIGURING APPLICATION")
             print("="*60)
-        success = self._configure_application()
-        if not success:
-            print("⚠️  Application configuration had some issues")
+            success = self._configure_application()
+            if not success:
+                print("⚠️  Application configuration had some issues")
         
-        # Set up application-specific configurations
-        print("\n" + "="*60)
-        print("⚙️  APPLICATION-SPECIFIC CONFIGURATIONS")
-        print("="*60)
-        success = self._setup_app_specific_config()
-        if not success:
-            print("⚠️  Some application-specific configurations failed")
+        # Only run traditional configuration steps if not using Docker
+        if not use_docker_deployment:
+            # Set up application-specific configurations
+            print("\n" + "="*60)
+            print("⚙️  APPLICATION-SPECIFIC CONFIGURATIONS")
+            print("="*60)
+            success = self._setup_app_specific_config()
+            if not success:
+                print("⚠️  Some application-specific configurations failed")
+            
+            # Restart services
+            print("\n" + "="*60)
+            print("🔄 RESTARTING SERVICES")
+            print("="*60)
+            success = self.dependency_manager.restart_services()
+            if not success:
+                print("⚠️  Some services failed to restart")
         
-        # Restart services
-        print("\n" + "="*60)
-        print("🔄 RESTARTING SERVICES")
-        print("="*60)
-        success = self.dependency_manager.restart_services()
-        if not success:
-            print("⚠️  Some services failed to restart")
-        
-        # For Node.js apps, verify the service is still running after restart
-        if 'nodejs' in self.dependency_manager.installed_dependencies:
-            print("\n🔍 Verifying Node.js service after restart...")
-            verify_script = '''
+            # For Node.js apps, verify the service is still running after restart
+            if 'nodejs' in self.dependency_manager.installed_dependencies:
+                print("\n🔍 Verifying Node.js service after restart...")
+                verify_script = '''
 if systemctl is-active --quiet nodejs-app.service; then
     echo "✅ Node.js service is running"
     # Test local connection
@@ -153,7 +158,7 @@ else
     sudo journalctl -u nodejs-app.service -n 30 --no-pager || true
 fi
 '''
-            self.client.run_command(verify_script, timeout=30)
+                self.client.run_command(verify_script, timeout=30)
         
         # Set environment variables if provided
         if env_vars:
