@@ -245,23 +245,32 @@ ENVEOF
     echo "✅ Environment file created"
 fi
 
-# Stop existing containers
+# Ensure Docker is available and add user to docker group
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker is not installed"
+    exit 1
+fi
+
+# Add ubuntu user to docker group for non-sudo access
+sudo usermod -aG docker ubuntu || true
+
+# Stop existing containers (use sudo for now until group takes effect)
 echo "🛑 Stopping existing containers..."
-sudo docker compose -f $COMPOSE_FILE down || true
+sudo /usr/bin/docker compose -f $COMPOSE_FILE down || true
 
 # Pull latest images
 echo "📥 Pulling Docker images..."
-sudo docker compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+sudo /usr/bin/docker compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
 
 # Build images if needed
 if grep -q "build:" $COMPOSE_FILE; then
     echo "🔨 Building Docker images..."
-    sudo docker compose -f $COMPOSE_FILE build
+    sudo /usr/bin/docker compose -f $COMPOSE_FILE build
 fi
 
 # Start containers
 echo "🚀 Starting containers..."
-sudo docker compose -f $COMPOSE_FILE up -d
+sudo /usr/bin/docker compose -f $COMPOSE_FILE up -d
 
 # Wait for containers to be healthy
 echo "⏳ Waiting for containers to be ready..."
@@ -269,11 +278,11 @@ sleep 10
 
 # Show container status
 echo "📊 Container status:"
-sudo docker compose -f $COMPOSE_FILE ps
+sudo /usr/bin/docker compose -f $COMPOSE_FILE ps
 
 # Show logs
 echo "📋 Recent logs:"
-sudo docker compose -f $COMPOSE_FILE logs --tail=20
+sudo /usr/bin/docker compose -f $COMPOSE_FILE logs --tail=20
 
 echo "✅ Docker deployment completed"
 '''
