@@ -33,5 +33,4 @@ jobs:
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: deployment-docker.config.yml
-      environment: ${{ github.event.inputs.environment || 'production' }}
     secrets: inherit
