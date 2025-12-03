@@ -25,6 +25,10 @@ on:
         description: 'GitHub environment to use'
         required: false
         type: string
+    secrets:
+      aws_role_arn:
+        description: 'AWS IAM Role ARN for OIDC authentication'
+        required: true
     outputs:
       deployment_url:
         description: 'URL of deployed application'
@@ -58,7 +62,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.aws_role_arn }}
         aws-region: us-east-1
 
     - name: Setup Python
@@ -443,7 +447,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.aws_role_arn }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -512,7 +516,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.aws_role_arn }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Build React app if needed
@@ -598,7 +602,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.aws_role_arn }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
@@ -656,7 +660,7 @@ jobs:
       if: needs.load-config.outputs.is_ubuntu == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.aws_role_arn }}
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
