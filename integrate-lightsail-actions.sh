@@ -249,6 +249,13 @@ else
         curl -sL "$REPO_URL/workflows/$file" -o "workflows/$file"
     done
     
+    # Download OIDC setup script if needed
+    if [[ "$SETUP_OIDC" == "true" ]]; then
+        echo "  Downloading OIDC setup script..."
+        curl -sL "$REPO_URL/setup-github-oidc.sh" -o setup-github-oidc.sh
+        chmod +x setup-github-oidc.sh
+    fi
+    
     SOURCE_DIR="."
 fi
 
@@ -647,6 +654,167 @@ EOF
 echo "  ✓ Created LIGHTSAIL-DEPLOYMENT.md"
 
 echo ""
+echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  Step 5: AWS OIDC Setup${NC}"
+echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+if [[ "$SETUP_OIDC" == "true" ]]; then
+    echo -e "${GREEN}Setting up OIDC and IAM role...${NC}"
+    
+    # Check if AWS CLI is configured
+    if ! aws sts get-caller-identity &> /dev/null; then
+        echo -e "${RED}❌ AWS CLI is not configured${NC}"
+        echo ""
+        echo "Please configure AWS credentials first:"
+        echo "  aws configure"
+        echo ""
+        echo "Or if you have a credentials script:"
+        echo "  source .aws-creds.sh"
+        echo ""
+        echo "After configuring AWS, run this script again or manually set up OIDC:"
+        echo "  ./setup-github-oidc.sh"
+        echo ""
+        SETUP_OIDC="false"
+    else
+        # Get AWS account ID
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+        
+        # Get GitHub repository info
+        GITHUB_OWNER=$(git config --get remote.origin.url | sed -n 's#.*/\([^/]*\)/\([^/]*\)\.git#\1#p')
+        REPO_NAME=$(git config --get remote.origin.url | sed -n 's#.*/\([^/]*\)/\([^/]*\)\.git#\2#p')
+        
+        if [ -z "$GITHUB_OWNER" ] || [ -z "$REPO_NAME" ]; then
+            echo -e "${YELLOW}⚠️  Could not detect GitHub repository info${NC}"
+            read -p "Enter GitHub owner/username: " GITHUB_OWNER
+            read -p "Enter repository name: " REPO_NAME
+        fi
+        
+        GITHUB_REPO="${GITHUB_OWNER}/${REPO_NAME}"
+        
+        # Set trust condition (default to main branch only)
+        TRUST_CONDITION="repo:${GITHUB_REPO}:ref:refs/heads/main"
+        
+        echo "Repository: $GITHUB_REPO"
+        echo "AWS Account: $AWS_ACCOUNT_ID"
+        echo "IAM Role: $ROLE_NAME"
+        echo ""
+        
+        # Create OIDC Provider (if it doesn't exist)
+        OIDC_PROVIDER_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+        
+        if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" &> /dev/null; then
+            echo "✓ OIDC provider already exists"
+        else
+            echo "Creating OIDC provider..."
+            aws iam create-open-id-connect-provider \
+                --url https://token.actions.githubusercontent.com \
+                --client-id-list sts.amazonaws.com \
+                --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+                --tags Key=ManagedBy,Value=integrate-lightsail-actions > /dev/null
+            echo "✓ OIDC provider created"
+        fi
+        
+        # Create trust policy
+        TRUST_POLICY=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "$OIDC_PROVIDER_ARN"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "$TRUST_CONDITION"
+        }
+      }
+    }
+  ]
+}
+EOF
+)
+        
+        echo "$TRUST_POLICY" > /tmp/trust-policy-${REPO_NAME}.json
+        
+        # Create or update IAM role
+        if aws iam get-role --role-name "$ROLE_NAME" &> /dev/null; then
+            echo "✓ Role exists, updating trust policy..."
+            aws iam update-assume-role-policy \
+                --role-name "$ROLE_NAME" \
+                --policy-document file:///tmp/trust-policy-${REPO_NAME}.json > /dev/null
+        else
+            echo "Creating IAM role..."
+            aws iam create-role \
+                --role-name "$ROLE_NAME" \
+                --assume-role-policy-document file:///tmp/trust-policy-${REPO_NAME}.json \
+                --description "Role for GitHub Actions OIDC - ${REPO_NAME}" \
+                --tags Key=ManagedBy,Value=integrate-lightsail-actions Key=Repository,Value=${REPO_NAME} > /dev/null
+            echo "✓ IAM role created"
+            
+            # Attach policies
+            echo "Attaching IAM policies..."
+            aws iam attach-role-policy \
+                --role-name "$ROLE_NAME" \
+                --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess > /dev/null
+            
+            # Create Lightsail policy
+            LIGHTSAIL_POLICY_NAME="${ROLE_NAME}-LightsailAccess"
+            POLICY_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/${LIGHTSAIL_POLICY_NAME}"
+            
+            if ! aws iam get-policy --policy-arn "$POLICY_ARN" &> /dev/null; then
+                LIGHTSAIL_POLICY='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lightsail:*","Resource":"*"}]}'
+                aws iam create-policy \
+                    --policy-name "$LIGHTSAIL_POLICY_NAME" \
+                    --policy-document "$LIGHTSAIL_POLICY" \
+                    --description "Full access to AWS Lightsail" \
+                    --tags Key=ManagedBy,Value=integrate-lightsail-actions > /dev/null
+            fi
+            
+            aws iam attach-role-policy \
+                --role-name "$ROLE_NAME" \
+                --policy-arn "$POLICY_ARN" > /dev/null
+            echo "✓ Lightsail policy attached"
+        fi
+        
+        AWS_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${ROLE_NAME}"
+        
+        # Cleanup
+        rm /tmp/trust-policy-${REPO_NAME}.json
+        
+        echo "✓ OIDC setup complete"
+        echo ""
+    fi
+fi
+
+# Set GitHub variable if gh CLI is available
+if command -v gh &> /dev/null && [[ -n "$AWS_ROLE_ARN" ]]; then
+    echo -e "${GREEN}Setting GitHub variable...${NC}"
+    if gh variable set AWS_ROLE_ARN --body "$AWS_ROLE_ARN" 2>/dev/null; then
+        echo "✓ AWS_ROLE_ARN variable set in GitHub"
+    else
+        echo -e "${YELLOW}⚠️  Could not set GitHub variable automatically${NC}"
+        echo "Please set it manually:"
+        echo "  1. Go to repository Settings → Secrets and variables → Actions"
+        echo "  2. Add variable: AWS_ROLE_ARN"
+        echo "  3. Value: $AWS_ROLE_ARN"
+    fi
+else
+    if [[ -n "$AWS_ROLE_ARN" ]]; then
+        echo -e "${YELLOW}⚠️  GitHub CLI not available${NC}"
+        echo "Please set AWS_ROLE_ARN variable manually:"
+        echo "  1. Go to repository Settings → Secrets and variables → Actions"
+        echo "  2. Add variable: AWS_ROLE_ARN"
+        echo "  3. Value: $AWS_ROLE_ARN"
+    fi
+fi
+
+echo ""
 echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  ✅ Integration Complete!${NC}"
 echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
@@ -660,25 +828,33 @@ echo "  ✓ workflows/*.py (deployment modules)"
 echo "  ✓ LIGHTSAIL-DEPLOYMENT.md"
 echo ""
 
-echo -e "${YELLOW}Next Steps:${NC}"
-echo ""
-
-if [[ "$SETUP_OIDC" == "true" ]]; then
-    echo "1. Set up AWS OIDC authentication:"
-    echo "   ${BLUE}./setup-github-oidc.sh${NC}"
+if [[ "$SETUP_OIDC" == "true" ]] && [[ -n "$AWS_ROLE_ARN" ]]; then
+    echo -e "${GREEN}AWS Authentication:${NC}"
+    echo "  ✓ OIDC provider configured"
+    echo "  ✓ IAM role created: $ROLE_NAME"
+    echo "  ✓ Role ARN: $AWS_ROLE_ARN"
+    echo "  ✓ Trust condition: $TRUST_CONDITION"
     echo ""
 fi
 
-echo "2. Review and customize deployment-${APP_TYPE}.config.yml"
+echo -e "${YELLOW}Next Steps:${NC}"
 echo ""
 
-echo "3. Commit and push changes:"
+echo "1. Review and customize deployment-${APP_TYPE}.config.yml"
+echo ""
+
+echo "2. Commit and push changes:"
 echo "   ${BLUE}git add .${NC}"
 echo "   ${BLUE}git commit -m \"Add Lightsail deployment automation\"${NC}"
 echo "   ${BLUE}git push origin $CURRENT_BRANCH${NC}"
 echo ""
 
-echo "4. Monitor deployment in GitHub Actions tab"
+echo "3. Monitor deployment in GitHub Actions tab"
 echo ""
+
+if [[ "$SETUP_OIDC" == "true" ]] && [[ -n "$AWS_ROLE_ARN" ]]; then
+    echo -e "${GREEN}✓ OIDC is configured and ready to use!${NC}"
+    echo ""
+fi
 
 echo -e "${GREEN}Your repository is now ready for automated Lightsail deployment! 🚀${NC}"
