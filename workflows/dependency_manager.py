@@ -120,22 +120,32 @@ echo "✅ Package lists updated"
         
         return overall_success, self.installed_dependencies, self.failed_dependencies
     
-    def _wait_for_dpkg_lock(self, timeout=300):
-        """Wait for dpkg lock to be released"""
+    def _wait_for_dpkg_lock(self, timeout=60):
+        """Wait for dpkg lock to be released (optimized)"""
         wait_script = '''
-# Wait for dpkg lock to be released
-echo "Waiting for dpkg lock to be released..."
-timeout=300
+# Quick check for dpkg lock
+if ! sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && ! sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
+    echo "✅ dpkg lock is available"
+    exit 0
+fi
+
+# Wait for lock to be released
+echo "⏳ Waiting for dpkg lock (max 60s)..."
+timeout=60
 elapsed=0
 while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
     if [ $elapsed -ge $timeout ]; then
-        echo "⚠️  Timeout waiting for dpkg lock"
+        echo "⚠️  dpkg still locked after ${timeout}s, proceeding anyway..."
+        # Kill any stuck apt processes
+        sudo killall apt apt-get dpkg 2>/dev/null || true
+        sleep 2
         break
     fi
     sleep 2
     elapsed=$((elapsed + 2))
+    [ $((elapsed % 10)) -eq 0 ] && echo "   Still waiting... (${elapsed}s)"
 done
-echo "✅ dpkg lock is available"
+echo "✅ Proceeding with installation"
 '''
         self.client.run_command(wait_script, timeout=timeout + 10)
     
@@ -669,6 +679,47 @@ echo "✅ Git installation completed"
 '''
         
         success, output = self.client.run_command(script, timeout=420)
+        return success
+    
+    def _install_awscli(self, config: Dict[str, Any]) -> bool:
+        """Install AWS CLI for S3 bucket access"""
+        awscli_config = config.get('config', {})
+        version = awscli_config.get('version', '2')
+        
+        if version == '2':
+            script = '''
+set -e
+echo "Installing AWS CLI v2..."
+
+# Download and install AWS CLI v2
+cd /tmp
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+sudo apt-get install -y unzip
+unzip -q awscliv2.zip
+sudo ./aws/install --update
+rm -rf aws awscliv2.zip
+
+# Verify installation
+aws --version
+
+echo "✅ AWS CLI v2 installation completed"
+'''
+        else:
+            # AWS CLI v1 (legacy)
+            script = '''
+set -e
+echo "Installing AWS CLI v1..."
+
+# Install AWS CLI v1 via apt
+sudo apt-get install -y awscli
+
+# Verify installation
+aws --version
+
+echo "✅ AWS CLI v1 installation completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=300)
         return success
     
     def _configure_firewall(self, config: Dict[str, Any]) -> bool:
