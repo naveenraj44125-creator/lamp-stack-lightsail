@@ -85,19 +85,35 @@ echo "Service check completed"
         print(f"🌍 Instance: {self.client.instance_name}")
         print(f"📍 Region: {self.client.region}")
         
-        # Deploy application files
-        print("\n" + "="*60)
-        print("📦 DEPLOYING APPLICATION FILES")
-        print("="*60)
-        success = self._deploy_application_files(package_file)
-        if not success:
-            print("❌ Failed to deploy application files")
-            return False
+        # Check if Docker deployment is enabled
+        docker_enabled = self.config.get('dependencies.docker.enabled', False)
+        use_docker_deployment = docker_enabled and self.config.get('deployment.use_docker', False)
         
-        # Configure application based on type and dependencies
-        print("\n" + "="*60)
-        print("🔧 CONFIGURING APPLICATION")
-        print("="*60)
+        if use_docker_deployment:
+            print("\n🐳 Docker deployment mode enabled")
+            print("="*60)
+            print("🐳 DEPLOYING WITH DOCKER")
+            print("="*60)
+            success = self._deploy_with_docker(package_file, env_vars)
+            if not success:
+                print("❌ Docker deployment failed")
+                return False
+        else:
+            # Traditional deployment
+            print("\n📦 Traditional deployment mode")
+            # Deploy application files
+            print("\n" + "="*60)
+            print("📦 DEPLOYING APPLICATION FILES")
+            print("="*60)
+            success = self._deploy_application_files(package_file)
+            if not success:
+                print("❌ Failed to deploy application files")
+                return False
+            
+            # Configure application based on type and dependencies
+            print("\n" + "="*60)
+            print("🔧 CONFIGURING APPLICATION")
+            print("="*60)
         success = self._configure_application()
         if not success:
             print("⚠️  Application configuration had some issues")
@@ -173,6 +189,98 @@ fi
         print(f"🌐 Instance: {self.client.instance_name}")
         print(f"📍 Region: {self.client.region}")
         print(f"🏷️  Type: {app_type}")
+        return True
+    
+    def _deploy_with_docker(self, package_file, env_vars=None) -> bool:
+        """Deploy application using Docker and docker-compose"""
+        print("🐳 Deploying application with Docker...")
+        
+        # Upload package to instance
+        print(f"📤 Uploading package file {package_file}...")
+        remote_package_path = f"~/{package_file}"
+        
+        if not self.client.copy_file_to_instance(package_file, remote_package_path):
+            print(f"❌ Failed to upload package file")
+            return False
+        
+        # Prepare environment variables for docker-compose
+        env_file_content = ""
+        if env_vars:
+            for key, value in env_vars.items():
+                env_file_content += f'{key}={value}\n'
+        
+        script = f'''
+set -e
+echo "🐳 Setting up Docker deployment..."
+
+# Create deployment directory
+DEPLOY_DIR="/opt/docker-app"
+sudo mkdir -p $DEPLOY_DIR
+cd $DEPLOY_DIR
+
+# Extract application package
+echo "📦 Extracting application..."
+sudo tar -xzf ~/{package_file} -C $DEPLOY_DIR
+
+# Find docker-compose file
+COMPOSE_FILE=$(find . -name "docker-compose.yml" -o -name "docker-compose.yaml" | head -n 1)
+
+if [ -z "$COMPOSE_FILE" ]; then
+    echo "❌ No docker-compose.yml found in package"
+    exit 1
+fi
+
+echo "✅ Found docker-compose file: $COMPOSE_FILE"
+
+# Create .env file if environment variables provided
+if [ -n "{env_file_content}" ]; then
+    cat > .env << 'ENVEOF'
+{env_file_content}
+ENVEOF
+    echo "✅ Environment file created"
+fi
+
+# Stop existing containers
+echo "🛑 Stopping existing containers..."
+sudo docker-compose -f $COMPOSE_FILE down || true
+
+# Pull latest images
+echo "📥 Pulling Docker images..."
+sudo docker-compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+
+# Build images if needed
+if grep -q "build:" $COMPOSE_FILE; then
+    echo "🔨 Building Docker images..."
+    sudo docker-compose -f $COMPOSE_FILE build
+fi
+
+# Start containers
+echo "🚀 Starting containers..."
+sudo docker-compose -f $COMPOSE_FILE up -d
+
+# Wait for containers to be healthy
+echo "⏳ Waiting for containers to be ready..."
+sleep 10
+
+# Show container status
+echo "📊 Container status:"
+sudo docker-compose -f $COMPOSE_FILE ps
+
+# Show logs
+echo "📋 Recent logs:"
+sudo docker-compose -f $COMPOSE_FILE logs --tail=20
+
+echo "✅ Docker deployment completed"
+'''
+        
+        success, output = self.client.run_command(script, timeout=600)
+        print(output)
+        
+        if not success:
+            print("❌ Docker deployment failed")
+            return False
+        
+        print("✅ Application deployed with Docker successfully")
         return True
 
     def _deploy_application_files(self, package_file) -> bool:

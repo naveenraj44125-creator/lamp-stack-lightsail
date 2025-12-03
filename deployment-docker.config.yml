@@ -1,0 +1,205 @@
+# Docker Deployment Configuration for AWS Lightsail
+# This configuration demonstrates Docker-based deployment
+
+# AWS Configuration
+aws:
+  region: us-east-1
+
+# Lightsail Instance Configuration
+lightsail:
+  instance_name: docker-lamp-demo-v1
+  static_ip: ""  # Will be fetched automatically from AWS
+
+# Application Configuration
+application:
+  name: docker-lamp-app
+  version: "1.0.0"
+  type: docker
+  
+  # Files to include in deployment package
+  package_files:
+    - "example-docker-app/"
+  
+  # Fallback: include all files if specific files don't exist
+  package_fallback: true
+  
+  # Environment variables to set on the instance and pass to Docker
+  environment_variables:
+    APP_ENV: production
+    APP_DEBUG: "false"
+    DB_HOST: db
+    DB_NAME: docker_app
+    DB_USER: app_user
+    DB_PASSWORD: secure_password_change_me
+    DB_ROOT_PASSWORD: root_password_change_me
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+
+# Dependencies Configuration
+dependencies:
+  # Docker is REQUIRED for this deployment
+  docker:
+    enabled: true
+    config:
+      install_compose: true  # Install Docker Compose
+  
+  # Traditional dependencies are NOT needed with Docker deployment
+  nginx:
+    enabled: false
+  
+  apache:
+    enabled: false
+  
+  mysql:
+    enabled: false
+  
+  php:
+    enabled: false
+  
+  redis:
+    enabled: false
+  
+  # Git for version control (optional)
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  # System Dependencies
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP (Docker web container)
+        - "443"   # HTTPS (Docker web container)
+        - "8080"  # phpMyAdmin (Docker container)
+      deny_all_other: true
+  
+  ssl_certificates:
+    enabled: false
+  
+  monitoring:
+    enabled: false
+
+# Deployment Configuration
+deployment:
+  # IMPORTANT: Enable Docker deployment mode
+  use_docker: true  # This tells the system to use Docker instead of traditional deployment
+  
+  # Docker-specific settings
+  docker_app_path: "/opt/docker-app"  # Where to extract the application
+  docker_compose_file: "docker-compose.yml"  # Compose file name
+  
+  # Traditional settings (ignored when use_docker: true)
+  web_root: "/var/www/html"
+  backup_existing: true
+  restart_services: true
+  
+  timeouts:
+    ssh_connection: 120
+    command_execution: 600  # Docker operations can take longer
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true  # This will restart Docker containers
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - "/"
+        - "/api/test.php"
+
+# GitHub Actions Configuration
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      docker_test: true  # Test with docker-compose locally
+    
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: "Docker LAMP Stack Demo"
+    max_attempts: 10
+    wait_between_attempts: 15  # Docker startup can take longer
+    initial_wait: 45  # Wait for containers to start
+  
+  docker_health:
+    check_containers: true
+    required_containers:
+      - "docker-app-web"
+      - "docker-app-db"
+      - "docker-app-redis"
+      - "docker-app-phpmyadmin"
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+  
+  docker_security:
+    run_as_non_root: true
+    use_secrets: false  # Set to true to use Docker secrets
+    network_isolation: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/docker-deployments"
+  include_volumes: true  # Backup Docker volumes
+  backup_strategy: "docker-export"  # or "volume-backup"
+
+# Notes:
+# 1. Make sure Docker is installed on your Lightsail instance
+# 2. The application will run in containers, not directly on the host
+# 3. All services (Apache, MySQL, Redis) run in separate containers
+# 4. Data persists in Docker volumes even when containers are recreated
+# 5. Access phpMyAdmin at http://your-ip:8080
+# 6. Change default passwords in environment_variables before deploying!

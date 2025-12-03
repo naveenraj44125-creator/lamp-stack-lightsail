@@ -60,7 +60,9 @@ dependencies:
     enabled: false
   
   docker:
-    enabled: false
+    enabled: false  # Set to true to install Docker (for containerized deployments)
+    config:
+      install_compose: true  # Install Docker Compose alongside Docker
   
   git:
     enabled: true

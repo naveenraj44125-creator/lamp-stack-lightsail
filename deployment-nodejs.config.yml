@@ -74,7 +74,9 @@ dependencies:
     enabled: false
   
   docker:
-    enabled: false
+    enabled: false  # Set to true to install Docker (for containerized deployments)
+    config:
+      install_compose: true  # Install Docker Compose alongside Docker
   
   git:
     enabled: true
@@ -107,6 +109,9 @@ deployment:
   retries:
     max_attempts: 3
     ssh_connection: 5
+  
+  use_docker: false  # Use Docker deployment instead of traditional deployment
+                     # Requires: docker.enabled: true and docker-compose.yml in your app
   
   steps:
     pre_deployment:

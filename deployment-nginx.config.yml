@@ -34,6 +34,11 @@ dependencies:
     config:
       install_lfs: false
   
+  docker:
+    enabled: false  # Set to true to install Docker (for containerized deployments)
+    config:
+      install_compose: true  # Install Docker Compose alongside Docker
+  
   firewall:
     enabled: true
     config:
