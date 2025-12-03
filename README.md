@@ -41,6 +41,7 @@ curl -sL https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lig
 - **Node.js** - Express, Next.js, NestJS, APIs
 - **Python** - Flask, Django, FastAPI
 - **React** - CRA, Vite, Next.js static exports
+- **🐳 Docker** - Multi-container applications with Docker Compose
 
 ### 🗄️ Database Support
 - **Local Installation** - MySQL or PostgreSQL on instance
@@ -436,12 +437,16 @@ lamp-stack-lightsail/
 │   ├── example-nginx-app/
 │   ├── example-nodejs-app/
 │   ├── example-python-app/
-│   └── example-react-app/
+│   ├── example-react-app/
+│   ├── 🐳 example-docker-app/           # Basic Docker LAMP stack
+│   └── 🐳 example-recipe-docker-app/    # Recipe Manager with S3
 │
 └── 📚 Documentation
     ├── README.md                        # This file
     ├── INTEGRATION-GUIDE.md             # Integration documentation
     ├── BUCKET-INTEGRATION.md            # S3 bucket guide
+    ├── DOCKER-DEPLOYMENT-GUIDE.md       # Docker deployment guide
+    ├── DOCKER-EXAMPLES-GUIDE.md         # Docker examples comparison
     ├── GITHUB-ACTIONS-OIDC-GUIDE.md     # OIDC setup guide
     └── REUSABLE_WORKFLOWS.md            # Workflow documentation
 ```
@@ -741,6 +746,61 @@ MIT License - Feel free to use and modify for your projects.
 - **Issues**: [GitHub Issues](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/issues)
 - **Examples**: Check `example-*-app` directories
 
+## 🐳 Docker Deployment Examples
+
+Two complete Docker examples demonstrating containerized deployments:
+
+### 1. Basic Docker LAMP Stack (`example-docker-app/`)
+**Perfect for learning Docker basics**
+
+- Multi-container architecture (Apache, MySQL, Redis, phpMyAdmin)
+- Service health monitoring dashboard
+- Container networking demonstration
+- Persistent data volumes
+- Quick deployment testing
+
+```bash
+cd example-docker-app
+docker-compose up -d
+open http://localhost
+```
+
+### 2. Recipe Manager with S3 (`example-recipe-docker-app/`)
+**Production-ready application with AWS integration**
+
+- Complete recipe management system
+- Admin panel with authentication
+- Image upload to AWS Lightsail buckets
+- RESTful API with CRUD operations
+- Session management with Redis
+- Responsive modern UI
+
+```bash
+cd example-recipe-docker-app
+cp .env.example .env
+# Edit .env with your bucket name
+docker-compose up -d
+open http://localhost
+open http://localhost/admin/  # admin/admin123
+```
+
+**Features Demonstrated**:
+- ✅ Docker Compose orchestration
+- ✅ AWS S3 bucket integration
+- ✅ File upload handling
+- ✅ Database relationships
+- ✅ Authentication & sessions
+- ✅ RESTful API design
+- ✅ Production deployment patterns
+
+**Deployment**: Use `deployment-docker.config.yml` or `deployment-recipe-docker.config.yml`
+
+📚 **Learn More**: 
+- [Docker Deployment Guide](DOCKER-DEPLOYMENT-GUIDE.md)
+- [Docker Examples Comparison](DOCKER-EXAMPLES-GUIDE.md)
+
+---
+
 ## 🎉 Success Stories
 
 This system successfully deploys:
@@ -749,5 +809,6 @@ This system successfully deploys:
 - ✅ Python web apps with S3 storage
 - ✅ React SPAs with NGINX
 - ✅ Multi-service applications with Docker
+- ✅ Containerized apps with S3 integration
 
 Ready to deploy? Run `./setup-new-repo.sh` or `./integrate-lightsail-actions.sh` now! 🚀
