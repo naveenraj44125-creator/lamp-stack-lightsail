@@ -1,0 +1,154 @@
+# Recipe Manager Docker Deployment Configuration
+
+aws:
+  region: us-east-1
+
+lightsail:
+  instance_name: recipe-manager-docker-v1
+  static_ip: ""
+
+application:
+  name: recipe-manager-docker
+  version: "1.0.0"
+  type: docker
+  
+  package_files:
+    - "example-recipe-docker-app/"
+  
+  package_fallback: true
+  
+  # IMPORTANT: Set your bucket name here
+  environment_variables:
+    APP_ENV: production
+    UPLOAD_MAX_SIZE: "5242880"
+    DB_HOST: db
+    DB_NAME: recipe_db
+    DB_USER: recipe_user
+    DB_PASSWORD: CHANGE_ME_secure_password_123
+    DB_ROOT_PASSWORD: CHANGE_ME_root_password_123
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    BUCKET_NAME: recipe-images-bucket  # CHANGE THIS to your bucket name
+    AWS_REGION: us-east-1
+
+dependencies:
+  docker:
+    enabled: true
+    config:
+      install_compose: true
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+        - "8080"  # phpMyAdmin
+      deny_all_other: true
+
+deployment:
+  use_docker: true  # Enable Docker deployment mode
+  docker_app_path: "/opt/recipe-app"
+  docker_compose_file: "docker-compose.yml"
+  
+  timeouts:
+    ssh_connection: 120
+    command_execution: 600
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - "/"
+        - "/api/recipes.php"
+
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      docker_test: true
+    
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: "Recipe Manager"
+    max_attempts: 10
+    wait_between_attempts: 15
+    initial_wait: 45
+  
+  docker_health:
+    check_containers: true
+    required_containers:
+      - "recipe-app-web"
+      - "recipe-app-db"
+      - "recipe-app-redis"
+
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/recipe-deployments"
+  include_volumes: true
+
+# SETUP INSTRUCTIONS:
+# 1. Create Lightsail bucket: aws lightsail create-bucket --bucket-name recipe-images-bucket --bundle-id small_1_0
+# 2. Update BUCKET_NAME in environment_variables above
+# 3. Ensure instance has IAM permissions for S3 access
+# 4. Change default passwords in environment_variables
+# 5. Push to GitHub to trigger deployment
