@@ -247,21 +247,21 @@ fi
 
 # Stop existing containers
 echo "🛑 Stopping existing containers..."
-sudo docker-compose -f $COMPOSE_FILE down || true
+sudo docker compose -f $COMPOSE_FILE down || true
 
 # Pull latest images
 echo "📥 Pulling Docker images..."
-sudo docker-compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+sudo docker compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
 
 # Build images if needed
 if grep -q "build:" $COMPOSE_FILE; then
     echo "🔨 Building Docker images..."
-    sudo docker-compose -f $COMPOSE_FILE build
+    sudo docker compose -f $COMPOSE_FILE build
 fi
 
 # Start containers
 echo "🚀 Starting containers..."
-sudo docker-compose -f $COMPOSE_FILE up -d
+sudo docker compose -f $COMPOSE_FILE up -d
 
 # Wait for containers to be healthy
 echo "⏳ Waiting for containers to be ready..."
@@ -269,11 +269,11 @@ sleep 10
 
 # Show container status
 echo "📊 Container status:"
-sudo docker-compose -f $COMPOSE_FILE ps
+sudo docker compose -f $COMPOSE_FILE ps
 
 # Show logs
 echo "📋 Recent logs:"
-sudo docker-compose -f $COMPOSE_FILE logs --tail=20
+sudo docker compose -f $COMPOSE_FILE logs --tail=20
 
 echo "✅ Docker deployment completed"
 '''
