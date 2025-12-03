@@ -1,4 +1,4 @@
-name: Deploy Recipe Manager Docker
+name: Deploy Recipe Manager Docker App
 
 on:
   push:
