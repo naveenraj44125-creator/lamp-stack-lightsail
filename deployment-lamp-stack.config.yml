@@ -31,6 +31,8 @@ application:
   package_files:
     - "example-lamp-app/index.php"
     - "example-lamp-app/bucket-demo.php"
+    - "example-lamp-app/bucket-manager.php"
+    - "example-lamp-app/bucket-download.php"
     - "example-lamp-app/css/"
     - "example-lamp-app/config/"
   

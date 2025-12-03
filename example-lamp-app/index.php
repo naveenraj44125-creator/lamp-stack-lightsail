@@ -252,7 +252,10 @@ function tableExists() {
                     <li><strong>DB Driver:</strong> <?php echo $dbConfig['type'] === 'POSTGRESQL' ? 'pdo_pgsql' : 'pdo_mysql'; ?></li>
                     <li><strong>OS:</strong> Linux</li>
                     <li><strong>DB Status:</strong> <?php echo getDatabaseStatus(); ?></li>
-                    <li><strong>🪣 Bucket:</strong> <a href="bucket-demo.php" style="color: #2563eb; text-decoration: none; font-weight: bold;">View Bucket Demo →</a></li>
+                    <li><strong>🪣 Bucket:</strong> 
+                        <a href="bucket-manager.php" style="color: #2563eb; text-decoration: none; font-weight: bold;">Manage Files →</a> | 
+                        <a href="bucket-demo.php" style="color: #2563eb; text-decoration: none;">View Demo</a>
+                    </li>
                 </ul>
             </div>
             
