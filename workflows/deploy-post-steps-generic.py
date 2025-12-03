@@ -239,7 +239,7 @@ echo "✅ Found docker-compose file: $COMPOSE_FILE"
 
 # Create .env file if environment variables provided
 if [ -n "{env_file_content}" ]; then
-    cat > .env << 'ENVEOF'
+    sudo tee .env > /dev/null << 'ENVEOF'
 {env_file_content}
 ENVEOF
     echo "✅ Environment file created"
