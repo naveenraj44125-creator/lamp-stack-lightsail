@@ -246,33 +246,43 @@ ENVEOF
 fi
 
 # Ensure Docker is available and add user to docker group
-if [ ! -f /usr/bin/docker ]; then
-    echo "❌ Docker is not installed at /usr/bin/docker"
+# Check multiple possible Docker locations
+DOCKER_BIN=""
+if [ -f /usr/bin/docker ]; then
+    DOCKER_BIN="/usr/bin/docker"
+elif command -v docker > /dev/null 2>&1; then
+    DOCKER_BIN=$(command -v docker)
+else
+    echo "❌ Docker is not installed"
+    echo "Checking common locations:"
+    ls -la /usr/bin/docker* 2>/dev/null || echo "  Not in /usr/bin/"
+    ls -la /usr/local/bin/docker* 2>/dev/null || echo "  Not in /usr/local/bin/"
+    which docker 2>/dev/null || echo "  Not in PATH"
     exit 1
 fi
 
-echo "✅ Docker found at /usr/bin/docker"
+echo "✅ Docker found at $DOCKER_BIN"
 
 # Add ubuntu user to docker group for non-sudo access
 sudo usermod -aG docker ubuntu || true
 
 # Stop existing containers (use sudo for now until group takes effect)
 echo "🛑 Stopping existing containers..."
-sudo /usr/bin/docker compose -f $COMPOSE_FILE down || true
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE down || true
 
 # Pull latest images
 echo "📥 Pulling Docker images..."
-sudo /usr/bin/docker compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
 
 # Build images if needed
 if grep -q "build:" $COMPOSE_FILE; then
     echo "🔨 Building Docker images..."
-    sudo /usr/bin/docker compose -f $COMPOSE_FILE build
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE build
 fi
 
 # Start containers
 echo "🚀 Starting containers..."
-sudo /usr/bin/docker compose -f $COMPOSE_FILE up -d
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d
 
 # Wait for containers to be healthy
 echo "⏳ Waiting for containers to be ready..."
@@ -280,11 +290,11 @@ sleep 10
 
 # Show container status
 echo "📊 Container status:"
-sudo /usr/bin/docker compose -f $COMPOSE_FILE ps
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps
 
 # Show logs
 echo "📋 Recent logs:"
-sudo /usr/bin/docker compose -f $COMPOSE_FILE logs --tail=20
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=20
 
 echo "✅ Docker deployment completed"
 '''
