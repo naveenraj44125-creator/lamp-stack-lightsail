@@ -727,13 +727,24 @@ echo "✅ AWS CLI v1 installation completed"
         firewall_config = config.get('config', {})
         allowed_ports = firewall_config.get('allowed_ports', ['22', '80', '443'])
         
+        # Ensure SSH port 22 is always in the allowed list to prevent lockout
+        if '22' not in allowed_ports and 22 not in allowed_ports:
+            allowed_ports.insert(0, '22')
+        
         script = f'''
 set -e
 echo "Configuring firewall..."
 
-# Install UFW if not present
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y ufw
+# Check if UFW is already installed
+if ! command -v ufw &> /dev/null; then
+    echo "Installing UFW..."
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ufw
+else
+    echo "UFW already installed"
+fi
+
+# Disable UFW first to prevent lockout during configuration
+sudo ufw --force disable
 
 # Reset UFW to defaults
 sudo ufw --force reset
@@ -742,20 +753,27 @@ sudo ufw --force reset
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 
-# Allow specified ports
+# CRITICAL: Allow SSH first to prevent lockout
+sudo ufw allow 22/tcp
+
+# Allow other specified ports
 '''
         
         for port in allowed_ports:
-            script += f'sudo ufw allow {port}\n'
+            if str(port) != '22':  # Skip 22 since we already added it
+                script += f'sudo ufw allow {port}\n'
         
         script += '''
 # Enable UFW
 sudo ufw --force enable
 
+# Verify SSH is allowed
+sudo ufw status | grep 22 || echo "⚠️  Warning: SSH port may not be properly configured"
+
 echo "✅ Firewall configuration completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=300)
+        success, output = self.client.run_command(script, timeout=120)
         return success
     
     def _install_ssl_certificates(self, config: Dict[str, Any]) -> bool:

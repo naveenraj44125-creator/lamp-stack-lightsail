@@ -66,8 +66,10 @@ dependencies:
       install_lfs: false
   
   # System Dependencies
+  # Firewall disabled for Docker - Docker manages its own networking
+  # UFW can interfere with Docker's iptables rules
   firewall:
-    enabled: true
+    enabled: false
     config:
       allowed_ports:
         - "22"    # SSH
