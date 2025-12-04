@@ -253,12 +253,27 @@ if [ -f /usr/bin/docker ]; then
 elif command -v docker > /dev/null 2>&1; then
     DOCKER_BIN=$(command -v docker)
 else
-    echo "❌ Docker is not installed"
-    echo "Checking common locations:"
-    ls -la /usr/bin/docker* 2>/dev/null || echo "  Not in /usr/bin/"
-    ls -la /usr/local/bin/docker* 2>/dev/null || echo "  Not in /usr/local/bin/"
-    which docker 2>/dev/null || echo "  Not in PATH"
-    exit 1
+    echo "⚠️  Docker not found, attempting to install..."
+    
+    # Install Docker using the convenience script (more reliable than manual GPG setup)
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    sudo sh /tmp/get-docker.sh
+    
+    # Start and enable Docker
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    
+    # Check again
+    if [ -f /usr/bin/docker ]; then
+        DOCKER_BIN="/usr/bin/docker"
+    elif command -v docker > /dev/null 2>&1; then
+        DOCKER_BIN=$(command -v docker)
+    else
+        echo "❌ Docker installation failed"
+        exit 1
+    fi
+    
+    echo "✅ Docker installed successfully"
 fi
 
 echo "✅ Docker found at $DOCKER_BIN"
