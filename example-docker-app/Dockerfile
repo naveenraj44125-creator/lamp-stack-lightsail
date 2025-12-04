@@ -3,8 +3,12 @@ FROM ubuntu:22.04
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies and Apache + PHP
+# Add PHP repository and install system dependencies
 RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    ca-certificates \
+    && add-apt-repository ppa:ondrej/php -y \
+    && apt-get update && apt-get install -y \
     apache2 \
     php8.1 \
     php8.1-apache2 \
@@ -12,7 +16,6 @@ RUN apt-get update && apt-get install -y \
     php8.1-pgsql \
     php8.1-redis \
     php8.1-curl \
-    php8.1-json \
     php8.1-mbstring \
     php8.1-xml \
     php8.1-zip \
