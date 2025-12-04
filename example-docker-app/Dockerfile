@@ -1,39 +1,19 @@
-FROM ubuntu:22.04
+# Use official PHP Apache image - pre-built and optimized
+FROM php:8.1-apache
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Add PHP repository and install system dependencies
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    ca-certificates \
-    && add-apt-repository ppa:ondrej/php -y \
-    && apt-get update && apt-get install -y \
-    apache2 \
-    php8.1 \
-    php8.1-apache2 \
-    php8.1-mysql \
-    php8.1-pgsql \
-    php8.1-redis \
-    php8.1-curl \
-    php8.1-mbstring \
-    php8.1-xml \
-    php8.1-zip \
-    php8.1-gd \
-    php8.1-intl \
-    php8.1-bcmath \
-    curl \
-    wget \
-    unzip \
-    git \
-    vim \
-    && rm -rf /var/lib/apt/lists/*
+# Install only required PHP extensions (much faster than Ubuntu base)
+RUN docker-php-ext-install pdo pdo_mysql mysqli \
+    && pecl install redis \
+    && docker-php-ext-enable redis
 
 # Enable Apache modules
-RUN a2enmod rewrite ssl headers proxy proxy_http
+RUN a2enmod rewrite headers
 
-# Configure Apache
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+# Configure PHP (use php.ini-production as base)
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && echo "upload_max_filesize = 50M" >> "$PHP_INI_DIR/php.ini" \
+    && echo "post_max_size = 50M" >> "$PHP_INI_DIR/php.ini" \
+    && echo "memory_limit = 256M" >> "$PHP_INI_DIR/php.ini"
 
 # Set working directory
 WORKDIR /var/www/html
@@ -41,45 +21,12 @@ WORKDIR /var/www/html
 # Copy application files
 COPY src/ /var/www/html/
 
-# Create necessary directories
-RUN mkdir -p /var/www/html/uploads /var/www/html/cache /var/www/html/logs
+# Create directories and set permissions in one layer
+RUN mkdir -p uploads cache logs \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
-# Set proper permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/uploads \
-    && chmod -R 775 /var/www/html/cache \
-    && chmod -R 775 /var/www/html/logs
+# Expose port
+EXPOSE 80
 
-# Configure PHP
-RUN echo "upload_max_filesize = 50M" >> /etc/php/8.1/apache2/php.ini \
-    && echo "post_max_size = 50M" >> /etc/php/8.1/apache2/php.ini \
-    && echo "memory_limit = 256M" >> /etc/php/8.1/apache2/php.ini \
-    && echo "max_execution_time = 300" >> /etc/php/8.1/apache2/php.ini \
-    && echo "display_errors = Off" >> /etc/php/8.1/apache2/php.ini \
-    && echo "log_errors = On" >> /etc/php/8.1/apache2/php.ini \
-    && echo "error_log = /var/www/html/logs/php_errors.log" >> /etc/php/8.1/apache2/php.ini
-
-# Create Apache virtual host configuration
-RUN echo '<VirtualHost *:80>' > /etc/apache2/sites-available/000-default.conf && \
-    echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    DocumentRoot /var/www/html' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    <Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '        Options Indexes FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '        AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '        Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    </Directory>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    ErrorLog ${APACHE_LOG_DIR}/error.log' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    CustomLog ${APACHE_LOG_DIR}/access.log combined' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '</VirtualHost>' >> /etc/apache2/sites-available/000-default.conf
-
-# Health check script
-RUN echo '<?php http_response_code(200); echo "OK"; ?>' > /var/www/html/health.php
-
-# Expose ports
-EXPOSE 80 443
-
-# Start Apache in foreground
-CMD ["apache2ctl", "-D", "FOREGROUND"]
+# Apache is already configured to run in foreground in base image
