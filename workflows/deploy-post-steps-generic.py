@@ -283,33 +283,66 @@ sudo usermod -aG docker ubuntu || true
 
 # Stop existing containers (use sudo for now until group takes effect)
 echo "🛑 Stopping existing containers..."
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE down || true
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE down --timeout 30 || true
 
-# Pull latest images
+# Pull latest images (with timeout)
 echo "📥 Pulling Docker images..."
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+timeout 300 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
 
-# Build images if needed
+# Build images if needed (with timeout and no cache for faster builds)
 if grep -q "build:" $COMPOSE_FILE; then
     echo "🔨 Building Docker images..."
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE build
+    timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build --no-cache || {{
+        echo "⚠️  Build with --no-cache failed, trying with cache..."
+        timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build
+    }}
 fi
 
-# Start containers
+# Start containers (with timeout)
 echo "🚀 Starting containers..."
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d
+timeout 180 sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d || {{
+    echo "❌ Failed to start containers within 3 minutes"
+    echo "📋 Checking what went wrong..."
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps -a
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=50
+    exit 1
+}}
 
-# Wait for containers to be healthy
-echo "⏳ Waiting for containers to be ready..."
-sleep 10
+# Wait for containers to initialize
+echo "⏳ Waiting for containers to initialize..."
+sleep 15
 
-# Show container status
+# Check container status
 echo "📊 Container status:"
 sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps
 
+# Count running containers
+RUNNING_COUNT=$(sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps --filter "status=running" --format json 2>/dev/null | wc -l)
+TOTAL_COUNT=$(sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps --format json 2>/dev/null | wc -l)
+
+echo "Running containers: $RUNNING_COUNT / $TOTAL_COUNT"
+
+if [ "$RUNNING_COUNT" -eq 0 ]; then
+    echo "❌ No containers are running!"
+    echo "📋 Container logs:"
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
+    exit 1
+fi
+
 # Show logs
 echo "📋 Recent logs:"
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=20
+sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=30
+
+# Test web service connectivity
+echo "🔍 Testing web service..."
+for i in {{1..10}}; do
+    if curl -f -s http://localhost/ > /dev/null 2>&1; then
+        echo "✅ Web service is responding"
+        break
+    fi
+    echo "Waiting for web service... ($i/10)"
+    sleep 3
+done
 
 echo "✅ Docker deployment completed"
 '''

@@ -627,33 +627,38 @@ echo "✅ Memcached installation completed"
         
         script = f'''
 set -e
-echo "Installing Docker..."
+echo "🐳 Installing Docker (optimized method)..."
 
-# Install Docker
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+# Remove old versions quickly
+sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
 
-# Enable Docker to start on boot
+# Install prerequisites (minimal set)
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+# Add Docker GPG key (faster method)
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Add Docker repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update and install Docker (with compose plugin)
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
 sudo systemctl enable docker
 
-# Start Docker
-sudo systemctl start docker
-
-# Install Docker Compose if requested
-if [ "{docker_config.get('enable_compose', True)}" = "True" ]; then
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    echo "✅ Docker Compose installed"
-fi
+# Verify installation
+docker --version
+docker compose version
 
 echo "✅ Docker installation completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=300)
+        success, output = self.client.run_command(script, timeout=240)
         return success
     
     def _install_git(self, config: Dict[str, Any]) -> bool:
