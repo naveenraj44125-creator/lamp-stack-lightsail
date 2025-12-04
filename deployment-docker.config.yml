@@ -166,9 +166,9 @@ monitoring:
   health_check:
     endpoint: "/"
     expected_content: "Docker LAMP Stack Demo"
-    max_attempts: 10
-    wait_between_attempts: 15  # Docker startup can take longer
-    initial_wait: 45  # Wait for containers to start
+    max_attempts: 15
+    wait_between_attempts: 20  # Docker startup can take longer
+    initial_wait: 60  # Wait for containers to start
   
   docker_health:
     check_containers: true

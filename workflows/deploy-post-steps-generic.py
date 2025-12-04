@@ -287,30 +287,31 @@ sudo $DOCKER_BIN compose -f $COMPOSE_FILE down --timeout 30 || true
 
 # Pull latest images (with timeout)
 echo "📥 Pulling Docker images..."
-timeout 300 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
 
-# Build images if needed (with timeout and no cache for faster builds)
+# Build images if needed (with timeout - use cache for faster builds)
 if grep -q "build:" $COMPOSE_FILE; then
     echo "🔨 Building Docker images..."
-    timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build --no-cache || {{
-        echo "⚠️  Build with --no-cache failed, trying with cache..."
-        timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build
+    timeout 900 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build || {{
+        echo "❌ Build failed after 15 minutes"
+        sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
+        exit 1
     }}
 fi
 
-# Start containers (with timeout)
+# Start containers (with extended timeout)
 echo "🚀 Starting containers..."
-timeout 180 sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d || {{
-    echo "❌ Failed to start containers within 3 minutes"
+timeout 300 sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d || {{
+    echo "❌ Failed to start containers within 5 minutes"
     echo "📋 Checking what went wrong..."
     sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps -a
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=50
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
     exit 1
 }}
 
-# Wait for containers to initialize
+# Wait for containers to initialize (extended wait time)
 echo "⏳ Waiting for containers to initialize..."
-sleep 15
+sleep 30
 
 # Check container status
 echo "📊 Container status:"
@@ -333,21 +334,31 @@ fi
 echo "📋 Recent logs:"
 sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=30
 
-# Test web service connectivity
+# Test web service connectivity (with more attempts and longer waits)
 echo "🔍 Testing web service..."
-for i in {{1..10}}; do
-    if curl -f -s http://localhost/ > /dev/null 2>&1; then
+WEB_READY=false
+for i in {{1..20}}; do
+    if curl -f -s --connect-timeout 5 http://localhost/ > /dev/null 2>&1; then
         echo "✅ Web service is responding"
+        WEB_READY=true
         break
     fi
-    echo "Waiting for web service... ($i/10)"
-    sleep 3
+    echo "Waiting for web service... ($i/20)"
+    sleep 5
 done
+
+if [ "$WEB_READY" = "false" ]; then
+    echo "⚠️  Web service not responding after 100 seconds, but containers may still be starting"
+    echo "📋 Container status:"
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps
+    echo "📋 Recent logs:"
+    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=50
+fi
 
 echo "✅ Docker deployment completed"
 '''
         
-        success, output = self.client.run_command(script, timeout=600)
+        success, output = self.client.run_command(script, timeout=1200)
         print(output)
         
         if not success:

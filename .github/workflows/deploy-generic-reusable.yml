@@ -677,19 +677,20 @@ jobs:
       id: connectivity
       run: |
         echo "🌐 Testing external connectivity..."
-        sleep 30
+        echo "⏳ Waiting 60 seconds for Docker containers to fully initialize..."
+        sleep 60
 
-        for i in {1..10}; do
-          echo "Attempt $i/10: Testing http://${{ needs.load-config.outputs.static_ip }}/"
+        for i in {1..15}; do
+          echo "Attempt $i/15: Testing http://${{ needs.load-config.outputs.static_ip }}/"
           
           # Try to fetch the page and check if we get a 200 response
-          HTTP_CODE=$(curl -s -o /tmp/response.html -w "%{http_code}" http://${{ needs.load-config.outputs.static_ip }}/)
+          HTTP_CODE=$(curl -s -o /tmp/response.html -w "%{http_code}" --connect-timeout 10 --max-time 30 http://${{ needs.load-config.outputs.static_ip }}/ || echo "000")
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Got HTTP 200 response!"
             
             # Check if response contains HTML content (case-insensitive)
-            if grep -qi "html\|Example\|App\|Hello\|Welcome" /tmp/response.html; then
+            if grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker" /tmp/response.html; then
               echo "✅ Application is accessible and responding with content!"
               cat /tmp/response.html | head -20
               echo "status=success" >> $GITHUB_OUTPUT
@@ -698,15 +699,17 @@ jobs:
               echo "⚠️ Got 200 but unexpected content:"
               cat /tmp/response.html | head -20
             fi
+          elif [ "$HTTP_CODE" = "000" ]; then
+            echo "❌ Connection timeout or refused"
           else
             echo "❌ Got HTTP $HTTP_CODE"
           fi
           
-          echo "Waiting for application to respond... ($i/10)"
-          sleep 10
+          echo "Waiting for application to respond... ($i/15)"
+          sleep 15
         done
 
-        echo "❌ Application failed to respond after 10 attempts"
+        echo "❌ Application failed to respond after 15 attempts (4+ minutes)"
         echo "status=failed" >> $GITHUB_OUTPUT
         exit 1
 

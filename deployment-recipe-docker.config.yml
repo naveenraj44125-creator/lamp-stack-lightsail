@@ -123,9 +123,9 @@ monitoring:
   health_check:
     endpoint: "/"
     expected_content: "Recipe Manager"
-    max_attempts: 10
-    wait_between_attempts: 15
-    initial_wait: 45
+    max_attempts: 15
+    wait_between_attempts: 20
+    initial_wait: 60
   
   docker_health:
     check_containers: true
