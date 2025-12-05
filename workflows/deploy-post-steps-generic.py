@@ -5,6 +5,7 @@ This script handles application deployment and service configuration based on co
 """
 
 import sys
+import os
 import argparse
 from lightsail_common import LightsailBase
 from config_loader import DeploymentConfig
@@ -200,6 +201,15 @@ fi
         """Deploy application using Docker and docker-compose"""
         print("🐳 Deploying application with Docker...")
         
+        # Check if using pre-built image
+        docker_image_tag = os.environ.get('DOCKER_IMAGE_TAG', '')
+        use_prebuilt_image = bool(docker_image_tag)
+        
+        if use_prebuilt_image:
+            print(f"📦 Using pre-built Docker image: {docker_image_tag}")
+        else:
+            print("🔨 Will build Docker image on instance")
+        
         # Upload package to instance
         print(f"📤 Uploading package file {package_file}...")
         remote_package_path = f"~/{package_file}"
@@ -217,6 +227,9 @@ fi
         script = f'''
 set -e
 echo "🐳 Setting up Docker deployment..."
+
+# Set Docker image tag if provided
+export DOCKER_IMAGE_TAG="{docker_image_tag}"
 
 # Create deployment directory
 DEPLOY_DIR="/opt/docker-app"
@@ -285,18 +298,95 @@ sudo usermod -aG docker ubuntu || true
 echo "🛑 Stopping existing containers..."
 sudo $DOCKER_BIN compose -f $COMPOSE_FILE down --timeout 30 || true
 
-# Pull latest images (with timeout)
-echo "📥 Pulling Docker images..."
-timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
-
-# Build images if needed (with timeout - use cache for faster builds)
-if grep -q "build:" $COMPOSE_FILE; then
-    echo "🔨 Building Docker images..."
-    timeout 900 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build || {{
-        echo "❌ Build failed after 15 minutes"
-        sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
+# Check if using pre-built image from environment
+if [ -n "$DOCKER_IMAGE_TAG" ]; then
+    echo "📦 Using pre-built image: $DOCKER_IMAGE_TAG"
+    export DOCKER_IMAGE="$DOCKER_IMAGE_TAG"
+    
+    # Check network connectivity before pulling
+    echo "🔍 Checking network connectivity..."
+    if ! timeout 10 ping -c 2 8.8.8.8 > /dev/null 2>&1; then
+        echo "⚠️  Network connectivity issue detected"
+    fi
+    
+    # Check DNS resolution
+    if ! timeout 10 nslookup hub.docker.com > /dev/null 2>&1; then
+        echo "⚠️  DNS resolution issue for hub.docker.com"
+        echo "Trying to resolve with Google DNS..."
+        sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf.tmp'
+        sudo bash -c 'cat /etc/resolv.conf >> /etc/resolv.conf.tmp'
+        sudo mv /etc/resolv.conf.tmp /etc/resolv.conf
+    fi
+    
+    # Configure Docker to use different registry mirrors if needed
+    echo "🔧 Configuring Docker daemon..."
+    sudo mkdir -p /etc/docker
+    sudo tee /etc/docker/daemon.json > /dev/null << 'DOCKEREOF'
+{{
+  "registry-mirrors": [],
+  "max-concurrent-downloads": 3,
+  "max-concurrent-uploads": 3,
+  "log-driver": "json-file",
+  "log-opts": {{
+    "max-size": "10m",
+    "max-file": "3"
+  }}
+}}
+DOCKEREOF
+    sudo systemctl restart docker || true
+    sleep 5
+    
+    # Pull the pre-built image with retry logic
+    echo "📥 Pulling pre-built Docker image..."
+    PULL_SUCCESS=false
+    for attempt in 1 2 3; do
+        echo "Attempt $attempt/3 to pull image..."
+        if timeout 600 sudo $DOCKER_BIN pull "$DOCKER_IMAGE_TAG"; then
+            echo "✅ Image pulled successfully"
+            PULL_SUCCESS=true
+            break
+        else
+            echo "⚠️  Pull attempt $attempt failed"
+            if [ $attempt -lt 3 ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+            fi
+        fi
+    done
+    
+    if [ "$PULL_SUCCESS" = "false" ]; then
+        echo "❌ Failed to pull image after 3 attempts"
+        echo "Checking Docker Hub connectivity..."
+        timeout 10 curl -I https://hub.docker.com/ || echo "Cannot reach Docker Hub"
         exit 1
-    }}
+    fi
+    
+    # Pull other service images (MySQL, Redis, etc.) with retry
+    echo "📥 Pulling service images..."
+    for attempt in 1 2; do
+        if timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull db redis phpmyadmin 2>/dev/null; then
+            echo "✅ Service images pulled"
+            break
+        else
+            echo "⚠️  Some service images may have issues (attempt $attempt/2)"
+            [ $attempt -lt 2 ] && sleep 5
+        fi
+    done
+else
+    echo "🔨 Building Docker image on instance..."
+    # Pull base images first
+    echo "📥 Pulling base Docker images..."
+    timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
+    
+    # Build images if needed (with timeout - use cache for faster builds)
+    if grep -q "build:" $COMPOSE_FILE; then
+        echo "🔨 Building Docker images..."
+        timeout 900 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build || {{
+            echo "❌ Build failed after 15 minutes"
+            sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
+            exit 1
+        }}
+    fi
 fi
 
 # Start containers (with extended timeout)
