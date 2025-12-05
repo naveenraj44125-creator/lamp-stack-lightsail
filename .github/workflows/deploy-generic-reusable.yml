@@ -25,6 +25,10 @@ on:
         description: 'GitHub environment to use'
         required: false
         type: string
+      docker_image_tag:
+        description: 'Pre-built Docker image tag to use'
+        required: false
+        type: string
     outputs:
       deployment_url:
         description: 'URL of deployed application'
@@ -130,6 +134,78 @@ jobs:
             else:
                 print(f"✅ Ubuntu blueprint confirmed: {blueprint_name}")
             
+            # Validate instance size for Docker deployments
+            docker_enabled = config.get('dependencies', {}).get('docker', {}).get('enabled', False)
+            use_docker = config.get('deployment', {}).get('use_docker', False)
+            
+            if docker_enabled and use_docker:
+                ram_gb = instance.get('hardware', {}).get('ramSizeInGb', 0)
+                bundle_id = instance.get('bundleId', '')
+                
+                print(f"\n🐳 Docker deployment detected - validating instance size...")
+                print(f"   Instance RAM: {ram_gb} GB")
+                print(f"   Bundle ID: {bundle_id}")
+                
+                # Docker requires minimum 2GB RAM for reliable operation
+                MIN_DOCKER_RAM = 2.0
+                
+                if ram_gb < MIN_DOCKER_RAM:
+                    print(f"❌ ERROR: Instance has insufficient RAM for Docker deployment!")
+                    print(f"   Current RAM: {ram_gb} GB")
+                    print(f"   Required RAM: {MIN_DOCKER_RAM} GB minimum")
+                    print(f"   Current bundle: {bundle_id}")
+                    print(f"\n💡 Recommended bundles for Docker:")
+                    print(f"   - small_3_0 (2GB RAM, $12/month)")
+                    print(f"   - medium_3_0 (4GB RAM, $24/month)")
+                    print(f"   - large_3_0 (8GB RAM, $44/month)")
+                    print(f"\n⚠️  Deployment will be SKIPPED to prevent instance freezing.")
+                    print(f"   Please upgrade your instance size and try again.")
+                    
+                    # Write GitHub Actions summary
+                    if 'GITHUB_STEP_SUMMARY' in os.environ:
+                        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                            f.write(f"## ❌ Docker Deployment Blocked - Insufficient RAM\n\n")
+                            f.write(f"**Instance:** `{instance_name}`\n\n")
+                            f.write(f"**Current Configuration:**\n")
+                            f.write(f"- RAM: {ram_gb} GB\n")
+                            f.write(f"- Bundle: `{bundle_id}`\n\n")
+                            f.write(f"**Required Configuration:**\n")
+                            f.write(f"- Minimum RAM: {MIN_DOCKER_RAM} GB\n\n")
+                            f.write(f"### 💡 Recommended Actions\n\n")
+                            f.write(f"Docker requires at least 2GB RAM to operate reliably. Please upgrade your instance:\n\n")
+                            f.write(f"| Bundle | RAM | CPU | Storage | Price/Month |\n")
+                            f.write(f"|--------|-----|-----|---------|-------------|\n")
+                            f.write(f"| `small_3_0` | 2 GB | 2 vCPU | 60 GB | $12 |\n")
+                            f.write(f"| `medium_3_0` | 4 GB | 2 vCPU | 80 GB | $24 |\n")
+                            f.write(f"| `large_3_0` | 8 GB | 2 vCPU | 160 GB | $44 |\n\n")
+                            f.write(f"**To upgrade your instance:**\n")
+                            f.write(f"1. Delete the current instance\n")
+                            f.write(f"2. Create a new instance with a larger bundle size\n")
+                            f.write(f"3. Re-run this deployment\n\n")
+                            f.write(f"Or use the AWS CLI:\n")
+                            f.write(f"```bash\n")
+                            f.write(f"aws lightsail delete-instance --instance-name {instance_name}\n")
+                            f.write(f"aws lightsail create-instances \\\n")
+                            f.write(f"  --instance-names {instance_name} \\\n")
+                            f.write(f"  --availability-zone {aws_region}a \\\n")
+                            f.write(f"  --blueprint-id ubuntu_22_04 \\\n")
+                            f.write(f"  --bundle-id small_3_0\n")
+                            f.write(f"```\n")
+                    
+                    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                        f.write(f"is_ubuntu=true\n")
+                        f.write(f"instance_name={instance_name}\n")
+                        f.write(f"aws_region={aws_region}\n")
+                        f.write(f"app_name={app_name}\n")
+                        f.write(f"app_type={app_type}\n")
+                        f.write(f"app_version={app_version}\n")
+                        f.write(f"should_deploy=false\n")
+                    exit(1)
+                else:
+                    print(f"✅ Instance size validated: {ram_gb} GB RAM is sufficient for Docker")
+            else:
+                print(f"\nℹ️  Non-Docker deployment - no minimum RAM requirement")
+            
             # Get public IP
             if 'publicIpAddress' in instance:
                 static_ip = instance['publicIpAddress']
@@ -186,20 +262,31 @@ jobs:
         except lightsail.exceptions.NotFoundException:
             print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")
             
-            # Create instance with default settings
+            # Determine bundle size based on deployment type
+            docker_enabled = config.get('dependencies', {}).get('docker', {}).get('enabled', False)
+            use_docker = config.get('deployment', {}).get('use_docker', False)
+            
+            if docker_enabled and use_docker:
+                bundle_id = 'small_3_0'  # 2 GB RAM minimum for Docker
+                print(f"🐳 Docker deployment detected - using bundle: {bundle_id} (2GB RAM)")
+            else:
+                bundle_id = 'nano_3_0'  # 512 MB RAM for traditional deployments
+                print(f"📦 Traditional deployment - using bundle: {bundle_id} (512MB RAM)")
+            
+            # Create instance with appropriate settings
             try:
                 response = lightsail.create_instances(
                     instanceNames=[instance_name],
                     availabilityZone=f'{aws_region}a',
                     blueprintId='ubuntu_22_04',
-                    bundleId='nano_3_0',  # 512 MB RAM, 1 vCPU, 20 GB SSD
+                    bundleId=bundle_id,
                     tags=[
                         {'key': 'Application', 'value': app_name},
                         {'key': 'ManagedBy', 'value': 'GitHub-Actions'},
                         {'key': 'Type', 'value': app_type}
                     ]
                 )
-                print(f"✅ Instance creation initiated")
+                print(f"✅ Instance creation initiated with {bundle_id}")
                 
                 # Wait for instance to be running
                 print("⏳ Waiting for instance to be running...")
@@ -622,6 +709,7 @@ jobs:
         echo "🚀 Running generic application deployment..."
         export GITHUB_ACTIONS=true
         export PYTHONPATH="${PYTHONPATH}:$(pwd)/workflows"
+        export DOCKER_IMAGE_TAG="${{ inputs.docker_image_tag }}"
         
         python3 workflows/deploy-post-steps-generic.py \
           app.tar.gz \
@@ -635,7 +723,8 @@ jobs:
           --env GITHUB_ACTOR=${{ github.actor }} \
           --env GITHUB_RUN_ID=${{ github.run_id }} \
           --env APP_TYPE=${{ needs.load-config.outputs.app_type }} \
-          --env APP_VERSION=${{ needs.load-config.outputs.app_version }}
+          --env APP_VERSION=${{ needs.load-config.outputs.app_version }} \
+          --env DOCKER_IMAGE_TAG="${{ inputs.docker_image_tag }}"
 
   verification:
     needs: [load-config, post-steps-generic]
