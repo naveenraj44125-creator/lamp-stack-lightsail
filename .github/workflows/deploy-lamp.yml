@@ -29,6 +29,5 @@ jobs:
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: 'deployment-lamp-stack.config.yml'
-      environment: ${{ inputs.environment || 'production' }}
     secrets:
       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
