@@ -1,0 +1,34 @@
+name: Deploy LAMP Stack Example
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+  push:
+    branches:
+      - main
+    paths:
+      - 'example-lamp-app/**'
+      - 'deployment-lamp-stack.config.yml'
+      - '.github/workflows/deploy-lamp.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy LAMP Application
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-lamp-stack.config.yml'
+      environment: ${{ inputs.environment || 'production' }}
+    secrets:
+      aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
