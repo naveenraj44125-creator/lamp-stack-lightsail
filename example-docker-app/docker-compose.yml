@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   web:
+    # Use pre-built image if DOCKER_IMAGE is set, otherwise build locally
+    image: ${DOCKER_IMAGE:-lamp-stack-demo-web:local}
     build:
       context: .
       dockerfile: Dockerfile
