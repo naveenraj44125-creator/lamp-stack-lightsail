@@ -795,9 +795,45 @@ open http://localhost/admin/  # admin/admin123
 
 **Deployment**: Use `deployment-docker.config.yml` or `deployment-recipe-docker.config.yml`
 
-📚 **Learn More**: 
-- [Docker Deployment Guide](DOCKER-DEPLOYMENT-GUIDE.md)
-- [Docker Examples Comparison](DOCKER-EXAMPLES-GUIDE.md)
+### 🚨 Important: Instance Size Requirements
+
+Docker requires **minimum 2GB RAM** to operate reliably. The deployment system automatically:
+- ✅ Validates instance size before deployment
+- ✅ Creates instances with appropriate bundle size (small_3_0 for Docker)
+- ✅ Blocks deployment on undersized instances to prevent freezing
+- ✅ Displays helpful error messages with upgrade instructions
+
+**Recommended bundles for Docker:**
+- `small_3_0` - 2GB RAM, $12/month (minimum)
+- `medium_3_0` - 4GB RAM, $24/month (recommended)
+- `large_3_0` - 8GB RAM, $44/month (production)
+
+### ⚡ Pre-Built Images (Optional)
+
+Speed up deployments by building images on GitHub Actions instead of Lightsail:
+
+**Benefits:**
+- 85% faster deployments (3-4 minutes vs 20+ minutes)
+- Build on powerful GitHub runners (8GB RAM) instead of Lightsail
+- No timeout issues
+- Layer caching for faster subsequent builds
+
+**Setup:**
+1. Create Docker Hub account (free): https://hub.docker.com/
+2. Generate access token: Account Settings → Security → New Access Token
+3. Add GitHub secrets:
+   - `DOCKER_USERNAME`: Your Docker Hub username
+   - `DOCKER_PASSWORD`: Your Docker Hub access token
+4. Push code - workflow automatically builds and pushes images
+
+**How it works:**
+```
+GitHub Actions (fast) → Build image → Push to Docker Hub
+                                           ↓
+Lightsail (fast) → Pull pre-built image → Start containers
+```
+
+**Without pre-built images:** Lightsail builds locally (slower but still works)
 
 ---
 
