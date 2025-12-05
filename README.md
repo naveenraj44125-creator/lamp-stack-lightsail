@@ -848,3 +848,364 @@ This system successfully deploys:
 - ✅ Containerized apps with S3 integration
 
 Ready to deploy? Run `./setup-new-repo.sh` or `./integrate-lightsail-actions.sh` now! 🚀
+
+---
+
+## 📚 Additional Documentation
+
+### Integration Guide
+
+For detailed integration instructions, see the sections above or use the integration script:
+
+```bash
+./integrate-lightsail-actions.sh
+```
+
+The script automatically adds all necessary workflows, configurations, and documentation to your repository.
+
+### Reusable Workflows
+
+This repository provides reusable GitHub Actions workflows that can be used across multiple repositories.
+
+#### Using Reusable Workflow
+
+```yaml
+name: Deploy Application
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    uses: YOUR-USERNAME/YOUR-REPO/.github/workflows/deploy-generic-reusable.yml@main
+    with:
+      config_file: 'deployment-generic.config.yml'
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+```
+
+#### Workflow Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `config_file` | No | `deployment-generic.config.yml` | Path to deployment config |
+| `aws_region` | No | (from config) | AWS region override |
+| `instance_name` | No | (from config) | Instance name override |
+| `skip_tests` | No | `false` | Skip test execution |
+| `environment` | No | - | GitHub environment name |
+
+#### Multi-Environment Example
+
+```yaml
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/staging'
+    uses: YOUR-USERNAME/YOUR-REPO/.github/workflows/deploy-generic-reusable.yml@main
+    with:
+      config_file: 'deployment-staging.config.yml'
+      environment: 'staging'
+  
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    uses: YOUR-USERNAME/YOUR-REPO/.github/workflows/deploy-generic-reusable.yml@main
+    with:
+      config_file: 'deployment-production.config.yml'
+      environment: 'production'
+```
+
+### GitHub Actions OIDC Authentication
+
+The system uses OpenID Connect (OIDC) for secure authentication between GitHub Actions and AWS, eliminating the need for long-lived credentials.
+
+#### How OIDC Works
+
+1. GitHub generates a JWT token when workflow runs
+2. Workflow exchanges token with AWS STS
+3. AWS validates token against OIDC provider
+4. AWS returns temporary credentials (~1 hour)
+5. Workflow uses credentials to access AWS services
+
+#### Automatic OIDC Setup
+
+Both setup scripts automatically configure OIDC:
+
+1. **Create OIDC Provider** (if doesn't exist)
+   - URL: `token.actions.githubusercontent.com`
+   - Audience: `sts.amazonaws.com`
+
+2. **Create IAM Role**
+   - Name: `GitHubActionsRole-{instance-name}`
+   - Trust: Only allows authentication from `main` branch
+
+3. **Attach Policies**
+   - `ReadOnlyAccess` (AWS managed)
+   - Custom Lightsail policy (full access)
+
+4. **Set GitHub Variable**
+   - `AWS_ROLE_ARN`: Role ARN for authentication
+
+#### Benefits
+
+- ✅ No stored AWS credentials in GitHub
+- ✅ Short-lived tokens (expire after ~1 hour)
+- ✅ Better security with branch restrictions
+- ✅ Audit trail in CloudTrail
+- ✅ Fine-grained access control
+
+#### Manual OIDC Setup
+
+If automatic setup fails:
+
+```bash
+./setup-github-oidc.sh
+```
+
+#### Trust Policy Configuration
+
+**Allow only main branch:**
+```json
+"token.actions.githubusercontent.com:sub": "repo:owner/repo:ref:refs/heads/main"
+```
+
+**Allow specific environment:**
+```json
+"token.actions.githubusercontent.com:sub": "repo:owner/repo:environment:production"
+```
+
+**Allow any branch:**
+```json
+"token.actions.githubusercontent.com:sub": "repo:owner/repo:*"
+```
+
+#### Troubleshooting OIDC
+
+**Authentication fails:**
+- Verify trust policy has correct repository name
+- Check OIDC provider exists in AWS
+- Ensure `permissions: id-token: write` is in workflow
+- Confirm role ARN is correct
+
+**Missing permissions:**
+- Check IAM policies attached to role
+- Verify policy allows required actions
+- Review CloudTrail logs for denied actions
+
+### Lightsail Bucket Integration
+
+Complete S3-compatible object storage integration with automatic setup and web-based management.
+
+#### Bucket Features
+
+- **Automatic Creation** - Buckets created if they don't exist
+- **Instance Attachment** - Credentials configured automatically
+- **Access Control** - Read-only or read-write permissions
+- **Multiple Sizes** - 250GB, 500GB, or 1TB storage
+- **Web Interface** - Upload/download files via browser
+
+#### Configuration
+
+```yaml
+lightsail:
+  bucket:
+    enabled: true
+    name: "my-app-bucket"
+    access_level: "read_write"  # or "read_only"
+    bundle_id: "small_1_0"      # 250GB storage
+```
+
+#### Bucket Sizes and Pricing
+
+| Bundle ID | Storage | Transfer/Month | Monthly Cost | Use Case |
+|-----------|---------|----------------|--------------|----------|
+| small_1_0 | 250GB | 100GB | $3 | Small apps, testing |
+| medium_1_0 | 500GB | 250GB | $5 | Medium apps, production |
+| large_1_0 | 1TB | 500GB | $10 | Large apps, heavy usage |
+
+#### Using Buckets
+
+**Web Interface:**
+```
+Upload files: http://your-ip/bucket-manager.php
+View examples: http://your-ip/bucket-demo.php
+```
+
+**AWS CLI:**
+```bash
+# List files
+aws s3 ls s3://my-app-bucket/
+
+# Upload file
+aws s3 cp file.txt s3://my-app-bucket/
+
+# Download file
+aws s3 cp s3://my-app-bucket/file.txt ./
+```
+
+**PHP with AWS SDK:**
+```php
+use Aws\S3\S3Client;
+
+$s3 = new S3Client([
+    'version' => 'latest',
+    'region'  => 'us-east-1'
+]);
+
+// Upload
+$s3->putObject([
+    'Bucket' => 'my-app-bucket',
+    'Key'    => 'uploads/photo.jpg',
+    'Body'   => fopen('photo.jpg', 'r')
+]);
+
+// Download
+$result = $s3->getObject([
+    'Bucket' => 'my-app-bucket',
+    'Key'    => 'uploads/photo.jpg'
+]);
+```
+
+#### Common Use Cases
+
+1. **User File Uploads** - Store user-uploaded images, documents
+2. **Database Backups** - Automated backup storage
+3. **Static Assets** - CDN-style asset delivery
+4. **Log Archival** - Long-term log storage
+5. **Media Storage** - Video and audio files
+
+#### Security Best Practices
+
+- Use read-only access when possible
+- Implement file type validation
+- Set up lifecycle policies for old files
+- Monitor bucket usage and costs
+- Use signed URLs for temporary access
+
+#### Deployment Flow
+
+```
+1. GitHub Actions reads bucket config
+2. Check if bucket exists
+3. Create bucket if missing (with tags)
+4. Wait for bucket to be active
+5. Attach bucket to instance
+6. Configure access permissions (read-only or read-write)
+7. Deploy bucket manager interface
+8. Verify bucket access
+```
+
+#### Monitoring Bucket Setup
+
+Check GitHub Actions logs for:
+```
+🪣 Setting up Lightsail bucket...
+📦 Creating Lightsail bucket: my-app-bucket
+✅ Bucket created successfully
+🔗 Attaching bucket to instance...
+✅ Instance access configured
+✅ Bucket Setup Complete
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Deployment Fails
+
+1. **Check GitHub Actions logs**
+   - Go to Actions tab
+   - Click on failed workflow
+   - Review step-by-step logs
+
+2. **Verify AWS credentials**
+   - Ensure AWS_ROLE_ARN is set
+   - Check IAM role permissions
+   - Verify trust policy
+
+3. **Check instance status**
+   - Log into AWS Lightsail console
+   - Verify instance is running
+   - Check firewall rules
+
+#### Connection Issues
+
+```bash
+# SSH into instance
+ssh ubuntu@<instance-ip>
+
+# Check service status
+sudo systemctl status apache2  # or nginx, pm2, etc.
+
+# View logs
+sudo tail -f /var/log/apache2/error.log
+```
+
+#### Database Connection Fails
+
+1. Verify RDS instance is running
+2. Check security group rules
+3. Verify database credentials in GitHub secrets
+4. Test connection from instance
+
+#### Bucket Operations Fail
+
+1. Verify bucket is attached to instance
+2. Check access level (read_only vs read_write)
+3. Ensure AWS CLI is installed on instance
+4. Test with: `aws s3 ls s3://bucket-name/`
+
+#### Docker Deployment Issues
+
+**Instance freezes during build:**
+- Instance too small (needs minimum 2GB RAM)
+- Upgrade to `small_3_0` or larger bundle
+- Use pre-built images from Docker Hub
+
+**Build timeout:**
+- Enable pre-built images
+- Build on GitHub Actions instead of Lightsail
+- Use layer caching
+
+**Container won't start:**
+- Check logs: `docker-compose logs`
+- Verify environment variables
+- Check port conflicts
+
+### Verification Steps
+
+1. **Check OIDC Provider**:
+   ```bash
+   aws iam list-open-id-connect-providers
+   ```
+
+2. **Verify Role Trust Policy**:
+   ```bash
+   aws iam get-role --role-name GitHubActionsRole
+   ```
+
+3. **Test AWS Access**:
+   ```yaml
+   - name: Test AWS Access
+     run: |
+       aws sts get-caller-identity
+       aws lightsail get-regions
+   ```
+
+4. **Verify Bucket Integration**:
+   ```bash
+   # On the instance
+   ./verify-bucket-integration.sh
+   ```
+
+---
+
+## 📖 Additional Resources
+
+- [AWS Lightsail Documentation](https://docs.aws.amazon.com/lightsail/)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [Docker Documentation](https://docs.docker.com/)
+- [AWS SDK for PHP](https://docs.aws.amazon.com/sdk-for-php/)
+- [GitHub OIDC Guide](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
