@@ -28,8 +28,27 @@ permissions:
   contents: read
 
 jobs:
+  check-docker-hub:
+    name: Check Docker Hub Credentials
+    runs-on: ubuntu-latest
+    outputs:
+      has-credentials: ${{ steps.check.outputs.has-credentials }}
+    steps:
+      - name: Check if Docker Hub credentials exist
+        id: check
+        run: |
+          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "has-credentials=true" >> $GITHUB_OUTPUT
+            echo "✅ Docker Hub credentials found - will use pre-built images"
+          else
+            echo "has-credentials=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Docker Hub credentials not found - will build locally on Lightsail"
+          fi
+
   build-and-push:
     name: Build and Push Docker Image
+    needs: check-docker-hub
+    if: needs.check-docker-hub.outputs.has-credentials == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -75,7 +94,8 @@ jobs:
 
   deploy:
     name: Deploy to Lightsail
-    needs: build-and-push
+    needs: [check-docker-hub, build-and-push]
+    if: always() && !cancelled()
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: deployment-docker.config.yml
