@@ -94,7 +94,9 @@ echo "2) Nginx Static Site"
 echo "3) Node.js Application (with PM2)"
 echo "4) Python/Flask Application (with Gunicorn)"
 echo "5) React Application (SPA)"
-read -p "Choose application type (1-5): " APP_TYPE_CHOICE
+echo "6) Docker - Basic LAMP (Apache + MySQL + Redis + phpMyAdmin)"
+echo "7) Docker - Recipe Manager (Full-featured app with S3)"
+read -p "Choose application type (1-7): " APP_TYPE_CHOICE
 
 case $APP_TYPE_CHOICE in
     1)
@@ -121,6 +123,16 @@ case $APP_TYPE_CHOICE in
         APP_TYPE="react"
         APP_TYPE_NAME="React"
         DEPENDENCIES="nodejs,nginx"
+        ;;
+    6)
+        APP_TYPE="docker"
+        APP_TYPE_NAME="Docker Basic LAMP"
+        DEPENDENCIES="docker"
+        ;;
+    7)
+        APP_TYPE="docker-recipe"
+        APP_TYPE_NAME="Docker Recipe Manager"
+        DEPENDENCIES="docker"
         ;;
     *)
         echo -e "${RED}Invalid choice${NC}"

@@ -54,7 +54,9 @@ echo "2) NGINX (Static sites or reverse proxy)"
 echo "3) Node.js (Express, Next.js, etc.)"
 echo "4) Python (Flask, Django, FastAPI)"
 echo "5) React (Create React App, Vite, etc.)"
-read -p "Enter choice (1-5): " APP_TYPE_CHOICE
+echo "6) Docker - Basic LAMP (Apache + MySQL + Redis + phpMyAdmin)"
+echo "7) Docker - Recipe Manager (Full-featured app with S3)"
+read -p "Enter choice (1-7): " APP_TYPE_CHOICE
 
 case $APP_TYPE_CHOICE in
     1) APP_TYPE="lamp"; APP_TYPE_NAME="LAMP Stack";;
@@ -62,6 +64,8 @@ case $APP_TYPE_CHOICE in
     3) APP_TYPE="nodejs"; APP_TYPE_NAME="Node.js";;
     4) APP_TYPE="python"; APP_TYPE_NAME="Python";;
     5) APP_TYPE="react"; APP_TYPE_NAME="React";;
+    6) APP_TYPE="docker"; APP_TYPE_NAME="Docker Basic LAMP";;
+    7) APP_TYPE="docker-recipe"; APP_TYPE_NAME="Docker Recipe Manager";;
     *) echo "Invalid choice"; exit 1;;
 esac
 
