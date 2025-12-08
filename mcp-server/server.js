@@ -215,8 +215,8 @@ app.get('/sse', authenticate, async (req, res) => {
   });
 });
 
-// Message endpoint for MCP
-app.post('/message', authenticate, express.json(), async (req, res) => {
+// Message endpoint for MCP - must be before express.json() middleware
+app.post('/message', authenticate, async (req, res) => {
   const sessionId = req.query.sessionId;
   const session = sessions.get(sessionId);
   
@@ -228,7 +228,9 @@ app.post('/message', authenticate, express.json(), async (req, res) => {
     await session.transport.handlePostMessage(req, res);
   } catch (error) {
     console.error('Error handling message:', error);
-    res.status(500).json({ error: error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
