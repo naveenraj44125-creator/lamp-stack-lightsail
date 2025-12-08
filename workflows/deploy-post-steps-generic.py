@@ -1045,9 +1045,19 @@ fi
 set -e
 echo "Configuring Node.js for application..."
 
-# Check if app files exist
-if [ ! -f "/opt/nodejs-app/app.js" ] && [ ! -f "/opt/nodejs-app/index.js" ]; then
-    echo "❌ No app.js or index.js found in /opt/nodejs-app"
+# Detect entry point file
+ENTRY_POINT=""
+if [ -f "/opt/nodejs-app/server.js" ]; then
+    ENTRY_POINT="server.js"
+    echo "✅ Found server.js as entry point"
+elif [ -f "/opt/nodejs-app/app.js" ]; then
+    ENTRY_POINT="app.js"
+    echo "✅ Found app.js as entry point"
+elif [ -f "/opt/nodejs-app/index.js" ]; then
+    ENTRY_POINT="index.js"
+    echo "✅ Found index.js as entry point"
+else
+    echo "❌ No entry point file found (server.js, app.js, or index.js)"
     ls -la /opt/nodejs-app/ || echo "Directory does not exist"
     exit 1
 fi
@@ -1076,7 +1086,7 @@ After=network.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/opt/nodejs-app
-ExecStart=/usr/bin/node app.js
+ExecStart=/usr/bin/node $ENTRY_POINT
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
