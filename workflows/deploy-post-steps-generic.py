@@ -489,6 +489,15 @@ echo "✅ Docker deployment completed"
         else:
             target_dir = '/opt/app'
         
+        # Get expected directory from config
+        package_files = self.config.get('application.package_files', [])
+        expected_dirs = []
+        for pf in package_files:
+            # Extract directory name from patterns like "mcp-server/" or "example-app/"
+            dir_name = pf.rstrip('/').split('/')[-1] if pf else None
+            if dir_name:
+                expected_dirs.append(dir_name)
+        
         # First, copy the package file to the remote instance
         print(f"📤 Uploading package file {package_file} to remote instance...")
         # Use home directory instead of /tmp to avoid permission issues
@@ -497,6 +506,21 @@ echo "✅ Docker deployment completed"
         if not self.client.copy_file_to_instance(package_file, remote_package_path):
             print(f"❌ Failed to upload package file to remote instance")
             return False
+        
+        # Build directory search logic based on config
+        dir_checks = ""
+        if expected_dirs:
+            for dir_name in expected_dirs:
+                dir_checks += f'''
+if [ -d "./{dir_name}" ]; then
+    EXTRACTED_DIR="./{dir_name}"
+    echo "✅ Found configured directory: {dir_name}"
+el'''
+            dir_checks += '''se
+    EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
+fi'''
+        else:
+            dir_checks = '''EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)'''
         
         script = f'''
 set -e
@@ -515,17 +539,11 @@ echo "Extracting application package..."
 cd ~
 tar -xzf {package_file}
 
-# Find the extracted directory (usually example-*-app, mcp-server, or just files)
+# Find the extracted directory based on config
 echo "🔍 Looking for extracted directories..."
 ls -la
 
-# Prioritize mcp-server over example-*-app directories
-if [ -d "./mcp-server" ]; then
-    EXTRACTED_DIR="./mcp-server"
-    echo "✅ Found mcp-server directory (prioritized)"
-else
-    EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
-fi
+{dir_checks}
 
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
