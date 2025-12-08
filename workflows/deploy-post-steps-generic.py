@@ -460,11 +460,30 @@ echo "✅ Docker deployment completed"
 
     def _deploy_application_files(self, package_file) -> bool:
         """Deploy application files to the appropriate location"""
-        app_type = self.config.get('application.type', 'web')
+        app_type = self.config.get('application.type')
+        
+        # Fallback: detect app type from dependencies if not specified
+        if not app_type:
+            if 'nodejs' in self.dependency_manager.installed_dependencies:
+                app_type = 'nodejs'
+            elif 'python' in self.dependency_manager.installed_dependencies:
+                app_type = 'python'
+            elif 'docker' in self.dependency_manager.installed_dependencies:
+                app_type = 'docker'
+            else:
+                app_type = 'web'
+        
+        print(f"📋 Detected app type: {app_type}")
         
         # Determine deployment target based on app type and installed dependencies
-        if app_type == 'web':
-            # For Node.js web apps, deploy to /opt/nodejs-app
+        if app_type == 'nodejs':
+            target_dir = '/opt/nodejs-app'
+        elif app_type == 'python':
+            target_dir = '/opt/python-app'
+        elif app_type == 'docker':
+            target_dir = '/opt/docker-app'
+        elif app_type == 'web':
+            # For web apps, check which server is installed
             if 'nodejs' in self.dependency_manager.installed_dependencies:
                 target_dir = '/opt/nodejs-app'
             elif 'apache' in self.dependency_manager.installed_dependencies:
@@ -475,7 +494,7 @@ echo "✅ Docker deployment completed"
                 target_dir = '/var/www/html'
         elif app_type == 'api':
             if 'python' in self.dependency_manager.installed_dependencies:
-                target_dir = '/opt/app'
+                target_dir = '/opt/python-app'
             elif 'nodejs' in self.dependency_manager.installed_dependencies:
                 target_dir = '/opt/nodejs-app'
             else:
@@ -488,6 +507,8 @@ echo "✅ Docker deployment completed"
                 target_dir = '/var/www/html'
         else:
             target_dir = '/opt/app'
+        
+        print(f"📁 Target directory: {target_dir}")
         
         # Get expected directory from config
         package_files = self.config.get('application.package_files', [])
