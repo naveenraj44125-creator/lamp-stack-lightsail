@@ -1097,8 +1097,8 @@ sudo mkdir -p /var/log/nodejs-app
 sudo chown ubuntu:ubuntu /var/log/nodejs-app
 
 # Create systemd service for Node.js app
-echo "📝 Creating systemd service file..."
-sudo tee /etc/systemd/system/nodejs-app.service > /dev/null << 'EOF'
+echo "📝 Creating systemd service file with entry point: $ENTRY_POINT"
+sudo tee /etc/systemd/system/nodejs-app.service > /dev/null << EOF
 [Unit]
 Description=Node.js Application
 After=network.target
