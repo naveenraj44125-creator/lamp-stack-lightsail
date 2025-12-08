@@ -46,13 +46,16 @@ class LightsailDeploymentServer {
         },
       }
     );
-
-    this.setupToolHandlers();
     
     this.server.onerror = (error) => console.error('[MCP Error]', error);
   }
 
-  setupToolHandlers() {
+  async initialize() {
+    await this.setupToolHandlers();
+    return this;
+  }
+
+  async setupToolHandlers() {
     // Import tool handlers from index.js
     // For now, we'll duplicate the essential methods
     // In production, you'd want to refactor shared code into a module
@@ -195,7 +198,7 @@ app.get('/sse', authenticate, async (req, res) => {
   console.log('New SSE connection from', req.ip);
 
   const transport = new SSEServerTransport('/message', res);
-  const mcpServer = new LightsailDeploymentServer();
+  const mcpServer = await new LightsailDeploymentServer().initialize();
   
   await mcpServer.connect(transport);
 
