@@ -518,7 +518,14 @@ tar -xzf {package_file}
 # Find the extracted directory (usually example-*-app, mcp-server, or just files)
 echo "🔍 Looking for extracted directories..."
 ls -la
-EXTRACTED_DIR=$(find . -maxdepth 1 -type d \( -name "example-*-app" -o -name "mcp-server" \) | head -n 1)
+
+# Prioritize mcp-server over example-*-app directories
+if [ -d "./mcp-server" ]; then
+    EXTRACTED_DIR="./mcp-server"
+    echo "✅ Found mcp-server directory (prioritized)"
+else
+    EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
+fi
 
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
