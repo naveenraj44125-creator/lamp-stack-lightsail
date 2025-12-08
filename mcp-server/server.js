@@ -193,6 +193,9 @@ const authenticate = (req, res, next) => {
   next();
 };
 
+// Store active sessions
+const sessions = new Map();
+
 // SSE endpoint for MCP
 app.get('/sse', authenticate, async (req, res) => {
   console.log('New SSE connection from', req.ip);
@@ -200,17 +203,33 @@ app.get('/sse', authenticate, async (req, res) => {
   const transport = new SSEServerTransport('/message', res);
   const mcpServer = await new LightsailDeploymentServer().initialize();
   
+  // Store session
+  const sessionId = transport.sessionId;
+  sessions.set(sessionId, { transport, mcpServer });
+  
   await mcpServer.connect(transport);
 
   req.on('close', () => {
     console.log('SSE connection closed');
+    sessions.delete(sessionId);
   });
 });
 
 // Message endpoint for MCP
 app.post('/message', authenticate, express.json(), async (req, res) => {
-  // This is handled by the SSE transport
-  res.status(200).end();
+  const sessionId = req.query.sessionId;
+  const session = sessions.get(sessionId);
+  
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  try {
+    await session.transport.handlePostMessage(req, res);
+  } catch (error) {
+    console.error('Error handling message:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Start server
