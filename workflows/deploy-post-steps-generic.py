@@ -515,10 +515,10 @@ echo "Extracting application package..."
 cd ~
 tar -xzf {package_file}
 
-# Find the extracted directory (usually example-*-app or just files)
+# Find the extracted directory (usually example-*-app, mcp-server, or just files)
 echo "🔍 Looking for extracted directories..."
 ls -la
-EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
+EXTRACTED_DIR=$(find . -maxdepth 1 -type d \( -name "example-*-app" -o -name "mcp-server" \) | head -n 1)
 
 # Deploy files to target directory
 sudo mkdir -p {target_dir}
@@ -538,7 +538,7 @@ if [ -n "$EXTRACTED_DIR" ]; then
         sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
     fi
 else
-    echo "⚠️  No example-*-app directory found, copying all files"
+    echo "⚠️  No application directory found (example-*-app or mcp-server), copying all files"
     echo "📋 Current directory contents:"
     ls -la | head -20
     

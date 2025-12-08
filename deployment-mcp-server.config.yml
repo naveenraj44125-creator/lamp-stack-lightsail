@@ -18,10 +18,15 @@ application:
   
   # Files to include in deployment package
   package_files:
-    - "mcp-server/"
+    - "mcp-server/*"
   
   # Fallback: include all files if specific files don't exist
   package_fallback: true
+  
+  # Package directory structure
+  # When true, preserves directory structure (mcp-server/index.js)
+  # When false, flattens to root (index.js)
+  preserve_directory_structure: false
   
   # Environment variables to set on the instance
   environment_variables:
