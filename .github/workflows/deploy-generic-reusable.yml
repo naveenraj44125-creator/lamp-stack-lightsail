@@ -56,6 +56,7 @@ jobs:
       test_enabled: ${{ steps.config.outputs.test_enabled }}
       is_ubuntu: ${{ steps.config.outputs.is_ubuntu }}
       verification_port: ${{ steps.config.outputs.verification_port }}
+      verification_path: ${{ steps.config.outputs.verification_path }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -377,7 +378,12 @@ jobs:
             # Also check monitoring config
             verification_port = config.get('monitoring', {}).get('health_check', {}).get('port', 80)
         
+        # Get verification path from config (default to /)
+        verification_endpoints = config.get('deployment', {}).get('steps', {}).get('verification', {}).get('endpoints_to_test', ['/'])
+        verification_path = verification_endpoints[0] if verification_endpoints else '/'
+        
         print(f"✅ Verification Port: {verification_port}")
+        print(f"✅ Verification Path: {verification_path}")
         
         # Write to GitHub outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
@@ -392,6 +398,7 @@ jobs:
             f.write(f"test_enabled={str(test_enabled).lower()}\n")
             f.write(f"is_ubuntu=true\n")
             f.write(f"verification_port={verification_port}\n")
+            f.write(f"verification_path={verification_path}\n")
         EOF
 
   test:
@@ -822,7 +829,8 @@ jobs:
       run: |
         echo "🌐 Testing external connectivity..."
         VERIFICATION_PORT="${{ needs.load-config.outputs.verification_port }}"
-        TEST_URL="http://${{ needs.load-config.outputs.static_ip }}:${VERIFICATION_PORT}/"
+        VERIFICATION_PATH="${{ needs.load-config.outputs.verification_path }}"
+        TEST_URL="http://${{ needs.load-config.outputs.static_ip }}:${VERIFICATION_PORT}${VERIFICATION_PATH}"
         
         echo "📍 Test URL: $TEST_URL"
         echo "⏳ Waiting 60 seconds for services to fully initialize..."
