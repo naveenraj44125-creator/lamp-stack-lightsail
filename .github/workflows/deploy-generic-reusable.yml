@@ -641,17 +641,17 @@ jobs:
             
             if existing_files:
                 print(f"📦 Packaging specific files: {existing_files}")
-                cmd = ['tar', '-czf', 'app.tar.gz'] + existing_files
+                cmd = ['tar', '--warning=no-file-changed', '-czf', 'app.tar.gz'] + existing_files
                 subprocess.run(cmd, check=True)
             elif package_fallback:
                 print("📦 Specific files not found, packaging all files as fallback")
-                subprocess.run(['tar', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=node_modules', '--exclude=*.tar.gz', '.'], check=True)
+                subprocess.run(['tar', '--warning=no-file-changed', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=node_modules', '--exclude=*.tar.gz', '.'], check=True)
             else:
                 print("❌ Specific files not found and fallback disabled")
                 exit(1)
         else:
             print("📦 No specific files configured, packaging all files")
-            subprocess.run(['tar', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=*.tar.gz', '.'], check=True)
+            subprocess.run(['tar', '--warning=no-file-changed', '-czf', 'app.tar.gz', '--exclude=.git', '--exclude=.github', '--exclude=*.tar.gz', '.'], check=True)
         EOF
 
     - name: Upload application package
