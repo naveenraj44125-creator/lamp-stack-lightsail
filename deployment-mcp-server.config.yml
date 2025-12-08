@@ -109,6 +109,7 @@ deployment:
       enabled: true
       health_check: true
       external_connectivity: true
+      port: 3000
       endpoints_to_test:
         - "/health"
 
@@ -137,6 +138,7 @@ github_actions:
 monitoring:
   health_check:
     endpoint: "/health"
+    port: 3000
     expected_content: "healthy"
     max_attempts: 10
     wait_between_attempts: 10

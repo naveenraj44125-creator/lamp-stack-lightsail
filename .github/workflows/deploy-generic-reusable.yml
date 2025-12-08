@@ -55,6 +55,7 @@ jobs:
       enabled_dependencies: ${{ steps.config.outputs.enabled_dependencies }}
       test_enabled: ${{ steps.config.outputs.test_enabled }}
       is_ubuntu: ${{ steps.config.outputs.is_ubuntu }}
+      verification_port: ${{ steps.config.outputs.verification_port }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -215,16 +216,25 @@ jobs:
             
             # Ensure firewall ports are open for existing instances
             print("\n🔥 Ensuring firewall ports are open...")
+            
+            # Get custom ports from config
+            firewall_config = config.get('dependencies', {}).get('firewall', {}).get('config', {})
+            allowed_ports = firewall_config.get('allowed_ports', ['22', '80', '443'])
+            
+            # Convert to port info format
+            port_infos = []
+            for port in allowed_ports:
+                port_num = int(str(port).strip())
+                port_infos.append({'fromPort': port_num, 'toPort': port_num, 'protocol': 'tcp'})
+            
+            print(f"   Opening ports: {', '.join(map(str, allowed_ports))}")
+            
             try:
                 lightsail.put_instance_public_ports(
-                    portInfos=[
-                        {'fromPort': 22, 'toPort': 22, 'protocol': 'tcp'},
-                        {'fromPort': 80, 'toPort': 80, 'protocol': 'tcp'},
-                        {'fromPort': 443, 'toPort': 443, 'protocol': 'tcp'}
-                    ],
+                    portInfos=port_infos,
                     instanceName=instance_name
                 )
-                print("✅ Firewall ports ensured (22, 80, 443)")
+                print(f"✅ Firewall ports ensured: {', '.join(map(str, allowed_ports))}")
             except Exception as e:
                 print(f"⚠️  Could not update firewall: {e}")
             
@@ -318,15 +328,24 @@ jobs:
                     
                 # Open firewall ports
                 print("\n🔥 Configuring firewall...")
+                
+                # Get custom ports from config
+                firewall_config = config.get('dependencies', {}).get('firewall', {}).get('config', {})
+                allowed_ports = firewall_config.get('allowed_ports', ['22', '80', '443'])
+                
+                # Convert to port info format
+                port_infos = []
+                for port in allowed_ports:
+                    port_num = int(str(port).strip())
+                    port_infos.append({'fromPort': port_num, 'toPort': port_num, 'protocol': 'tcp'})
+                
+                print(f"   Opening ports: {', '.join(map(str, allowed_ports))}")
+                
                 lightsail.put_instance_public_ports(
-                    portInfos=[
-                        {'fromPort': 22, 'toPort': 22, 'protocol': 'tcp'},
-                        {'fromPort': 80, 'toPort': 80, 'protocol': 'tcp'},
-                        {'fromPort': 443, 'toPort': 443, 'protocol': 'tcp'}
-                    ],
+                    portInfos=port_infos,
                     instanceName=instance_name
                 )
-                print("✅ Firewall configured (ports 22, 80, 443)")
+                print(f"✅ Firewall configured: {', '.join(map(str, allowed_ports))}")
                 
             except Exception as e:
                 print(f"❌ Failed to create instance: {e}")
@@ -352,6 +371,14 @@ jobs:
         should_deploy = True
         print(f"🚀 Should Deploy: {should_deploy}")
         
+        # Get verification port from config (default to 80 for web apps)
+        verification_port = config.get('deployment', {}).get('steps', {}).get('verification', {}).get('port', 80)
+        if verification_port == 80:
+            # Also check monitoring config
+            verification_port = config.get('monitoring', {}).get('health_check', {}).get('port', 80)
+        
+        print(f"✅ Verification Port: {verification_port}")
+        
         # Write to GitHub outputs
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"instance_name={instance_name}\n")
@@ -364,6 +391,7 @@ jobs:
             f.write(f"enabled_dependencies={enabled_dependencies}\n")
             f.write(f"test_enabled={str(test_enabled).lower()}\n")
             f.write(f"is_ubuntu=true\n")
+            f.write(f"verification_port={verification_port}\n")
         EOF
 
   test:
@@ -793,20 +821,24 @@ jobs:
       id: connectivity
       run: |
         echo "🌐 Testing external connectivity..."
-        echo "⏳ Waiting 60 seconds for Docker containers to fully initialize..."
+        VERIFICATION_PORT="${{ needs.load-config.outputs.verification_port }}"
+        TEST_URL="http://${{ needs.load-config.outputs.static_ip }}:${VERIFICATION_PORT}/"
+        
+        echo "📍 Test URL: $TEST_URL"
+        echo "⏳ Waiting 60 seconds for services to fully initialize..."
         sleep 60
 
         for i in {1..15}; do
-          echo "Attempt $i/15: Testing http://${{ needs.load-config.outputs.static_ip }}/"
+          echo "Attempt $i/15: Testing $TEST_URL"
           
           # Try to fetch the page and check if we get a 200 response
-          HTTP_CODE=$(curl -s -o /tmp/response.html -w "%{http_code}" --connect-timeout 10 --max-time 30 http://${{ needs.load-config.outputs.static_ip }}/ || echo "000")
+          HTTP_CODE=$(curl -s -o /tmp/response.html -w "%{http_code}" --connect-timeout 10 --max-time 30 "$TEST_URL" || echo "000")
           
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Got HTTP 200 response!"
             
-            # Check if response contains HTML content (case-insensitive)
-            if grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker" /tmp/response.html; then
+            # Check if response contains expected content (case-insensitive)
+            if grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker\|healthy\|ok" /tmp/response.html; then
               echo "✅ Application is accessible and responding with content!"
               cat /tmp/response.html | head -20
               echo "status=success" >> $GITHUB_OUTPUT

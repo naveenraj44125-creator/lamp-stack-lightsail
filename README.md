@@ -1202,6 +1202,92 @@ sudo tail -f /var/log/apache2/error.log
 
 ---
 
+## 🤖 MCP Server Integration
+
+Use AI assistants (Claude, Kiro, etc.) to manage Lightsail deployments through the Model Context Protocol server.
+
+### Option 1: Deploy on Lightsail (Recommended for Teams)
+
+Run the MCP server on your Lightsail instance for remote access:
+
+```bash
+cd mcp-server
+./deploy-to-lightsail.sh your-instance-ip
+```
+
+Benefits:
+- ✅ No local installation needed
+- ✅ Centralized for entire team
+- ✅ Always available
+- ✅ Secure with token authentication
+
+Client configuration:
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "url": "http://your-instance-ip:3000/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
+See [mcp-server/DEPLOY.md](mcp-server/DEPLOY.md) for complete guide.
+
+### Option 2: Local with NPX (Zero Install)
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "npx",
+      "args": ["-y", "lightsail-deployment-mcp"]
+    }
+  }
+}
+```
+
+### Option 3: Global Install
+
+```bash
+npm install -g lightsail-deployment-mcp
+```
+
+Then configure:
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "lightsail-deployment-mcp"
+    }
+  }
+}
+```
+
+### Available AI Commands
+
+- **"Create a new Node.js app deployed to Lightsail"** - Sets up complete repository
+- **"Add Lightsail deployment to my existing repo"** - Integrates with existing projects
+- **"Generate a deployment config for Python with Redis"** - Creates configuration files
+- **"Set up OIDC for my repository"** - Configures AWS authentication
+- **"Check my deployment status"** - Monitors workflow runs
+- **"What example applications are available?"** - Lists templates
+- **"Diagnose my deployment setup"** - Troubleshoots issues automatically
+
+### Documentation
+
+- [Complete Guide](mcp-server/README.md) - Full documentation
+- [Quick Start](mcp-server/QUICKSTART.md) - 5-minute setup
+- [Examples](mcp-server/EXAMPLES.md) - Usage examples
+- [Troubleshooting](mcp-server/TROUBLESHOOTING.md) - Problem solving
+
+---
+
 ## 📖 Additional Resources
 
 - [AWS Lightsail Documentation](https://docs.aws.amazon.com/lightsail/)
@@ -1209,3 +1295,4 @@ sudo tail -f /var/log/apache2/error.log
 - [Docker Documentation](https://docs.docker.com/)
 - [AWS SDK for PHP](https://docs.aws.amazon.com/sdk-for-php/)
 - [GitHub OIDC Guide](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
