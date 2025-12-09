@@ -300,12 +300,38 @@ Increase timeout for slow connections:
 - **Debug script:** `python3 troubleshooting-tools/mcp-server/debug-mcp-server.py`
 - **Documentation:** See [TESTING.md](TESTING.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
+## AWS Console Q Chat
+
+**Important:** Amazon Q in the AWS Console browser does **NOT** support MCP servers.
+
+### Limitations
+- ❌ AWS Console Q Chat cannot connect to MCP servers
+- ❌ No custom tool integration in browser
+- ❌ Only built-in AWS knowledge available
+
+### Alternatives
+
+**Option 1: Use Amazon Q Developer (Recommended)**
+- Install VS Code extension
+- Full MCP support
+- Configure as shown above
+
+**Option 2: Custom Web Interface**
+- See `web-interface-example.html` for a simple chat UI
+- Connects directly to your MCP server
+- Can be hosted anywhere
+
+**Option 3: API Integration**
+- Call MCP server directly from your applications
+- Use the HTTP/SSE endpoints
+- Build custom workflows
+
 ## Next Steps
 
-1. ✅ Configure Amazon Q with the server URL
+1. ✅ Configure Amazon Q Developer (not Console Q)
 2. ✅ Restart Amazon Q
 3. ✅ Verify tools are available
 4. ✅ Try creating a test repository
 5. ✅ Monitor deployment status
 
-Your MCP server is ready to enhance Amazon Q with Lightsail deployment capabilities!
+Your MCP server is ready to enhance Amazon Q Developer with Lightsail deployment capabilities!
