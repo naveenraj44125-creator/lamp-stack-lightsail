@@ -10,6 +10,7 @@ import argparse
 from lightsail_common import LightsailBase
 from config_loader import DeploymentConfig
 from dependency_manager import DependencyManager
+from app_configurators.configurator_factory import ConfiguratorFactory
 
 class GenericPostDeployer:
     def __init__(self, instance_name=None, region=None, config=None):
@@ -95,7 +96,11 @@ echo "Service check completed"
             print("="*60)
             print("🐳 DEPLOYING WITH DOCKER")
             print("="*60)
-            success = self._deploy_with_docker(package_file, env_vars)
+            
+            # Use Docker configurator for deployment
+            docker_configurator = ConfiguratorFactory.get_docker_configurator(self.client, self.config)
+            success = docker_configurator.deploy_with_docker(package_file, env_vars)
+            
             if not success:
                 print("❌ Docker deployment failed")
                 return False
@@ -140,26 +145,22 @@ echo "Service check completed"
             if not success:
                 print("⚠️  Some services failed to restart")
         
-            # For Node.js apps, verify the service is still running after restart
-            if 'nodejs' in self.dependency_manager.installed_dependencies:
-                print("\n🔍 Verifying Node.js service after restart...")
-                verify_script = '''
-if systemctl is-active --quiet nodejs-app.service; then
-    echo "✅ Node.js service is running"
-    # Test local connection
-    if curl -s http://localhost:3000/ > /dev/null 2>&1; then
-        echo "✅ Node.js app responding on port 3000"
-    else
-        echo "⚠️  Node.js service running but not responding on port 3000"
+            # Verify application services are running after restart
+            print("\n🔍 Verifying application services after restart...")
+            verify_script = '''
+echo "Checking application services..."
+for service in nodejs-app python-app; do
+    if systemctl list-unit-files | grep -q "^${service}.service"; then
+        if systemctl is-active --quiet ${service}.service; then
+            echo "✅ ${service} service is running"
+        else
+            echo "⚠️  ${service} service is not running"
+            sudo systemctl status ${service}.service --no-pager || true
+        fi
     fi
-else
-    echo "❌ Node.js service is NOT running after restart!"
-    sudo systemctl status nodejs-app.service --no-pager || true
-    echo "=== Recent logs ==="
-    sudo journalctl -u nodejs-app.service -n 30 --no-pager || true
-fi
+done
 '''
-                self.client.run_command(verify_script, timeout=30)
+            self.client.run_command(verify_script, timeout=30)
         
         # Set environment variables if provided
         if env_vars:
@@ -197,269 +198,8 @@ fi
         print(f"🏷️  Type: {app_type}")
         return True
     
-    def _deploy_with_docker(self, package_file, env_vars=None) -> bool:
-        """Deploy application using Docker and docker-compose"""
-        print("🐳 Deploying application with Docker...")
-        
-        # Check if using pre-built image
-        docker_image_tag = os.environ.get('DOCKER_IMAGE_TAG', '')
-        use_prebuilt_image = bool(docker_image_tag)
-        
-        if use_prebuilt_image:
-            print(f"📦 Using pre-built Docker image: {docker_image_tag}")
-        else:
-            print("🔨 Will build Docker image on instance")
-        
-        # Upload package to instance
-        print(f"📤 Uploading package file {package_file}...")
-        remote_package_path = f"~/{package_file}"
-        
-        if not self.client.copy_file_to_instance(package_file, remote_package_path):
-            print(f"❌ Failed to upload package file")
-            return False
-        
-        # Prepare environment variables for docker-compose
-        env_file_content = ""
-        if env_vars:
-            for key, value in env_vars.items():
-                env_file_content += f'{key}={value}\n'
-        
-        script = f'''
-set -e
-echo "🐳 Setting up Docker deployment..."
-
-# Set Docker image tag if provided
-export DOCKER_IMAGE_TAG="{docker_image_tag}"
-
-# Create deployment directory
-DEPLOY_DIR="/opt/docker-app"
-sudo mkdir -p $DEPLOY_DIR
-cd $DEPLOY_DIR
-
-# Extract application package
-echo "📦 Extracting application..."
-sudo tar -xzf ~/{package_file} -C $DEPLOY_DIR
-
-# Find docker-compose file
-COMPOSE_FILE=$(find . -name "docker-compose.yml" -o -name "docker-compose.yaml" | head -n 1)
-
-if [ -z "$COMPOSE_FILE" ]; then
-    echo "❌ No docker-compose.yml found in package"
-    exit 1
-fi
-
-echo "✅ Found docker-compose file: $COMPOSE_FILE"
-
-# Create .env file if environment variables provided
-if [ -n "{env_file_content}" ]; then
-    sudo tee .env > /dev/null << 'ENVEOF'
-{env_file_content}
-ENVEOF
-    echo "✅ Environment file created"
-fi
-
-# Ensure Docker is available and add user to docker group
-# Check multiple possible Docker locations
-DOCKER_BIN=""
-if [ -f /usr/bin/docker ]; then
-    DOCKER_BIN="/usr/bin/docker"
-elif command -v docker > /dev/null 2>&1; then
-    DOCKER_BIN=$(command -v docker)
-else
-    echo "⚠️  Docker not found, attempting to install..."
-    
-    # Install Docker using the convenience script (more reliable than manual GPG setup)
-    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-    sudo sh /tmp/get-docker.sh
-    
-    # Start and enable Docker
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    
-    # Check again
-    if [ -f /usr/bin/docker ]; then
-        DOCKER_BIN="/usr/bin/docker"
-    elif command -v docker > /dev/null 2>&1; then
-        DOCKER_BIN=$(command -v docker)
-    else
-        echo "❌ Docker installation failed"
-        exit 1
-    fi
-    
-    echo "✅ Docker installed successfully"
-fi
-
-echo "✅ Docker found at $DOCKER_BIN"
-
-# Add ubuntu user to docker group for non-sudo access
-sudo usermod -aG docker ubuntu || true
-
-# Stop existing containers (use sudo for now until group takes effect)
-echo "🛑 Stopping existing containers..."
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE down --timeout 30 || true
-
-# Check if using pre-built image from environment
-if [ -n "$DOCKER_IMAGE_TAG" ]; then
-    echo "📦 Using pre-built image: $DOCKER_IMAGE_TAG"
-    export DOCKER_IMAGE="$DOCKER_IMAGE_TAG"
-    
-    # Check network connectivity before pulling
-    echo "🔍 Checking network connectivity..."
-    if ! timeout 10 ping -c 2 8.8.8.8 > /dev/null 2>&1; then
-        echo "⚠️  Network connectivity issue detected"
-    fi
-    
-    # Check DNS resolution
-    if ! timeout 10 nslookup hub.docker.com > /dev/null 2>&1; then
-        echo "⚠️  DNS resolution issue for hub.docker.com"
-        echo "Trying to resolve with Google DNS..."
-        sudo bash -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf.tmp'
-        sudo bash -c 'cat /etc/resolv.conf >> /etc/resolv.conf.tmp'
-        sudo mv /etc/resolv.conf.tmp /etc/resolv.conf
-    fi
-    
-    # Configure Docker to use different registry mirrors if needed
-    echo "🔧 Configuring Docker daemon..."
-    sudo mkdir -p /etc/docker
-    sudo tee /etc/docker/daemon.json > /dev/null << 'DOCKEREOF'
-{{
-  "registry-mirrors": [],
-  "max-concurrent-downloads": 3,
-  "max-concurrent-uploads": 3,
-  "log-driver": "json-file",
-  "log-opts": {{
-    "max-size": "10m",
-    "max-file": "3"
-  }}
-}}
-DOCKEREOF
-    sudo systemctl restart docker || true
-    sleep 5
-    
-    # Pull the pre-built image with retry logic
-    echo "📥 Pulling pre-built Docker image..."
-    PULL_SUCCESS=false
-    for attempt in 1 2 3; do
-        echo "Attempt $attempt/3 to pull image..."
-        if timeout 600 sudo $DOCKER_BIN pull "$DOCKER_IMAGE_TAG"; then
-            echo "✅ Image pulled successfully"
-            PULL_SUCCESS=true
-            break
-        else
-            echo "⚠️  Pull attempt $attempt failed"
-            if [ $attempt -lt 3 ]; then
-                echo "Waiting 10 seconds before retry..."
-                sleep 10
-            fi
-        fi
-    done
-    
-    if [ "$PULL_SUCCESS" = "false" ]; then
-        echo "❌ Failed to pull image after 3 attempts"
-        echo "Checking Docker Hub connectivity..."
-        timeout 10 curl -I https://hub.docker.com/ || echo "Cannot reach Docker Hub"
-        exit 1
-    fi
-    
-    # Pull other service images (MySQL, Redis, etc.) with retry
-    echo "📥 Pulling service images..."
-    for attempt in 1 2; do
-        if timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull db redis phpmyadmin 2>/dev/null; then
-            echo "✅ Service images pulled"
-            break
-        else
-            echo "⚠️  Some service images may have issues (attempt $attempt/2)"
-            [ $attempt -lt 2 ] && sleep 5
-        fi
-    done
-else
-    echo "🔨 Building Docker image on instance..."
-    # Pull base images first
-    echo "📥 Pulling base Docker images..."
-    timeout 600 sudo $DOCKER_BIN compose -f $COMPOSE_FILE pull || echo "⚠️  Some images may need to be built"
-    
-    # Build images if needed (with timeout - use cache for faster builds)
-    if grep -q "build:" $COMPOSE_FILE; then
-        echo "🔨 Building Docker images..."
-        timeout 900 sudo $DOCKER_BIN compose -f $COMPOSE_FILE build || {{
-            echo "❌ Build failed after 15 minutes"
-            sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
-            exit 1
-        }}
-    fi
-fi
-
-# Start containers (with extended timeout)
-echo "🚀 Starting containers..."
-timeout 300 sudo $DOCKER_BIN compose -f $COMPOSE_FILE up -d || {{
-    echo "❌ Failed to start containers within 5 minutes"
-    echo "📋 Checking what went wrong..."
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps -a
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
-    exit 1
-}}
-
-# Wait for containers to initialize (extended wait time)
-echo "⏳ Waiting for containers to initialize..."
-sleep 30
-
-# Check container status
-echo "📊 Container status:"
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps
-
-# Count running containers
-RUNNING_COUNT=$(sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps --filter "status=running" --format json 2>/dev/null | wc -l)
-TOTAL_COUNT=$(sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps --format json 2>/dev/null | wc -l)
-
-echo "Running containers: $RUNNING_COUNT / $TOTAL_COUNT"
-
-if [ "$RUNNING_COUNT" -eq 0 ]; then
-    echo "❌ No containers are running!"
-    echo "📋 Container logs:"
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=100
-    exit 1
-fi
-
-# Show logs
-echo "📋 Recent logs:"
-sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=30
-
-# Test web service connectivity (with more attempts and longer waits)
-echo "🔍 Testing web service..."
-WEB_READY=false
-for i in {{1..20}}; do
-    if curl -f -s --connect-timeout 5 http://localhost/ > /dev/null 2>&1; then
-        echo "✅ Web service is responding"
-        WEB_READY=true
-        break
-    fi
-    echo "Waiting for web service... ($i/20)"
-    sleep 5
-done
-
-if [ "$WEB_READY" = "false" ]; then
-    echo "⚠️  Web service not responding after 100 seconds, but containers may still be starting"
-    echo "📋 Container status:"
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE ps
-    echo "📋 Recent logs:"
-    sudo $DOCKER_BIN compose -f $COMPOSE_FILE logs --tail=50
-fi
-
-echo "✅ Docker deployment completed"
-'''
-        
-        success, output = self.client.run_command(script, timeout=1200)
-        print(output)
-        
-        if not success:
-            print("❌ Docker deployment failed")
-            return False
-        
-        print("✅ Application deployed with Docker successfully")
-        return True
-
-    def _deploy_application_files(self, package_file) -> bool:
-        """Deploy application files to the appropriate location"""
+    def _get_target_directory(self) -> str:
+        """Determine target directory based on app type and dependencies"""
         app_type = self.config.get('application.type')
         
         # Fallback: detect app type from dependencies if not specified
@@ -475,39 +215,53 @@ echo "✅ Docker deployment completed"
         
         print(f"📋 Detected app type: {app_type}")
         
-        # Determine deployment target based on app type and installed dependencies
-        if app_type == 'nodejs':
-            target_dir = '/opt/nodejs-app'
-        elif app_type == 'python':
-            target_dir = '/opt/python-app'
-        elif app_type == 'docker':
-            target_dir = '/opt/docker-app'
-        elif app_type == 'web':
-            # For web apps, check which server is installed
-            if 'nodejs' in self.dependency_manager.installed_dependencies:
-                target_dir = '/opt/nodejs-app'
-            elif 'apache' in self.dependency_manager.installed_dependencies:
-                target_dir = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
-            elif 'nginx' in self.dependency_manager.installed_dependencies:
-                target_dir = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
-            else:
-                target_dir = '/var/www/html'
-        elif app_type == 'api':
-            if 'python' in self.dependency_manager.installed_dependencies:
-                target_dir = '/opt/python-app'
-            elif 'nodejs' in self.dependency_manager.installed_dependencies:
-                target_dir = '/opt/nodejs-app'
-            else:
-                target_dir = '/opt/app'
-        elif app_type == 'static':
-            # For static sites, use nginx document_root if nginx is enabled
-            if 'nginx' in self.dependency_manager.installed_dependencies:
-                target_dir = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
-            else:
-                target_dir = '/var/www/html'
-        else:
-            target_dir = '/opt/app'
+        # Map app types to target directories
+        APP_TYPE_DIRS = {
+            'nodejs': '/opt/nodejs-app',
+            'python': '/opt/python-app',
+            'docker': '/opt/docker-app',
+        }
         
+        # Direct mapping for specific app types
+        if app_type in APP_TYPE_DIRS:
+            return APP_TYPE_DIRS[app_type]
+        
+        # For generic types, determine based on installed dependencies
+        if app_type in ['web', 'api', 'static']:
+            # Check for runtime dependencies first
+            if 'nodejs' in self.dependency_manager.installed_dependencies:
+                return '/opt/nodejs-app'
+            elif 'python' in self.dependency_manager.installed_dependencies:
+                return '/opt/python-app'
+            
+            # Check for web servers and use their document root
+            if 'apache' in self.dependency_manager.installed_dependencies:
+                return self.config.get('dependencies.apache.config.document_root', '/var/www/html')
+            elif 'nginx' in self.dependency_manager.installed_dependencies:
+                return self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
+            
+            # Default for web apps
+            return '/var/www/html'
+        
+        # Default fallback
+        return '/opt/app'
+    
+    def _get_file_owner(self, target_dir: str) -> str:
+        """Determine appropriate file owner based on target directory and dependencies"""
+        # Node.js and Python apps run as ubuntu user
+        if target_dir in ['/opt/nodejs-app', '/opt/python-app', '/opt/docker-app', '/opt/app']:
+            return 'ubuntu:ubuntu'
+        
+        # Web server directories need www-data
+        if any(dep in self.dependency_manager.installed_dependencies for dep in ['apache', 'nginx']):
+            return 'www-data:www-data'
+        
+        # Default to ubuntu
+        return 'ubuntu:ubuntu'
+    
+    def _deploy_application_files(self, package_file) -> bool:
+        """Deploy application files to the appropriate location"""
+        target_dir = self._get_target_directory()
         print(f"📁 Target directory: {target_dir}")
         
         # Get expected directory from config
@@ -606,53 +360,23 @@ echo ""
 echo "📋 Files in {target_dir} after deployment:"
 ls -la {target_dir}/ | head -20
 
-# Set proper ownership based on application type
+# Set proper ownership
 '''
         
-        # Check if nginx or apache are enabled in config
-        nginx_enabled = self.config.get('dependencies.nginx.enabled', False)
-        apache_enabled = self.config.get('dependencies.apache.enabled', False)
-        nodejs_enabled = self.config.get('dependencies.nodejs.enabled', False)
+        # Get appropriate owner for this deployment
+        owner = self._get_file_owner(target_dir)
         
-        # Debug logging
         script += f'''
-echo "🔍 Permission Debug Info:"
-echo "  App Type: {app_type}"
-echo "  Nginx Enabled: {nginx_enabled}"
-echo "  Apache Enabled: {apache_enabled}"
-echo "  Node.js Enabled: {nodejs_enabled}"
-echo "  Installed Dependencies: {','.join(self.dependency_manager.installed_dependencies)}"
-'''
-        
-        # For Node.js apps, always use ubuntu user
-        if 'nodejs' in self.dependency_manager.installed_dependencies or nodejs_enabled:
-            script += f'''
-
-echo "📝 Setting Node.js app permissions (ubuntu:ubuntu)"
-sudo chown -R ubuntu:ubuntu {target_dir}
+echo "📝 Setting file permissions ({owner})"
+sudo chown -R {owner} {target_dir}
 sudo chmod -R 755 {target_dir}
-echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
-'''
-        elif (app_type in ['web', 'static'] or 
-              'nginx' in self.dependency_manager.installed_dependencies or 
-              'apache' in self.dependency_manager.installed_dependencies or
-              nginx_enabled or apache_enabled):
-            # Web servers need www-data ownership
-            script += f'''
 
-echo "📝 Setting web server permissions (www-data:www-data)"
-sudo chown -R www-data:www-data {target_dir}
-sudo chmod -R 755 {target_dir}
-sudo find {target_dir} -type f -exec chmod 644 {{}} \\;
-echo "✅ Set ownership to www-data:www-data for web server"
-ls -la {target_dir}/ | head -10
-'''
-        else:
-            script += f'''
+# Set stricter permissions for web-served files
+if [ "{owner}" = "www-data:www-data" ]; then
+    sudo find {target_dir} -type f -exec chmod 644 {{}} \\;
+fi
 
-echo "📝 Setting default permissions (ubuntu:ubuntu)"
-sudo chown -R ubuntu:ubuntu {target_dir}
-sudo chmod -R 755 {target_dir}
+echo "✅ Set ownership to {owner}"
 '''
         
         script += '''
@@ -663,712 +387,38 @@ echo "✅ Application files deployed successfully"
         return success
 
     def _configure_application(self) -> bool:
-        """Configure application based on installed dependencies"""
-        success = True
-        
+        """Configure application based on installed dependencies using modular configurators"""
         print(f"🔍 Detected installed dependencies: {self.dependency_manager.installed_dependencies}")
         
-        # Configure web server if installed
-        if 'apache' in self.dependency_manager.installed_dependencies:
-            print("🔧 Configuring Apache...")
-            success &= self._configure_apache_for_app()
+        # Create configurators based on installed dependencies
+        configurators = ConfiguratorFactory.create_configurators(
+            self.client,
+            self.config,
+            self.dependency_manager.installed_dependencies
+        )
         
-        if 'nginx' in self.dependency_manager.installed_dependencies:
-            print("🔧 Configuring Nginx...")
-            success &= self._configure_nginx_for_app()
+        if not configurators:
+            print("ℹ️  No configurators needed for this deployment")
+            return True
         
-        # Configure PHP if installed
-        if 'php' in self.dependency_manager.installed_dependencies:
-            print("🔧 Configuring PHP...")
-            success &= self._configure_php_for_app()
+        print(f"📋 Running {len(configurators)} configurator(s)...")
         
-        # Configure Python if installed
-        if 'python' in self.dependency_manager.installed_dependencies:
-            print("🔧 Configuring Python...")
-            success &= self._configure_python_for_app()
-        else:
-            print("⚠️  Python not detected in installed dependencies, skipping Python configuration")
+        # Run each configurator
+        success = True
+        for configurator in configurators:
+            configurator_name = configurator.__class__.__name__
+            print(f"\n🔧 Running {configurator_name}...")
+            
+            try:
+                if not configurator.configure():
+                    print(f"⚠️  {configurator_name} reported issues")
+                    success = False
+                else:
+                    print(f"✅ {configurator_name} completed successfully")
+            except Exception as e:
+                print(f"❌ {configurator_name} failed with error: {str(e)}")
+                success = False
         
-        # Configure Node.js if installed
-        if 'nodejs' in self.dependency_manager.installed_dependencies:
-            print("🔧 Configuring Node.js...")
-            success &= self._configure_nodejs_for_app()
-        
-        # Configure database connections
-        success &= self._configure_database_connections()
-        
-        return success
-
-    def _configure_apache_for_app(self) -> bool:
-        """Configure Apache for the application"""
-        app_type = self.config.get('application.type', 'web')
-        document_root = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
-        
-        script = f'''
-set -e
-echo "Configuring Apache for application..."
-
-# Create virtual host configuration
-cat > /tmp/app.conf << 'EOF'
-<VirtualHost *:80>
-    DocumentRoot {document_root}
-    
-    <Directory {document_root}>
-        Options Indexes FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-    
-    # Enable rewrite engine for pretty URLs
-    RewriteEngine On
-    
-    # Security headers
-    Header always set X-Content-Type-Options nosniff
-    Header always set X-Frame-Options DENY
-    Header always set X-XSS-Protection "1; mode=block"
-    
-    ErrorLog /var/log/apache2/app_error.log
-    CustomLog /var/log/apache2/app_access.log combined
-</VirtualHost>
-EOF
-
-# Install the configuration
-sudo mv /tmp/app.conf /etc/apache2/sites-available/app.conf
-sudo a2ensite app.conf
-sudo a2dissite 000-default.conf || true
-
-# Enable required modules
-sudo a2enmod rewrite
-sudo a2enmod headers
-
-echo "✅ Apache configured for application"
-'''
-        
-        success, output = self.client.run_command(script, timeout=60)
-        return success
-
-    def _configure_nginx_for_app(self) -> bool:
-        """Configure Nginx for the application"""
-        document_root = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
-        
-        # Check if Node.js is enabled - if so, configure as reverse proxy
-        if 'nodejs' in self.dependency_manager.installed_dependencies:
-            script = '''
-set -e
-echo "Configuring Nginx as reverse proxy for Node.js application..."
-
-# Create server block configuration for Node.js proxy
-cat > /tmp/app << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-    
-    # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
-    add_header X-XSS-Protection "1; mode=block";
-}
-EOF
-
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
-echo "✅ Nginx configured as reverse proxy for Node.js"
-'''
-        # Check if Python is enabled - if so, configure as reverse proxy to port 5000
-        elif 'python' in self.dependency_manager.installed_dependencies:
-            script = '''
-set -e
-echo "Configuring Nginx as reverse proxy for Python application..."
-
-# Create server block configuration for Python proxy
-cat > /tmp/app << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    # Health check endpoint
-    location /health {
-        proxy_pass http://localhost:5000/health;
-        access_log off;
-    }
-    
-    # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
-    add_header X-XSS-Protection "1; mode=block";
-}
-EOF
-
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
-echo "✅ Nginx configured as reverse proxy for Python"
-'''
-        else:
-            # Check if this is a React app (has index.html but no index.php)
-            app_type = self.config.get('application.type', 'web')
-            script = f'''
-set -e
-echo "Configuring Nginx for application..."
-
-# Check if this is a React/SPA application
-if [ -f "{document_root}/index.html" ] && [ ! -f "{document_root}/index.php" ]; then
-    echo "Detected React/SPA application"
-    cat > /tmp/app << 'EOF'
-server {{
-    listen 80;
-    server_name _;
-    
-    root {document_root};
-    index index.html;
-    
-    location / {{
-        try_files $uri $uri/ /index.html;
-    }}
-    
-    # Cache static assets
-    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {{
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }}
-    
-    # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
-    add_header X-XSS-Protection "1; mode=block";
-}}
-EOF
-else
-    echo "Detected PHP/traditional web application"
-    cat > /tmp/app << 'EOF'
-server {{
-    listen 80;
-    server_name _;
-    
-    root {document_root};
-    index index.php index.html index.htm;
-    
-    location / {{
-        try_files $uri $uri/ /index.php?$query_string;
-    }}
-    
-    location ~ \\\\.php$ {{
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
-    }}
-    
-    location ~ /\\\\.ht {{
-        deny all;
-    }}
-    
-    # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
-    add_header X-XSS-Protection "1; mode=block";
-}}
-EOF
-fi
-
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
-echo "✅ Nginx configured for application"
-'''
-        
-        success, output = self.client.run_command(script, timeout=60)
-        return success
-
-    def _configure_php_for_app(self) -> bool:
-        """Configure PHP for the application"""
-        script = '''
-set -e
-echo "Configuring PHP for application..."
-
-# Configure PHP settings for production
-PHP_INI="/etc/php/8.1/apache2/php.ini"
-if [ -f "$PHP_INI" ]; then
-    sudo sed -i 's/display_errors = On/display_errors = Off/' "$PHP_INI"
-    sudo sed -i 's/;date.timezone =/date.timezone = UTC/' "$PHP_INI"
-    sudo sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 10M/' "$PHP_INI"
-    sudo sed -i 's/post_max_size = 8M/post_max_size = 10M/' "$PHP_INI"
-fi
-
-# Configure PHP-FPM if available
-PHP_FPM_INI="/etc/php/8.1/fpm/php.ini"
-if [ -f "$PHP_FPM_INI" ]; then
-    sudo sed -i 's/display_errors = On/display_errors = Off/' "$PHP_FPM_INI"
-    sudo sed -i 's/;date.timezone =/date.timezone = UTC/' "$PHP_FPM_INI"
-fi
-
-echo "✅ PHP configured for application"
-'''
-        
-        success, output = self.client.run_command(script, timeout=60)
-        return success
-
-    def _configure_python_for_app(self) -> bool:
-        """Configure Python for the application"""
-        app_type = self.config.get('application.type', 'web')
-        
-        if app_type == 'api':
-            script = '''
-set -e
-echo "Configuring Python for API application..."
-
-# Check if app files exist
-if [ ! -f "/opt/app/app.py" ]; then
-    echo "❌ No app.py found in /opt/app"
-    ls -la /opt/app/ || echo "Directory does not exist"
-    exit 1
-fi
-
-# Install Python dependencies if requirements.txt exists
-if [ -f "/opt/app/requirements.txt" ]; then
-    echo "📦 Installing Python dependencies..."
-    cd /opt/app
-    
-    # Ensure pip is installed
-    if ! command -v pip3 &> /dev/null; then
-        echo "Installing pip3..."
-        sudo apt-get update
-        sudo apt-get install -y python3-pip
-    fi
-    
-    # Install dependencies
-    sudo pip3 install -r requirements.txt 2>&1 | tee /tmp/pip-install.log
-    echo "✅ Dependencies installed"
-else
-    echo "ℹ️  No requirements.txt found, skipping dependency installation"
-fi
-
-# Create log directory
-sudo mkdir -p /var/log/python-app
-sudo chown ubuntu:ubuntu /var/log/python-app
-
-# Create systemd service for Python app
-echo "📝 Creating systemd service file..."
-sudo tee /etc/systemd/system/python-app.service > /dev/null << 'EOF'
-[Unit]
-Description=Python Flask Application
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/opt/app
-Environment=PATH=/usr/bin:/usr/local/bin
-Environment=FLASK_APP=app.py
-Environment=FLASK_ENV=production
-ExecStart=/usr/bin/python3 /opt/app/app.py
-Restart=always
-RestartSec=10
-StandardOutput=append:/var/log/python-app/output.log
-StandardError=append:/var/log/python-app/error.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Reload systemd and enable the service
-echo "🔄 Reloading systemd..."
-sudo systemctl daemon-reload
-sudo systemctl enable python-app.service
-
-# Stop any existing instance
-sudo systemctl stop python-app.service 2>/dev/null || true
-
-# Start the service
-echo "🚀 Starting Python application service..."
-sudo systemctl start python-app.service
-
-# Wait and check if service started successfully
-sleep 5
-
-if systemctl is-active --quiet python-app.service; then
-    echo "✅ Python app service started successfully"
-    sudo systemctl status python-app.service --no-pager
-    
-    # Check if app is listening on port 5000
-    sleep 2
-    if sudo ss -tlnp 2>/dev/null | grep -q ":5000" || sudo netstat -tlnp 2>/dev/null | grep -q ":5000"; then
-        echo "✅ Application is listening on port 5000"
-    else
-        echo "⚠️  Application may not be listening on port 5000"
-        sudo ss -tlnp 2>/dev/null | grep python || sudo netstat -tlnp 2>/dev/null | grep python || echo "No python process found listening"
-    fi
-    
-    # Test local connection
-    if curl -s http://localhost:5000/ > /dev/null; then
-        echo "✅ Local connection to port 5000 successful"
-    else
-        echo "⚠️  Local connection to port 5000 failed"
-    fi
-else
-    echo "❌ Python app service failed to start"
-    sudo systemctl status python-app.service --no-pager || true
-    echo "=== Service Logs ==="
-    sudo journalctl -u python-app.service -n 50 --no-pager || true
-    echo "=== Application Error Log ==="
-    sudo cat /var/log/python-app/error.log 2>/dev/null || echo "No error log found"
-    exit 1
-fi
-
-echo "✅ Python app service configured"
-'''
-        else:
-            script = '''
-set -e
-echo "Configuring Python for web application..."
-
-# Install mod_wsgi if Apache is present
-if systemctl is-active --quiet apache2; then
-    sudo apt-get update
-    sudo apt-get install -y libapache2-mod-wsgi-py3
-    sudo a2enmod wsgi
-    echo "✅ mod_wsgi configured for Apache"
-fi
-'''
-        
-        success, output = self.client.run_command(script, timeout=120)
-        return success
-
-    def _configure_nodejs_for_app(self) -> bool:
-        """Configure Node.js for the application"""
-        script = '''
-set -e
-echo "Configuring Node.js for application..."
-
-# Detect entry point file
-ENTRY_POINT=""
-if [ -f "/opt/nodejs-app/server.js" ]; then
-    ENTRY_POINT="server.js"
-    echo "✅ Found server.js as entry point"
-elif [ -f "/opt/nodejs-app/app.js" ]; then
-    ENTRY_POINT="app.js"
-    echo "✅ Found app.js as entry point"
-elif [ -f "/opt/nodejs-app/index.js" ]; then
-    ENTRY_POINT="index.js"
-    echo "✅ Found index.js as entry point"
-else
-    echo "❌ No entry point file found (server.js, app.js, or index.js)"
-    ls -la /opt/nodejs-app/ || echo "Directory does not exist"
-    exit 1
-fi
-
-# Install dependencies if package.json exists
-if [ -f "/opt/nodejs-app/package.json" ]; then
-    echo "📦 Installing Node.js dependencies..."
-    cd /opt/nodejs-app && sudo -u ubuntu npm install --production 2>&1 | tee /tmp/npm-install.log
-    echo "✅ Dependencies installed"
-else
-    echo "ℹ️  No package.json found, skipping dependency installation"
-fi
-
-# Create log directory
-sudo mkdir -p /var/log/nodejs-app
-sudo chown ubuntu:ubuntu /var/log/nodejs-app
-
-# Create systemd service for Node.js app
-echo "📝 Creating systemd service file with entry point: $ENTRY_POINT"
-sudo tee /etc/systemd/system/nodejs-app.service > /dev/null << EOF
-[Unit]
-Description=Node.js Application
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/opt/nodejs-app
-ExecStart=/usr/bin/node $ENTRY_POINT
-Restart=always
-RestartSec=10
-Environment=NODE_ENV=production
-Environment=PORT=3000
-StandardOutput=append:/var/log/nodejs-app/output.log
-StandardError=append:/var/log/nodejs-app/error.log
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Reload systemd and enable the service
-echo "🔄 Reloading systemd..."
-sudo systemctl daemon-reload
-sudo systemctl enable nodejs-app.service
-
-# Stop any existing instance
-sudo systemctl stop nodejs-app.service 2>/dev/null || true
-
-# Start the service
-echo "🚀 Starting Node.js application service..."
-sudo systemctl start nodejs-app.service
-
-# Wait and check if service started successfully
-sleep 5
-
-if systemctl is-active --quiet nodejs-app.service; then
-    echo "✅ Node.js app service started successfully"
-    sudo systemctl status nodejs-app.service --no-pager
-    
-    # Check if app is listening on port 3000
-    sleep 2
-    if sudo ss -tlnp 2>/dev/null | grep -q ":3000" || sudo netstat -tlnp 2>/dev/null | grep -q ":3000"; then
-        echo "✅ Application is listening on port 3000"
-    else
-        echo "⚠️  Application may not be listening on port 3000"
-        sudo ss -tlnp 2>/dev/null | grep node || sudo netstat -tlnp 2>/dev/null | grep node || echo "No node process found listening"
-    fi
-    
-    # Test local connection
-    if curl -s http://localhost:3000/ > /dev/null; then
-        echo "✅ Local connection to port 3000 successful"
-    else
-        echo "⚠️  Local connection to port 3000 failed"
-    fi
-else
-    echo "❌ Node.js app service failed to start"
-    sudo systemctl status nodejs-app.service --no-pager || true
-    echo "=== Service Logs ==="
-    sudo journalctl -u nodejs-app.service -n 50 --no-pager || true
-    echo "=== Application Error Log ==="
-    sudo cat /var/log/nodejs-app/error.log 2>/dev/null || echo "No error log found"
-    exit 1
-fi
-'''
-        
-        success, output = self.client.run_command(script, timeout=420)
-        print(output)
-        return success
-
-    def _configure_database_connections(self) -> bool:
-        """Configure database connections based on enabled dependencies"""
-        print("🔧 Configuring database connections...")
-        
-        # Check if MySQL is enabled in config
-        mysql_enabled = self.config.get('dependencies.mysql.enabled', False)
-        mysql_external = self.config.get('dependencies.mysql.external', False)
-        
-        if mysql_enabled:
-            if mysql_external:
-                # Try to configure RDS connection
-                return self._configure_rds_connection()
-            else:
-                # Configure local MySQL
-                return self._configure_local_mysql()
-        
-        # Check if PostgreSQL is enabled
-        postgresql_enabled = self.config.get('dependencies.postgresql.enabled', False)
-        if postgresql_enabled:
-            return self._configure_local_postgresql()
-        
-        print("ℹ️  No database dependencies enabled, skipping database configuration")
-        return True
-
-    def _configure_rds_connection(self) -> bool:
-        """Configure RDS database connection"""
-        print("🔧 Configuring RDS database connection...")
-        
-        rds_config = self.config.get('dependencies.mysql.rds', {})
-        database_name = rds_config.get('database_name', 'lamp-app-db')
-        
-        script = f'''
-set -e
-echo "Setting up RDS database connection..."
-
-# Install MySQL client
-sudo apt-get update
-sudo apt-get install -y mysql-client
-
-# Try to get RDS connection details using AWS CLI/boto3
-# This would normally be handled by the RDS manager
-echo "RDS configuration attempted - requires valid AWS credentials"
-
-# Create fallback environment file for now
-if [ ! -f /var/www/html/.env ]; then
-    echo "Creating fallback local database environment file..."
-    sudo tee /var/www/html/.env > /dev/null << 'EOF'
-# Database Configuration - Fallback to Local MySQL
-DB_EXTERNAL=false
-DB_TYPE=MYSQL
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=app_db
-DB_USERNAME=root
-DB_PASSWORD=root123
-DB_CHARSET=utf8mb4
-
-# Application Configuration
-APP_ENV=production
-APP_DEBUG=false
-APP_NAME="Generic Application"
-EOF
-
-    sudo chown www-data:www-data /var/www/html/.env
-    sudo chmod 644 /var/www/html/.env
-    echo "✅ Fallback environment file created"
-fi
-
-echo "✅ RDS configuration completed (with local fallback)"
-'''
-        
-        success, output = self.client.run_command(script, timeout=120)
-        
-        # If RDS configuration fails, fall back to local MySQL
-        if not success:
-            print("⚠️  RDS configuration failed, falling back to local MySQL")
-            return self._configure_local_mysql()
-        
-        return success
-
-    def _configure_local_mysql(self) -> bool:
-        """Configure local MySQL database"""
-        print("🔧 Configuring local MySQL database...")
-        
-        script = '''
-set -e
-echo "Setting up local MySQL database..."
-
-# Install MySQL if not present
-if ! command -v mysql &> /dev/null; then
-    echo "Installing MySQL server..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server
-fi
-
-# Start and enable MySQL
-sudo systemctl start mysql
-sudo systemctl enable mysql
-
-# Configure MySQL root user
-echo "Configuring MySQL root user..."
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" 2>/dev/null || echo "Root password configuration attempted"
-
-# Create application database
-mysql -u root -proot123 -e "CREATE DATABASE IF NOT EXISTS app_db;" 2>/dev/null && echo "✅ app_db database created" || echo "❌ Failed to create database"
-
-# Create test table with sample data
-mysql -u root -proot123 app_db -e "
-CREATE TABLE IF NOT EXISTS test_table (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-INSERT IGNORE INTO test_table (id, name) VALUES 
-    (1, 'Test Entry'),
-    (2, 'Sample Data'),
-    (3, 'Database Working');
-" 2>/dev/null && echo "✅ Test table created with sample data" || echo "❌ Failed to create test table"
-
-# Test connection
-mysql -u root -proot123 -e "SELECT COUNT(*) as record_count FROM test_table;" app_db 2>/dev/null && echo "✅ MySQL connection test successful" || echo "❌ MySQL connection test failed"
-
-# Create environment file
-sudo tee /var/www/html/.env > /dev/null << 'EOF'
-# Database Configuration - Local MySQL
-DB_EXTERNAL=false
-DB_TYPE=MYSQL
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=app_db
-DB_USERNAME=root
-DB_PASSWORD=root123
-DB_CHARSET=utf8mb4
-
-# Application Configuration
-APP_ENV=production
-APP_DEBUG=false
-APP_NAME="Generic Application"
-EOF
-
-# Set proper permissions
-sudo chown www-data:www-data /var/www/html/.env
-sudo chmod 644 /var/www/html/.env
-
-echo "✅ Local MySQL database setup completed"
-'''
-        
-        success, output = self.client.run_command_with_live_output(script, timeout=420)
-        return success
-
-    def _configure_local_postgresql(self) -> bool:
-        """Configure local PostgreSQL database"""
-        print("🔧 Configuring local PostgreSQL database...")
-        
-        script = '''
-set -e
-echo "Setting up local PostgreSQL database..."
-
-# Install PostgreSQL
-sudo apt-get update
-sudo apt-get install -y postgresql postgresql-contrib
-
-# Start and enable PostgreSQL
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Create application database and user
-sudo -u postgres psql -c "CREATE DATABASE app_db;" 2>/dev/null || echo "Database may already exist"
-sudo -u postgres psql -c "CREATE USER app_user WITH PASSWORD 'app_password';" 2>/dev/null || echo "User may already exist"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE app_db TO app_user;" 2>/dev/null || echo "Privileges granted"
-
-# Create environment file
-sudo tee /var/www/html/.env > /dev/null << 'EOF'
-# Database Configuration - Local PostgreSQL
-DB_EXTERNAL=false
-DB_TYPE=POSTGRESQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=app_db
-DB_USERNAME=app_user
-DB_PASSWORD=app_password
-DB_CHARSET=utf8
-
-# Application Configuration
-APP_ENV=production
-APP_DEBUG=false
-APP_NAME="Generic Application"
-EOF
-
-# Set proper permissions
-sudo chown www-data:www-data /var/www/html/.env
-sudo chmod 644 /var/www/html/.env
-
-echo "✅ Local PostgreSQL database setup completed"
-'''
-        
-        success, output = self.client.run_command(script, timeout=420)
         return success
 
     def _setup_app_specific_config(self) -> bool:
@@ -1461,11 +511,16 @@ echo "✅ Deployment environment variables set"
 set -e
 echo "Verifying deployment..."
 
-# Check if Node.js app service is running
-if systemctl is-active --quiet nodejs-app.service; then
-    echo "✅ Node.js application service is running"
-    sudo systemctl status nodejs-app.service --no-pager || true
-fi
+# Check if application services are running
+for service in nodejs-app python-app; do
+    if systemctl list-unit-files | grep -q "^${{service}}.service"; then
+        if systemctl is-active --quiet ${{service}}.service; then
+            echo "✅ ${{service}} service is running"
+        else
+            echo "⚠️  ${{service}} service is not running"
+        fi
+    fi
+done
 
 # Check if web server is running
 if systemctl is-active --quiet apache2; then
@@ -1476,11 +531,15 @@ else
     echo "⚠️  No web server detected as running"
 fi
 
-# Check if application files exist
-if [ -f "/opt/nodejs-app/app.js" ] || [ -f "/opt/nodejs-app/index.js" ]; then
+# Check if application files exist in common locations
+if [ -d "/opt/nodejs-app" ] && [ -n "$(ls -A /opt/nodejs-app 2>/dev/null)" ]; then
     echo "✅ Node.js application files found"
+elif [ -d "/opt/python-app" ] && [ -n "$(ls -A /opt/python-app 2>/dev/null)" ]; then
+    echo "✅ Python application files found"
+elif [ -d "/opt/docker-app" ] && [ -n "$(ls -A /opt/docker-app 2>/dev/null)" ]; then
+    echo "✅ Docker application files found"
 elif [ -f "/var/www/html/index.php" ] || [ -f "/var/www/html/index.html" ]; then
-    echo "✅ Application files found"
+    echo "✅ Web application files found"
 else
     echo "⚠️  No main application files found"
 fi
@@ -1530,28 +589,31 @@ echo "✅ Cleanup completed"
 set -e
 echo "🔧 Starting performance optimization..."
 
-# Optimize Apache if running
-if systemctl is-active --quiet apache2; then
-    echo "⚡ Optimizing Apache web server..."
-    # Enable compression
-    sudo a2enmod deflate
-    sudo a2enmod expires
-    sudo a2enmod headers
-    sudo systemctl reload apache2
-    echo "✅ Apache performance optimized"
-fi
+# Optimize web servers if running
+for webserver in apache2 nginx; do
+    if systemctl is-active --quiet $webserver 2>/dev/null; then
+        echo "⚡ Optimizing $webserver web server..."
+        if [ "$webserver" = "apache2" ]; then
+            sudo a2enmod deflate 2>/dev/null || true
+            sudo a2enmod expires 2>/dev/null || true
+            sudo a2enmod headers 2>/dev/null || true
+            sudo systemctl reload apache2 2>/dev/null || true
+        fi
+        echo "✅ $webserver performance optimized"
+    fi
+done
 
 # Optimize PHP if installed
 if which php > /dev/null 2>&1; then
     echo "⚡ Optimizing PHP configuration..."
-    # Enable OPcache if available
-    PHP_INI="/etc/php/8.1/apache2/php.ini"
-    if [ -f "$PHP_INI" ]; then
-        sudo sed -i 's/;opcache.enable=1/opcache.enable=1/' "$PHP_INI" || true
-        sudo sed -i 's/;opcache.memory_consumption=128/opcache.memory_consumption=128/' "$PHP_INI" || true
-        sudo sed -i 's/;opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/' "$PHP_INI" || true
-        sudo sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/' "$PHP_INI" || true
-    fi
+    for PHP_INI in /etc/php/*/apache2/php.ini /etc/php/*/fpm/php.ini; do
+        if [ -f "$PHP_INI" ]; then
+            sudo sed -i 's/;opcache.enable=1/opcache.enable=1/' "$PHP_INI" 2>/dev/null || true
+            sudo sed -i 's/;opcache.memory_consumption=128/opcache.memory_consumption=128/' "$PHP_INI" 2>/dev/null || true
+            sudo sed -i 's/;opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/' "$PHP_INI" 2>/dev/null || true
+            sudo sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/' "$PHP_INI" 2>/dev/null || true
+        fi
+    done
     echo "✅ PHP performance optimized"
 fi
 
@@ -1610,9 +672,52 @@ echo "✅ Performance optimization completed successfully"
         print("\n🎯 Next Steps:")
         if instance_info and instance_info.get('public_ip'):
             print(f"   🌐 Visit: http://{instance_info['public_ip']}")
-        print("   📝 Check logs: /var/log/apache2/")
-        print("   🔧 Config files: /var/www/html/.env")
-        print("   📊 Monitor: systemctl status apache2 mysql")
+        
+        # Show relevant log locations based on what's installed
+        log_locations = []
+        if 'apache' in installed:
+            log_locations.append("/var/log/apache2/")
+        if 'nginx' in installed:
+            log_locations.append("/var/log/nginx/")
+        if 'nodejs' in installed:
+            log_locations.append("/var/log/nodejs-app/")
+        if 'python' in installed:
+            log_locations.append("/var/log/python-app/")
+        
+        if log_locations:
+            print(f"   📝 Check logs: {', '.join(log_locations)}")
+        
+        # Show relevant config locations
+        config_locations = []
+        if 'apache' in installed or 'nginx' in installed:
+            config_locations.append("/var/www/html/.env")
+        if 'nodejs' in installed:
+            config_locations.append("/opt/nodejs-app/")
+        if 'python' in installed:
+            config_locations.append("/opt/python-app/")
+        
+        if config_locations:
+            print(f"   🔧 Config files: {', '.join(config_locations)}")
+        
+        # Show relevant services to monitor
+        services = []
+        if 'apache' in installed:
+            services.append("apache2")
+        if 'nginx' in installed:
+            services.append("nginx")
+        if 'mysql' in installed:
+            services.append("mysql")
+        if 'postgresql' in installed:
+            services.append("postgresql")
+        if 'nodejs' in installed:
+            services.append("nodejs-app")
+        if 'python' in installed:
+            services.append("python-app")
+        if 'docker' in installed:
+            services.append("docker")
+        
+        if services:
+            print(f"   📊 Monitor: systemctl status {' '.join(services)}")
         
         print("="*60)
 
