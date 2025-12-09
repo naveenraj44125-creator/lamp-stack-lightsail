@@ -625,6 +625,7 @@ echo "  Installed Dependencies: {','.join(self.dependency_manager.installed_depe
         # For Node.js apps, always use ubuntu user
         if 'nodejs' in self.dependency_manager.installed_dependencies or nodejs_enabled:
             script += f'''
+
 echo "📝 Setting Node.js app permissions (ubuntu:ubuntu)"
 sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
@@ -636,6 +637,7 @@ echo "✅ Set ownership to ubuntu:ubuntu for Node.js app"
               nginx_enabled or apache_enabled):
             # Web servers need www-data ownership
             script += f'''
+
 echo "📝 Setting web server permissions (www-data:www-data)"
 sudo chown -R www-data:www-data {target_dir}
 sudo chmod -R 755 {target_dir}
@@ -645,6 +647,7 @@ ls -la {target_dir}/ | head -10
 '''
         else:
             script += f'''
+
 echo "📝 Setting default permissions (ubuntu:ubuntu)"
 sudo chown -R ubuntu:ubuntu {target_dir}
 sudo chmod -R 755 {target_dir}
