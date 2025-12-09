@@ -515,9 +515,11 @@ echo "✅ Docker deployment completed"
         expected_dirs = []
         for pf in package_files:
             # Extract directory name from patterns like "mcp-server/" or "example-app/"
-            dir_name = pf.rstrip('/').split('/')[-1] if pf else None
-            if dir_name:
-                expected_dirs.append(dir_name)
+            # Only add if it looks like a directory (ends with / or contains /)
+            if '/' in pf:
+                dir_name = pf.rstrip('/').split('/')[0] if pf else None
+                if dir_name and dir_name not in expected_dirs:
+                    expected_dirs.append(dir_name)
         
         # First, copy the package file to the remote instance
         print(f"📤 Uploading package file {package_file} to remote instance...")
