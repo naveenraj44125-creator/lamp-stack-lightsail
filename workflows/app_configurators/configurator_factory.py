@@ -2,7 +2,7 @@
 from typing import List
 from .apache_configurator import ApacheConfigurator
 from .nginx_configurator import NginxConfigurator
-from .php_configurator import PHPConfigurator
+from .php_configurator import PhpConfigurator
 from .python_configurator import PythonConfigurator
 from .nodejs_configurator import NodeJSConfigurator
 from .docker_configurator import DockerConfigurator
@@ -35,7 +35,7 @@ class ConfiguratorFactory:
         
         # Language/runtime configurators
         if 'php' in installed_dependencies:
-            configurators.append(PHPConfigurator(client, config))
+            configurators.append(PhpConfigurator(client, config))
         
         if 'python' in installed_dependencies:
             configurators.append(PythonConfigurator(client, config))
