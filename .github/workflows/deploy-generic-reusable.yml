@@ -1,6 +1,6 @@
 name: Reusable Generic Application Deployment
 
-on:
+"on":
   workflow_call:
     inputs:
       config_file:
