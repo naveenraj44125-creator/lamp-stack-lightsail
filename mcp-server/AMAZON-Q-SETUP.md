@@ -5,7 +5,7 @@ Complete guide to configure the Lightsail Deployment MCP Server with Amazon Q.
 ## Prerequisites
 
 - Amazon Q Developer installed (VS Code extension or standalone)
-- MCP server deployed and running (http://52.202.252.239:3000)
+- MCP server deployed and running (http://18.215.231.164:3000)
 - Access to Amazon Q settings
 
 ## Configuration Methods
@@ -35,7 +35,7 @@ Add this to your MCP configuration file:
 {
   "mcpServers": {
     "lightsail-deployment": {
-      "url": "http://52.202.252.239:3000/sse",
+      "url": "http://18.215.231.164:3000/sse",
       "transport": "sse",
       "description": "AWS Lightsail deployment automation tools"
     }
@@ -48,7 +48,7 @@ Add this to your MCP configuration file:
 {
   "mcpServers": {
     "lightsail-deployment": {
-      "url": "http://52.202.252.239:3000/sse",
+      "url": "http://18.215.231.164:3000/sse",
       "transport": "sse",
       "headers": {
         "Authorization": "Bearer YOUR_TOKEN_HERE"
@@ -167,7 +167,7 @@ Diagnose deployment issues in my current repository
 
 **Check server health:**
 ```bash
-curl http://52.202.252.239:3000/health
+curl http://18.215.231.164:3000/health
 ```
 
 Expected response:
@@ -205,7 +205,7 @@ If you get timeout errors:
    ```
 3. **Test SSE endpoint:**
    ```bash
-   curl -N http://52.202.252.239:3000/sse
+   curl -N http://18.215.231.164:3000/sse
    ```
 
 ## Security Considerations
@@ -271,7 +271,7 @@ Configure different servers for dev/prod:
       "description": "Development environment"
     },
     "lightsail-prod": {
-      "url": "http://52.202.252.239:3000/sse",
+      "url": "http://18.215.231.164:3000/sse",
       "description": "Production environment"
     }
   }
@@ -286,7 +286,7 @@ Increase timeout for slow connections:
 {
   "mcpServers": {
     "lightsail-deployment": {
-      "url": "http://52.202.252.239:3000/sse",
+      "url": "http://18.215.231.164:3000/sse",
       "timeout": 60000,
       "description": "AWS Lightsail deployment automation"
     }
