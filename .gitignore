@@ -37,3 +37,8 @@ debug-scripts/
 # Ignore AWS credentials
 .aws-creds.sh
 aws-creds.sh
+
+# Ignore monitor and test scripts (keep local only)
+monitor-*.sh
+test-v*.sh
+enhanced-monitor.sh
