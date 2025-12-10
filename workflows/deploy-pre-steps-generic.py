@@ -150,8 +150,8 @@ class GenericPreDeployer:
             os_info = OSDetector.get_user_info(self.client.os_type)
             web_user = os_info['web_user']
             web_group = os_info['web_group']
-            system_user = os_info['user']
-            system_group = os_info['group']
+            system_user = os_info['default_user']
+            system_group = os_info['default_user']  # Use same as user for group
         else:
             # Fallback to Ubuntu defaults
             web_user = 'www-data'
