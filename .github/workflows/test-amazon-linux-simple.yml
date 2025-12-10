@@ -1,0 +1,91 @@
+name: Test Amazon Linux Simple
+
+on:
+  workflow_dispatch:
+    inputs:
+      cleanup_after_test:
+        description: 'Delete instance after test'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
+
+jobs:
+  test-amazon-linux:
+    name: Deploy Amazon Linux Test
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-amazon-linux-test.config.yml'
+      skip_tests: false
+    secrets: inherit
+
+  cleanup-test-instance:
+    needs: [test-amazon-linux]
+    runs-on: ubuntu-latest
+    if: always() && inputs.cleanup_after_test == true
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600
+        aws-region: us-east-1
+
+    - name: Cleanup Test Instance
+      run: |
+        echo "🧹 Cleaning up test instance..."
+        
+        INSTANCE="amazon-linux-test-v1"
+        
+        echo "Checking instance: $INSTANCE"
+        
+        # Check if instance exists
+        if aws lightsail get-instance --instance-name "$INSTANCE" >/dev/null 2>&1; then
+          echo "  Deleting instance: $INSTANCE"
+          aws lightsail delete-instance --instance-name "$INSTANCE"
+          echo "  ✅ Instance $INSTANCE deleted"
+        else
+          echo "  ℹ️  Instance $INSTANCE not found (may have been deleted already)"
+        fi
+        
+        echo "🎉 Cleanup completed!"
+
+  test-summary:
+    needs: [test-amazon-linux]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## 🧪 Amazon Linux Support Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Amazon Linux test results
+        if [ "${{ needs.test-amazon-linux.result }}" == "success" ]; then
+          echo "### ✅ Amazon Linux 2023 Test: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- OS Detection: Working" >> $GITHUB_STEP_SUMMARY
+          echo "- Package Manager: yum commands successful" >> $GITHUB_STEP_SUMMARY
+          echo "- User Management: ec2-user and apache users configured" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependencies: httpd, php-fpm, mariadb installed correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- Application: LAMP stack deployed and accessible" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment URL**: ${{ needs.test-amazon-linux.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-amazon-linux.result }}" == "failure" ]; then
+          echo "### ❌ Amazon Linux 2023 Test: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Check the deployment logs for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-amazon-linux.result }}" == "skipped" ]; then
+          echo "### ⏭️ Amazon Linux 2023 Test: SKIPPED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Test Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Blueprint: amazon_linux_2023" >> $GITHUB_STEP_SUMMARY
+        echo "- Package Manager: yum" >> $GITHUB_STEP_SUMMARY
+        echo "- System User: ec2-user" >> $GITHUB_STEP_SUMMARY
+        echo "- Web User: apache" >> $GITHUB_STEP_SUMMARY
+        echo "- Web Server: httpd" >> $GITHUB_STEP_SUMMARY
+        echo "- Database: mariadb" >> $GITHUB_STEP_SUMMARY
+        echo "- Cleanup After Test: ${{ inputs.cleanup_after_test }}" >> $GITHUB_STEP_SUMMARY

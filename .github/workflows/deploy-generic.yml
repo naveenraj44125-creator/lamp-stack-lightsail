@@ -22,6 +22,7 @@ jobs:
     with:
       config_file: 'deployment-lamp-stack.config.yml'
       skip_tests: false
+    secrets: inherit
   
   summary:
     name: Deployment Summary
