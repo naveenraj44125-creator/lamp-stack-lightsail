@@ -12,7 +12,7 @@ lightsail:
   # Instance size configuration (optional)
   # If not specified, defaults are: nano_3_0 (512MB) for traditional apps, small_3_0 (2GB) for Docker apps
   # Available bundles: nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0
-  # bundle_id: "nano_3_0"  # 512MB RAM, 1 vCPU, 20GB SSD - Good for simple Python Flask apps
+  bundle_id: "small_3_0"  # 2GB RAM, 2 vCPU, 60GB SSD - Good performance for Python Flask apps
   
 # Application Configuration
 application:

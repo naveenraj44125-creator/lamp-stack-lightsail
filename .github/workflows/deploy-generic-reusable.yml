@@ -293,11 +293,11 @@ jobs:
                         print(f"   Recommended Docker bundles: {', '.join(docker_compatible_bundles)}")
                         print(f"   Proceeding with configured bundle...")
             elif docker_enabled and use_docker:
-                bundle_id = 'small_3_0'  # 2 GB RAM minimum for Docker
-                print(f"🐳 Docker deployment detected - using default bundle: {bundle_id} (2GB RAM)")
+                bundle_id = 'medium_3_0'  # 4 GB RAM for better Docker performance
+                print(f"🐳 Docker deployment detected - using default bundle: {bundle_id} (4GB RAM)")
             else:
-                bundle_id = 'nano_3_0'  # 512 MB RAM for traditional deployments
-                print(f"📦 Traditional deployment - using default bundle: {bundle_id} (512MB RAM)")
+                bundle_id = 'small_3_0'  # 2 GB RAM for traditional deployments
+                print(f"📦 Traditional deployment - using default bundle: {bundle_id} (2GB RAM)")
             
             # Create instance with appropriate settings
             try:

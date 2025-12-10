@@ -8,10 +8,10 @@ lightsail:
   static_ip: ""
   
   # Instance size configuration (optional)
-  # If not specified, defaults are: nano_3_0 (512MB) for traditional apps, small_3_0 (2GB) for Docker apps
+  # If not specified, defaults are: small_3_0 (2GB) for traditional apps, medium_3_0 (4GB) for Docker apps
   # Docker deployments require minimum 2GB RAM - use small_3_0 or larger
   # Available bundles: nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0
-  bundle_id: "small_3_0"  # 2GB RAM, 2 vCPU, 60GB SSD - Required for Docker deployments
+  bundle_id: "medium_3_0"  # 4GB RAM, 2 vCPU, 80GB SSD - Better performance for Docker deployments
 
 application:
   name: recipe-manager-docker
