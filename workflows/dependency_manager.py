@@ -1178,6 +1178,18 @@ echo "✅ Monitoring tools installation completed"
         web_user = self.user_info['web_user']
         web_group = self.user_info['web_group']
         
+        # Get OS-specific configuration
+        if self.os_info['package_manager'] == 'apt':
+            # Ubuntu/Debian
+            apache_service = 'apache2'
+            apache_conf_dir = '/etc/apache2'
+            apache_log_dir = '/var/log/apache2'
+        else:
+            # Amazon Linux/RHEL/CentOS
+            apache_service = 'httpd'
+            apache_conf_dir = '/etc/httpd'
+            apache_log_dir = '/var/log/httpd'
+        
         script = f'''
 set -e
 echo "Configuring web server on {self.os_type}..."
@@ -1190,10 +1202,166 @@ sudo chmod -R 755 /var/www/html
 sudo rm -f /var/www/html/index.html
 sudo rm -f /var/www/html/index.nginx-debian.html
 
+# Create a proper index.html for testing
+cat > /tmp/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Deployed Successfully</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }}
+        .container {{
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }}
+        .success {{
+            color: #4ade80;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }}
+        .info {{
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }}
+        .info h3 {{
+            margin-top: 0;
+            color: #fbbf24;
+        }}
+        .status-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }}
+        .status-item {{
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .status-item strong {{
+            display: block;
+            color: #fbbf24;
+            margin-bottom: 5px;
+        }}
+        .footer {{
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.8;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success">✅ Deployment Successful!</div>
+        
+        <div class="info">
+            <h3>🚀 Your Application is Live</h3>
+            <p>The web server has been successfully configured and is now serving your application.</p>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-item">
+                <strong>Server</strong>
+                Apache on {self.os_type.replace('_', ' ').title()}
+            </div>
+            <div class="status-item">
+                <strong>Document Root</strong>
+                /var/www/html
+            </div>
+            <div class="status-item">
+                <strong>Web User</strong>
+                {web_user}:{web_group}
+            </div>
+            <div class="status-item">
+                <strong>Status</strong>
+                🟢 Online
+            </div>
+        </div>
+        
+        <div class="info">
+            <h3>📁 Next Steps</h3>
+            <p>You can now upload your application files to <code>/var/www/html</code> to replace this default page.</p>
+            <p>The web server is configured with proper permissions and security settings.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Deployed via GitHub Actions • Amazon Lightsail</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+
+sudo mv /tmp/index.html /var/www/html/index.html
+sudo chown {web_user}:{web_group} /var/www/html/index.html
+sudo chmod 644 /var/www/html/index.html
+
+# Configure Apache virtual host for better compatibility
+if [ -d "{apache_conf_dir}" ]; then
+    echo "Configuring Apache virtual host..."
+    
+    cat > /tmp/app.conf << 'EOF'
+<VirtualHost *:80>
+    DocumentRoot /var/www/html
+    
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # Enable rewrite engine
+    RewriteEngine On
+    
+    # Security headers
+    Header always set X-Content-Type-Options nosniff
+    Header always set X-Frame-Options DENY
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    ErrorLog {apache_log_dir}/app_error.log
+    CustomLog {apache_log_dir}/app_access.log combined
+</VirtualHost>
+EOF
+
+    if [ "{self.os_info['package_manager']}" = "apt" ]; then
+        # Ubuntu/Debian
+        sudo mv /tmp/app.conf {apache_conf_dir}/sites-available/app.conf
+        sudo a2ensite app.conf
+        sudo a2dissite 000-default.conf || true
+        sudo a2enmod rewrite || true
+        sudo a2enmod headers || true
+        sudo systemctl reload {apache_service}
+    else
+        # Amazon Linux/RHEL/CentOS
+        sudo mv /tmp/app.conf {apache_conf_dir}/conf.d/app.conf
+        sudo systemctl restart {apache_service}
+    fi
+    
+    echo "✅ Apache virtual host configured"
+fi
+
 echo "✅ Web server configuration completed on {self.os_type}"
 '''
         
-        success, output = self.client.run_command(script, timeout=60)
+        success, output = self.client.run_command(script, timeout=120)
         return success
     
     def _configure_mysql_app_access(self) -> bool:
