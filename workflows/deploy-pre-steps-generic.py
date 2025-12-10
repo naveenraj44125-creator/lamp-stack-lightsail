@@ -4,6 +4,7 @@ Generic pre-deployment steps for AWS Lightsail
 This script handles dependency installation and configuration based on config
 """
 
+import os
 import sys
 import argparse
 from lightsail_common import LightsailBase
