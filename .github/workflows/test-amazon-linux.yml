@@ -1,6 +1,6 @@
 name: Test Amazon Linux Support
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       cleanup_after_test:
