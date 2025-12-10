@@ -200,22 +200,38 @@ class OSDetector:
             'ubuntu': {
                 'default_user': 'ubuntu',
                 'web_user': 'www-data',
-                'web_group': 'www-data'
+                'web_group': 'www-data',
+                'nginx_user': 'www-data',
+                'nginx_group': 'www-data',
+                'apache_user': 'www-data',
+                'apache_group': 'www-data'
             },
             'amazon_linux': {
                 'default_user': 'ec2-user',
-                'web_user': 'apache',
-                'web_group': 'apache'
+                'web_user': 'nginx',  # Use nginx user for web apps on Amazon Linux
+                'web_group': 'nginx',
+                'nginx_user': 'nginx',
+                'nginx_group': 'nginx',
+                'apache_user': 'apache',  # Only available after httpd installation
+                'apache_group': 'apache'
             },
             'centos': {
                 'default_user': 'centos',
-                'web_user': 'apache',
-                'web_group': 'apache'
+                'web_user': 'nginx',  # Use nginx user for web apps on CentOS
+                'web_group': 'nginx',
+                'nginx_user': 'nginx',
+                'nginx_group': 'nginx',
+                'apache_user': 'apache',
+                'apache_group': 'apache'
             },
             'rhel': {
                 'default_user': 'ec2-user',
-                'web_user': 'apache',
-                'web_group': 'apache'
+                'web_user': 'nginx',  # Use nginx user for web apps on RHEL
+                'web_group': 'nginx',
+                'nginx_user': 'nginx',
+                'nginx_group': 'nginx',
+                'apache_user': 'apache',
+                'apache_group': 'apache'
             }
         }
         

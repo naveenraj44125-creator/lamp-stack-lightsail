@@ -216,28 +216,25 @@ class GenericPreDeployer:
         
         app_type = self.config.get('application.type', 'web')
         
-        # Determine web root based on installed web server and app type
+        # Determine web root based on enabled web server configuration (not installed yet)
         web_root = "/var/www/html"
-        if 'nginx' in self.dependency_manager.installed_dependencies:
+        if self.config.get('dependencies.nginx.enabled', False):
             web_root = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
-        elif 'apache' in self.dependency_manager.installed_dependencies:
+        elif self.config.get('dependencies.apache.enabled', False):
             web_root = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
         
         # Get OS-specific user information
         from os_detector import OSDetector
         if hasattr(self.client, 'os_type') and self.client.os_type:
             os_info = OSDetector.get_user_info(self.client.os_type)
-            web_user = os_info['web_user']
-            web_group = os_info['web_group']
             system_user = os_info['default_user']
             system_group = os_info['default_user']  # Use same as user for group
         else:
             # Fallback to Ubuntu defaults
-            web_user = 'www-data'
-            web_group = 'www-data'
             system_user = 'ubuntu'
             system_group = 'ubuntu'
         
+        # CRITICAL FIX: Use system user initially, web server users will be set later after installation
         script = f'''
 set -e
 echo "Preparing application directories..."
@@ -251,65 +248,65 @@ sudo mkdir -p {web_root}/config
 # Create backup directory
 sudo mkdir -p /var/backups/app
 
-# Set proper ownership based on application type
-if [ "{app_type}" = "web" ]; then
-    # Web applications need web server ownership
-    sudo chown -R {web_user}:{web_group} {web_root}
-    sudo chmod -R 755 {web_root}
-    sudo chmod -R 777 {web_root}/tmp
-    sudo chmod -R 755 {web_root}/logs
-else
-    # Other application types use system user
-    sudo chown -R {system_user}:{system_group} {web_root}
-    sudo chmod -R 755 {web_root}
-fi
+# IMPORTANT: Use system user initially since web server users don't exist yet
+# Web server ownership will be set later in post-deployment steps after services are installed
+echo "Setting initial ownership to system user ({system_user}:{system_group})"
+sudo chown -R {system_user}:{system_group} {web_root}
+sudo chmod -R 755 {web_root}
+sudo chmod -R 777 {web_root}/tmp
+sudo chmod -R 755 {web_root}/logs
 
-# Create application-specific directories based on dependencies
+# Create application-specific directories based on enabled dependencies
 '''
         
-        # Add Python-specific directories
-        if 'python' in self.dependency_manager.installed_dependencies:
+        # Add Python-specific directories if Python is enabled
+        if self.config.get('dependencies.python.enabled', False):
+            python_config = self.config.get('dependencies.python.config', {})
+            venv_path = python_config.get('virtualenv_path', '/opt/python-venv/app')
             script += f'''
 # Python application directories
 sudo mkdir -p /opt/app
 sudo mkdir -p /var/log/app
-if [ -d "/opt/python-venv/app" ]; then
-    sudo chown -R {web_user}:{web_group} /opt/python-venv
-fi
+sudo mkdir -p {venv_path}
+sudo chown -R {system_user}:{system_group} /opt/app
+sudo chown -R {system_user}:{system_group} /var/log/app
+sudo chown -R {system_user}:{system_group} {venv_path}
 '''
         
-        # Add Node.js-specific directories
-        if 'nodejs' in self.dependency_manager.installed_dependencies:
+        # Add Node.js-specific directories if Node.js is enabled
+        if self.config.get('dependencies.nodejs.enabled', False):
             script += f'''
 # Node.js application directories
 sudo mkdir -p /opt/nodejs-app
 sudo mkdir -p /var/log/nodejs
 sudo chown -R {system_user}:{system_group} /opt/nodejs-app
+sudo chown -R {system_user}:{system_group} /var/log/nodejs
 '''
         
-        # Add database-specific directories
-        if 'mysql' in self.dependency_manager.installed_dependencies:
+        # Add database-specific directories only if they will be installed locally
+        if self.config.get('dependencies.mysql.enabled', False):
             # Only create mysql directories if using local MySQL (not external RDS)
             mysql_config = self.config.get('dependencies', {}).get('mysql', {})
             if not mysql_config.get('external', False):
-                script += '''
-# MySQL backup directory
+                script += f'''
+# MySQL backup directory (ownership will be set after MySQL installation)
 sudo mkdir -p /var/backups/mysql
-sudo chown -R mysql:mysql /var/backups/mysql
+sudo chown -R {system_user}:{system_group} /var/backups/mysql
 '''
         
-        if 'postgresql' in self.dependency_manager.installed_dependencies:
+        if self.config.get('dependencies.postgresql.enabled', False):
             # Only create postgres directories if using local PostgreSQL (not external RDS)
             pg_config = self.config.get('dependencies', {}).get('postgresql', {})
             if not pg_config.get('external', False):
-                script += '''
-# PostgreSQL backup directory
+                script += f'''
+# PostgreSQL backup directory (ownership will be set after PostgreSQL installation)
 sudo mkdir -p /var/backups/postgresql
-sudo chown -R postgres:postgres /var/backups/postgresql
+sudo chown -R {system_user}:{system_group} /var/backups/postgresql
 '''
         
         script += '''
-echo "✅ Application directories prepared"
+echo "✅ Application directories prepared with system user ownership"
+echo "   Web server ownership will be set after services are installed"
 '''
         
         success, output = self.client.run_command(script, timeout=120)

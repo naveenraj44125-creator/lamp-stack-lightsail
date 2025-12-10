@@ -20,6 +20,12 @@ class NginxConfigurator(BaseConfigurator):
         
         document_root = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
         
+        # CRITICAL: Fix directory ownership now that Nginx is installed
+        print("🔧 Setting proper directory ownership for Nginx...")
+        ownership_success = self._fix_directory_ownership(document_root)
+        if not ownership_success:
+            print("⚠️  Failed to set directory ownership, but continuing...")
+        
         # Check if Node.js is enabled - if so, configure as reverse proxy
         nodejs_enabled = self.config.get('dependencies.nodejs.enabled', False)
         python_enabled = self.config.get('dependencies.python.enabled', False)
@@ -202,6 +208,42 @@ sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
 sudo rm -f /etc/nginx/sites-enabled/default
 
 echo "✅ Nginx configured for application"
+'''
+        
+        success, output = self.client.run_command(script, timeout=60)
+        print(output)
+        return success
+    
+    def _fix_directory_ownership(self, document_root: str) -> bool:
+        """Fix directory ownership after Nginx installation"""
+        print("🔧 Fixing directory ownership for web server...")
+        
+        # Get web server user/group from OS info
+        nginx_user = self.user_info.get('nginx_user', 'nginx')
+        nginx_group = self.user_info.get('nginx_group', 'nginx')
+        
+        script = f'''
+set -e
+echo "Fixing directory ownership for Nginx..."
+
+# Check if nginx user exists
+if id "{nginx_user}" &>/dev/null; then
+    echo "✅ Nginx user '{nginx_user}' exists"
+    
+    # Set ownership for web directories
+    echo "Setting ownership of {document_root} to {nginx_user}:{nginx_group}"
+    sudo chown -R {nginx_user}:{nginx_group} {document_root}
+    
+    # Set proper permissions
+    sudo chmod -R 755 {document_root}
+    sudo chmod -R 777 {document_root}/tmp 2>/dev/null || true
+    sudo chmod -R 755 {document_root}/logs 2>/dev/null || true
+    
+    echo "✅ Directory ownership fixed for Nginx"
+else
+    echo "⚠️  Nginx user '{nginx_user}' does not exist yet, keeping system user ownership"
+    echo "   This is normal if Nginx hasn't been fully configured yet"
+fi
 '''
         
         success, output = self.client.run_command(script, timeout=60)
