@@ -12,7 +12,7 @@ from config_loader import DeploymentConfig
 from dependency_manager import DependencyManager
 
 class GenericPreDeployer:
-    def __init__(self, instance_name=None, region=None, config=None):
+    def __init__(self, instance_name=None, region=None, config=None, os_type=None, package_manager=None):
         # Initialize configuration
         if config is None:
             config = DeploymentConfig()
@@ -25,7 +25,22 @@ class GenericPreDeployer:
             
         self.config = config
         self.client = LightsailBase(instance_name, region)
-        self.dependency_manager = DependencyManager(self.client, config)
+        
+        # Set OS information on client for configurators to use
+        if os_type:
+            self.client.os_type = os_type
+        if package_manager:
+            self.client.os_info = {'package_manager': package_manager, 'user': 'ubuntu' if package_manager == 'apt' else 'ec2-user'}
+        
+        # Initialize dependency manager with OS information
+        from os_detector import OSDetector
+        if os_type and package_manager:
+            os_info = OSDetector.get_user_info(os_type)
+            os_info['package_manager'] = package_manager
+            os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
+            self.dependency_manager = DependencyManager(self.client, config, os_type, os_info)
+        else:
+            self.dependency_manager = DependencyManager(self.client, config)
 
     def prepare_environment(self):
         """Prepare generic application environment"""
@@ -129,6 +144,21 @@ class GenericPreDeployer:
         elif 'apache' in self.dependency_manager.installed_dependencies:
             web_root = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
         
+        # Get OS-specific user information
+        from os_detector import OSDetector
+        if hasattr(self.client, 'os_type') and self.client.os_type:
+            os_info = OSDetector.get_user_info(self.client.os_type)
+            web_user = os_info['web_user']
+            web_group = os_info['web_group']
+            system_user = os_info['user']
+            system_group = os_info['group']
+        else:
+            # Fallback to Ubuntu defaults
+            web_user = 'www-data'
+            web_group = 'www-data'
+            system_user = 'ubuntu'
+            system_group = 'ubuntu'
+        
         script = f'''
 set -e
 echo "Preparing application directories..."
@@ -144,14 +174,14 @@ sudo mkdir -p /var/backups/app
 
 # Set proper ownership based on application type
 if [ "{app_type}" = "web" ]; then
-    # Web applications need www-data ownership
-    sudo chown -R www-data:www-data {web_root}
+    # Web applications need web server ownership
+    sudo chown -R {web_user}:{web_group} {web_root}
     sudo chmod -R 755 {web_root}
     sudo chmod -R 777 {web_root}/tmp
     sudo chmod -R 755 {web_root}/logs
 else
-    # Other application types use ubuntu user
-    sudo chown -R ubuntu:ubuntu {web_root}
+    # Other application types use system user
+    sudo chown -R {system_user}:{system_group} {web_root}
     sudo chmod -R 755 {web_root}
 fi
 
@@ -160,22 +190,22 @@ fi
         
         # Add Python-specific directories
         if 'python' in self.dependency_manager.installed_dependencies:
-            script += '''
+            script += f'''
 # Python application directories
 sudo mkdir -p /opt/app
 sudo mkdir -p /var/log/app
 if [ -d "/opt/python-venv/app" ]; then
-    sudo chown -R www-data:www-data /opt/python-venv
+    sudo chown -R {web_user}:{web_group} /opt/python-venv
 fi
 '''
         
         # Add Node.js-specific directories
         if 'nodejs' in self.dependency_manager.installed_dependencies:
-            script += '''
+            script += f'''
 # Node.js application directories
 sudo mkdir -p /opt/nodejs-app
 sudo mkdir -p /var/log/nodejs
-sudo chown -R ubuntu:ubuntu /opt/nodejs-app
+sudo chown -R {system_user}:{system_group} /opt/nodejs-app
 '''
         
         # Add database-specific directories
@@ -220,37 +250,56 @@ echo "✅ Application directories prepared"
             print("⚠️  SSH connectivity issues detected, but continuing...")
             # Don't fail the deployment for SSH issues - the instance might still work
         
-        health_script = '''
+        # Get OS-specific package manager for health checks
+        if hasattr(self.client, 'os_info') and self.client.os_info:
+            package_manager = self.client.os_info.get('package_manager', 'unknown')
+        else:
+            package_manager = 'unknown'
+        
+        health_script = f'''
 #!/bin/bash
 set +e  # Don't exit on error, we want to check everything
 
 echo "Checking disk space..."
-df -h / | tail -1 | awk '{print "Disk usage: " $5 " used of " $2}'
+df -h / | tail -1 | awk '{{print "Disk usage: " $5 " used of " $2}}'
 
 echo ""
 echo "Checking memory..."
-free -h | grep Mem | awk '{print "Memory: " $3 " used of " $2}'
+free -h | grep Mem | awk '{{print "Memory: " $3 " used of " $2}}'
 
 echo ""
-echo "Checking dpkg state..."
-if sudo dpkg --audit 2>&1 | grep -q "broken"; then
-    echo "❌ dpkg is in broken state"
-    echo "Attempting to fix..."
-    sudo dpkg --configure -a
-    sudo apt-get install -f -y
-    echo "✅ dpkg fixed"
+echo "Checking package manager state..."
+if [ "{package_manager}" = "apt" ]; then
+    if sudo dpkg --audit 2>&1 | grep -q "broken"; then
+        echo "❌ dpkg is in broken state"
+        echo "Attempting to fix..."
+        sudo dpkg --configure -a
+        sudo apt-get install -f -y
+        echo "✅ dpkg fixed"
+    else
+        echo "✅ dpkg is healthy"
+    fi
+    
+    echo ""
+    echo "Checking apt locks..."
+    if sudo lsof /var/lib/dpkg/lock-frontend 2>/dev/null; then
+        echo "⚠️  apt is locked by another process"
+        echo "Waiting for lock to be released..."
+        sleep 10
+    else
+        echo "✅ No apt locks detected"
+    fi
+elif [ "{package_manager}" = "yum" ] || [ "{package_manager}" = "dnf" ]; then
+    echo "Checking yum/dnf locks..."
+    if sudo lsof /var/run/yum.pid 2>/dev/null || sudo lsof /var/lib/dnf/dnf.librepo.lock 2>/dev/null; then
+        echo "⚠️  Package manager is locked by another process"
+        echo "Waiting for lock to be released..."
+        sleep 10
+    else
+        echo "✅ No package manager locks detected"
+    fi
 else
-    echo "✅ dpkg is healthy"
-fi
-
-echo ""
-echo "Checking apt locks..."
-if sudo lsof /var/lib/dpkg/lock-frontend 2>/dev/null; then
-    echo "⚠️  apt is locked by another process"
-    echo "Waiting for lock to be released..."
-    sleep 10
-else
-    echo "✅ No apt locks detected"
+    echo "ℹ️  Unknown package manager, skipping package manager checks"
 fi
 
 echo ""
@@ -295,6 +344,17 @@ echo "✅ Health check completed"
         
         env_file_content = '\n'.join(env_content)
         
+        # Get OS-specific user information
+        from os_detector import OSDetector
+        if hasattr(self.client, 'os_type') and self.client.os_type:
+            os_info = OSDetector.get_user_info(self.client.os_type)
+            web_user = os_info['web_user']
+            web_group = os_info['web_group']
+        else:
+            # Fallback to Ubuntu defaults
+            web_user = 'www-data'
+            web_group = 'www-data'
+        
         script = f'''
 set -e
 echo "Setting up environment variables..."
@@ -306,7 +366,7 @@ EOF
 
 # Move to appropriate location based on application type
 sudo mv /tmp/app.env /var/www/html/.env
-sudo chown www-data:www-data /var/www/html/.env
+sudo chown {web_user}:{web_group} /var/www/html/.env
 sudo chmod 600 /var/www/html/.env
 
 # Also create system-wide environment file
@@ -323,6 +383,8 @@ def main():
     parser.add_argument('--instance-name', help='Lightsail instance name (overrides config)')
     parser.add_argument('--region', help='AWS region (overrides config)')
     parser.add_argument('--config-file', help='Path to configuration file')
+    parser.add_argument('--os-type', help='Operating system type (ubuntu, amazon_linux, centos, rhel)')
+    parser.add_argument('--package-manager', help='Package manager (apt, yum, dnf)')
     
     args = parser.parse_args()
     
@@ -340,13 +402,19 @@ def main():
         print(f"📋 Application: {config.get('application.name', 'Unknown')} v{config.get('application.version', '1.0.0')}")
         print(f"🏷️  Type: {config.get('application.type', 'web')}")
         
+        # Display OS information if provided
+        if args.os_type:
+            print(f"🖥️  OS Type: {args.os_type}")
+        if args.package_manager:
+            print(f"📦 Package Manager: {args.package_manager}")
+        
         # Check if dependency steps are enabled in config
         if not config.get('deployment.steps.pre_deployment.dependencies.enabled', True):
             print("ℹ️  Dependency installation steps are disabled in configuration")
             sys.exit(0)
         
         # Create generic pre-deployer and prepare environment
-        pre_deployer = GenericPreDeployer(instance_name, region, config)
+        pre_deployer = GenericPreDeployer(instance_name, region, config, args.os_type, args.package_manager)
         
         if pre_deployer.prepare_environment():
             print("🎉 Generic pre-deployment steps completed successfully!")

@@ -31,6 +31,12 @@ inputs:
     description: 'Verify deployment after completion'
     required: false
     default: 'true'
+  os-type:
+    description: 'Operating system type (ubuntu, amazon_linux, centos, rhel)'
+    required: false
+  package-manager:
+    description: 'Package manager (apt, yum, dnf)'
+    required: false
 
 outputs:
   deployment-url:
@@ -126,7 +132,9 @@ runs:
           python3 workflows/deploy-pre-steps-generic.py \
             --instance-name ${{ steps.config.outputs.instance_name }} \
             --region ${{ steps.config.outputs.aws_region }} \
-            --config-file ${{ inputs.config-file }}
+            --config-file ${{ inputs.config-file }} \
+            ${{ inputs.os-type && format('--os-type {0}', inputs.os-type) || '' }} \
+            ${{ inputs.package-manager && format('--package-manager {0}', inputs.package-manager) || '' }}
         fi
         
         # Run deployment

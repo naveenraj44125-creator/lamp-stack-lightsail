@@ -103,6 +103,10 @@ jobs:
         # Initialize Lightsail client
         lightsail = boto3.client('lightsail', region_name=aws_region)
         
+        # Initialize OS detection variables (will be set based on instance blueprint)
+        os_type = 'unknown'
+        package_manager = 'unknown'
+        
         # Check if instance exists, create if not
         static_ip = ""
         instance_exists = False
@@ -380,6 +384,34 @@ jobs:
                 )
                 print(f"✅ Firewall configured: {', '.join(map(str, allowed_ports))}")
                 
+                # Detect OS type from the blueprint we just created
+                print(f"\n🔍 Detecting OS type from blueprint: {blueprint_id}")
+                
+                # Determine OS type from blueprint
+                is_ubuntu = 'ubuntu' in blueprint_id.lower()
+                is_amazon_linux = 'amazon' in blueprint_id.lower() or 'amzn' in blueprint_id.lower()
+                is_centos = 'centos' in blueprint_id.lower()
+                
+                if is_ubuntu:
+                    os_type = 'ubuntu'
+                    package_manager = 'apt'
+                    print(f"✅ Ubuntu OS detected from blueprint: {blueprint_id}")
+                elif is_amazon_linux:
+                    os_type = 'amazon_linux'
+                    package_manager = 'yum'
+                    print(f"✅ Amazon Linux OS detected from blueprint: {blueprint_id}")
+                elif is_centos:
+                    os_type = 'centos'
+                    package_manager = 'yum'
+                    print(f"✅ CentOS OS detected from blueprint: {blueprint_id}")
+                else:
+                    os_type = 'unknown'
+                    package_manager = 'unknown'
+                    print(f"⚠️  Unknown OS type from blueprint: {blueprint_id}")
+                    print(f"   Deployment will attempt to proceed with best-effort support")
+                
+                print(f"🔧 Package manager: {package_manager}")
+                
                 # Setup Lightsail bucket for new instance if configured
                 bucket_config = config.get('lightsail', {}).get('bucket', {})
                 if bucket_config.get('enabled', False):
@@ -428,6 +460,37 @@ jobs:
                             print(f"✅ Using existing instance with IP: {static_ip}")
                         else:
                             print("⚠️  Existing instance has no public IP")
+                        
+                        # Detect operating system from blueprint for existing instance
+                        blueprint_id = instance.get('blueprintId', '')
+                        blueprint_name = instance.get('blueprintName', '')
+                        print(f"📋 Blueprint: {blueprint_name} ({blueprint_id})")
+                        
+                        # Determine OS type from blueprint
+                        is_ubuntu = 'ubuntu' in blueprint_id.lower() or 'ubuntu' in blueprint_name.lower()
+                        is_amazon_linux = 'amazon' in blueprint_id.lower() or 'amzn' in blueprint_id.lower()
+                        is_centos = 'centos' in blueprint_id.lower()
+                        
+                        if is_ubuntu:
+                            os_type = 'ubuntu'
+                            package_manager = 'apt'
+                            print(f"✅ Ubuntu OS detected: {blueprint_name}")
+                        elif is_amazon_linux:
+                            os_type = 'amazon_linux'
+                            package_manager = 'yum'
+                            print(f"✅ Amazon Linux OS detected: {blueprint_name}")
+                        elif is_centos:
+                            os_type = 'centos'
+                            package_manager = 'yum'
+                            print(f"✅ CentOS OS detected: {blueprint_name}")
+                        else:
+                            os_type = 'unknown'
+                            package_manager = 'unknown'
+                            print(f"⚠️  Unknown OS type from blueprint: {blueprint_name}")
+                            print(f"   Deployment will attempt to proceed with best-effort support")
+                        
+                        print(f"🔧 Package manager: {package_manager}")
+                        
                     except Exception as get_error:
                         print(f"❌ Could not retrieve existing instance: {get_error}")
                         exit(1)
@@ -724,7 +787,9 @@ jobs:
         python3 workflows/deploy-pre-steps-generic.py \
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
-          --config-file ${{ inputs.config_file }}
+          --config-file ${{ inputs.config_file }} \
+          --os-type ${{ needs.load-config.outputs.os_type }} \
+          --package-manager ${{ needs.load-config.outputs.package_manager }}
 
   application-package:
     needs: [load-config]
