@@ -62,7 +62,8 @@ def main():
             
             # Use OSDetector for OS detection
             detector = OSDetector()
-            os_type, package_manager = detector.detect_os_from_blueprint(blueprint_id)
+            os_type, os_info = detector.detect_os_from_blueprint(blueprint_id)
+            package_manager = os_info['package_manager']
             print(f"✅ {os_type.title()} OS detected: {blueprint_name}")
             print(f"🔧 Package manager: {package_manager}")
             
@@ -298,7 +299,8 @@ def main():
                 
                 # Use OSDetector for OS detection
                 detector = OSDetector()
-                os_type, package_manager = detector.detect_os_from_blueprint(blueprint_id)
+                os_type, os_info = detector.detect_os_from_blueprint(blueprint_id)
+                package_manager = os_info['package_manager']
                 print(f"✅ {os_type.title()} OS detected from blueprint: {blueprint_id}")
                 print(f"🔧 Package manager: {package_manager}")
                 
@@ -360,7 +362,8 @@ def main():
                         
                         # Use OSDetector for OS detection
                         detector = OSDetector()
-                        os_type, package_manager = detector.detect_os_from_blueprint(blueprint_id)
+                        os_type, os_info = detector.detect_os_from_blueprint(blueprint_id)
+                        package_manager = os_info['package_manager']
                         print(f"✅ {os_type.title()} OS detected: {blueprint_name}")
                         print(f"🔧 Package manager: {package_manager}")
                         
