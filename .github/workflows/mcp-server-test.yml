@@ -1,0 +1,21 @@
+name: MCP Server Test Workflow
+on:
+  workflow_dispatch:
+    inputs:
+      test_message:
+        description: 'Test message'
+        required: false
+        default: 'Hello from MCP Server!'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo test message
+        run: echo "Test message: ${{ github.event.inputs.test_message }}"
+      
+      - name: MCP Server Test
+        run: |
+          echo "🧪 This workflow was created to test MCP server capabilities"
+          echo "✅ MCP server can successfully create GitHub Actions workflows"
+          echo "🔗 MCP Server URL: http://18.215.231.164:3000"
