@@ -586,7 +586,7 @@ jobs:
   pre-steps-generic:
     needs: [load-config, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&

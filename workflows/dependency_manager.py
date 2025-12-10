@@ -77,10 +77,12 @@ fi
         update_script = '''
 set -e
 echo "Running apt-get update..."
-sudo apt-get update -qq
+# Use faster update with reduced timeout for GitHub Actions
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update -qq -o Acquire::Retries=2 -o Acquire::http::Timeout=30
 echo "✅ Package lists updated"
 '''
-        success, output = self.client.run_command(update_script, timeout=300)
+        success, output = self.client.run_command(update_script, timeout=180)
         if not success:
             print("⚠️  apt-get update failed, but continuing with installations...")
         else:
@@ -106,6 +108,9 @@ echo "✅ Package lists updated"
         
         overall_success = True
         
+        # Batch install common system packages first for efficiency
+        self._batch_install_common_packages(sorted_deps)
+        
         for dep_name in sorted_deps:
             print(f"\n🔧 Installing {dep_name}...")
             success = self._install_dependency(dep_name)
@@ -119,6 +124,65 @@ echo "✅ Package lists updated"
                 overall_success = False
         
         return overall_success, self.installed_dependencies, self.failed_dependencies
+    
+    def _batch_install_common_packages(self, enabled_deps: List[str]):
+        """Batch install common system packages for efficiency"""
+        common_packages = []
+        
+        # Collect common packages needed by multiple dependencies
+        if any(dep in enabled_deps for dep in ['apache', 'nginx', 'php']):
+            common_packages.extend(['curl', 'wget', 'unzip'])
+        
+        if 'git' in enabled_deps:
+            common_packages.append('git')
+        
+        if 'nodejs' in enabled_deps:
+            common_packages.extend(['curl', 'software-properties-common'])
+        
+        if 'python' in enabled_deps:
+            common_packages.extend(['python3', 'python3-pip', 'python3-venv'])
+        
+        if 'php' in enabled_deps:
+            common_packages.extend(['software-properties-common'])
+        
+        # Remove duplicates and install in batch
+        if common_packages:
+            unique_packages = list(set(common_packages))
+            print(f"\n📦 Batch installing common packages: {', '.join(unique_packages)}")
+            
+            batch_script = f'''
+set -e
+export DEBIAN_FRONTEND=noninteractive
+echo "Installing common packages in batch for efficiency..."
+sudo apt-get install -y -qq {' '.join(unique_packages)}
+echo "✅ Common packages installed"
+'''
+            success, output = self.client.run_command(batch_script, timeout=300)
+            if success:
+                print("✅ Batch installation completed successfully")
+            else:
+                print("⚠️  Batch installation had issues, individual installs will proceed")
+    
+    def _is_dependency_installed(self, dep_name: str) -> bool:
+        """Quick check if a dependency is already installed"""
+        check_commands = {
+            'apache': 'systemctl is-active apache2 >/dev/null 2>&1',
+            'nginx': 'systemctl is-active nginx >/dev/null 2>&1',
+            'mysql': 'command -v mysql >/dev/null 2>&1',
+            'postgresql': 'command -v psql >/dev/null 2>&1',
+            'php': 'command -v php >/dev/null 2>&1',
+            'python': 'command -v python3 >/dev/null 2>&1',
+            'nodejs': 'command -v node >/dev/null 2>&1',
+            'redis': 'systemctl is-active redis-server >/dev/null 2>&1 || systemctl is-active redis >/dev/null 2>&1',
+            'git': 'command -v git >/dev/null 2>&1',
+            'docker': 'command -v docker >/dev/null 2>&1'
+        }
+        
+        if dep_name not in check_commands:
+            return False
+        
+        success, _ = self.client.run_command(check_commands[dep_name], timeout=10, max_retries=1)
+        return success
     
     def _wait_for_dpkg_lock(self, timeout=60):
         """Wait for dpkg lock to be released (optimized)"""
@@ -180,6 +244,11 @@ sudo apt-get install -f -y 2>/dev/null || true
     
     def _do_install_dependency(self, dep_name: str, dep_config: dict) -> bool:
         """Perform the actual dependency installation"""
+        
+        # Quick check if dependency is already installed (optimization)
+        if self._is_dependency_installed(dep_name):
+            print(f"✅ {dep_name} is already installed, skipping...")
+            return True
 
         # Check if this is an external RDS database
         if dep_name in ['mysql', 'postgresql'] and dep_config.get('external', False):

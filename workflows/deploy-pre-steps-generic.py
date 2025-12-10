@@ -210,9 +210,12 @@ echo "✅ Application directories prepared"
         """Perform system health checks before deployment with enhanced resilience"""
         print("🔍 Checking system health...")
         
-        # First, test SSH connectivity with retries
+        # First, test SSH connectivity with reduced retries for faster deployment
         print("🔗 Testing SSH connectivity...")
-        ssh_ok = self.client.test_ssh_connectivity(timeout=60, max_retries=5)
+        # Reduce retries in pre-steps to speed up deployment
+        max_retries = 3 if "GITHUB_ACTIONS" in os.environ else 5
+        timeout = 30 if "GITHUB_ACTIONS" in os.environ else 60
+        ssh_ok = self.client.test_ssh_connectivity(timeout=timeout, max_retries=max_retries)
         if not ssh_ok:
             print("⚠️  SSH connectivity issues detected, but continuing...")
             # Don't fail the deployment for SSH issues - the instance might still work

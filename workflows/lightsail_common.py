@@ -43,8 +43,11 @@ class LightsailBase:
             try:
                 if attempt > 0:
                     print(f"🔄 Retry attempt {attempt + 1}/{max_retries}")
-                    # Progressive backoff with longer initial waits for GitHub Actions
-                    wait_time = min(15 + (attempt * 10), 60)
+                    # Optimized backoff for GitHub Actions - shorter waits for faster deployment
+                    if "GITHUB_ACTIONS" in os.environ:
+                        wait_time = min(5 + (attempt * 5), 20)  # Faster retries in CI
+                    else:
+                        wait_time = min(15 + (attempt * 10), 60)  # Original timing for local
                     print(f"   ⏳ Waiting {wait_time} seconds before retry...")
                     time.sleep(wait_time)
                     
@@ -301,11 +304,12 @@ class LightsailBase:
         """
         print("🔍 Testing SSH connectivity...")
         
-        # For GitHub Actions, use more aggressive retry strategy
+        # For GitHub Actions, use optimized retry strategy for faster deployments
         if "GITHUB_ACTIONS" in os.environ:
-            print("   🤖 GitHub Actions detected - using enhanced retry strategy")
-            max_retries = max(max_retries, 5)  # Minimum 5 retries in CI
-            timeout = max(timeout, 60)  # Minimum 60s timeout in CI
+            print("   🤖 GitHub Actions detected - using optimized retry strategy")
+            # Reduce retries and timeout for faster deployment in CI
+            max_retries = min(max_retries, 3)  # Maximum 3 retries in CI
+            timeout = min(timeout, 45)  # Maximum 45s timeout in CI
         
         success, _ = self.run_command("echo 'SSH test successful'", timeout=timeout, max_retries=max_retries)
         if success:
