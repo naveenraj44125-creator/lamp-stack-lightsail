@@ -290,7 +290,7 @@ class LightsailBase:
 
     def test_ssh_connectivity(self, timeout=30, max_retries=3):
         """
-        Test SSH connectivity to the instance
+        Test SSH connectivity to the instance with enhanced resilience
         
         Args:
             timeout (int): Connection timeout
@@ -300,11 +300,30 @@ class LightsailBase:
             bool: True if SSH is accessible, False otherwise
         """
         print("🔍 Testing SSH connectivity...")
+        
+        # For GitHub Actions, use more aggressive retry strategy
+        if "GITHUB_ACTIONS" in os.environ:
+            print("   🤖 GitHub Actions detected - using enhanced retry strategy")
+            max_retries = max(max_retries, 5)  # Minimum 5 retries in CI
+            timeout = max(timeout, 60)  # Minimum 60s timeout in CI
+        
         success, _ = self.run_command("echo 'SSH test successful'", timeout=timeout, max_retries=max_retries)
         if success:
             print("✅ SSH connectivity confirmed")
         else:
             print("❌ SSH connectivity failed")
+            
+            # In GitHub Actions, try one more time with instance restart
+            if "GITHUB_ACTIONS" in os.environ and not success:
+                print("   🔄 GitHub Actions: Attempting instance restart as last resort...")
+                if self.restart_instance_for_connectivity():
+                    print("   🔄 Retrying SSH after restart...")
+                    success, _ = self.run_command("echo 'SSH test after restart'", timeout=60, max_retries=2)
+                    if success:
+                        print("✅ SSH connectivity restored after restart")
+                    else:
+                        print("❌ SSH still failing after restart")
+        
         return success
 
     def test_network_connectivity(self):

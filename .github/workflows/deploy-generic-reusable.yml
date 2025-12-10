@@ -530,7 +530,7 @@ jobs:
   pre-steps-generic:
     needs: [load-config, test]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&
@@ -580,9 +580,11 @@ jobs:
       run: |
         echo "🏥 Running pre-flight health check..."
         export PYTHONPATH="${PYTHONPATH}:$(pwd)/workflows"
+        export GITHUB_ACTIONS=true
         
         python3 << 'EOF'
         import sys
+        import os
         sys.path.insert(0, 'workflows')
         from lightsail_common import LightsailBase
         
@@ -591,28 +593,39 @@ jobs:
         
         client = LightsailBase(instance_name, region)
         
-        print(f"🔍 Checking {instance_name}...")
+        print(f"🔍 Enhanced pre-flight check for {instance_name}...")
         
-        # Quick dpkg check and fix
-        script = '''
-        if sudo dpkg --audit 2>&1 | grep -q "broken"; then
-            echo "⚠️  dpkg broken, fixing..."
-            sudo dpkg --configure -a
-            sudo apt-get install -f -y
-            echo "✅ dpkg fixed"
-        else
-            echo "✅ dpkg healthy"
-        fi
-        '''
+        # Test SSH connectivity first with enhanced retries
+        print("🔗 Testing SSH connectivity with enhanced retries...")
+        ssh_success = client.test_ssh_connectivity(timeout=60, max_retries=5)
         
-        success, output = client.run_command(script, timeout=120)
-        print(output)
-        
-        if not success:
-            print("⚠️  Health check had issues, but continuing...")
-            sys.exit(0)  # Don't fail the workflow
+        if not ssh_success:
+            print("⚠️  SSH connectivity issues detected")
+            print("   This may be due to temporary network issues or instance startup")
+            print("   Deployment will continue - the instance may still be functional")
         else:
-            print("✅ Pre-flight check passed")
+            print("✅ SSH connectivity confirmed")
+            
+            # Only run dpkg check if SSH is working
+            print("🔧 Running dpkg health check...")
+            script = '''
+            if sudo dpkg --audit 2>&1 | grep -q "broken"; then
+                echo "⚠️  dpkg broken, fixing..."
+                sudo dpkg --configure -a
+                sudo apt-get install -f -y
+                echo "✅ dpkg fixed"
+            else
+                echo "✅ dpkg healthy"
+            fi
+            '''
+            
+            success, output = client.run_command(script, timeout=180, max_retries=3)
+            if success:
+                print("✅ dpkg health check passed")
+            else:
+                print("⚠️  dpkg check had issues, but continuing...")
+        
+        print("✅ Pre-flight check completed - deployment will proceed")
         EOF
 
     - name: Generic Environment Preparation & Dependency Installation
