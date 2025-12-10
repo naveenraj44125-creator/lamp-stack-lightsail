@@ -7,7 +7,7 @@ aws:
 
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: mcp-server-lightsail-v3
+  instance_name: mcp-server-lightsail-v5
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)

@@ -4,7 +4,7 @@ aws:
   region: us-east-1
 
 lightsail:
-  instance_name: recipe-manager-docker-v3
+  instance_name: recipe-manager-docker-v5
   static_ip: ""
   
   # Instance size configuration (optional)
