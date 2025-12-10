@@ -1,6 +1,6 @@
 """Docker application configurator"""
 from .base_configurator import BaseConfigurator
-from ..os_detector import OSDetector
+from os_detector import OSDetector
 import os
 
 class DockerConfigurator(BaseConfigurator):
