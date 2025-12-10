@@ -7,7 +7,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: amazon-linux-test-v5
+  instance_name: amazon-linux-test-v6
   static_ip: ""  # Will be assigned automatically
   
   # Instance size configuration (optional)

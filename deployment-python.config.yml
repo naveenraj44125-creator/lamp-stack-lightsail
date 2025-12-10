@@ -6,7 +6,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: python-flask-api-v5
+  instance_name: python-flask-api-v6
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
@@ -17,7 +17,7 @@ lightsail:
   # Operating system blueprint configuration (optional)
   # If not specified, defaults to ubuntu_22_04
   # Available blueprints: ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01
-  blueprint_id: "ubuntu_22_04"  # Ubuntu 22.04 LTS - Default choice with apt package manager
+  blueprint_id: "amazon_linux_2023"  # Amazon Linux 2023 - Testing Python on Amazon Linux with yum package manager
   
 # Application Configuration
 application:
@@ -65,7 +65,7 @@ dependencies:
   # Programming Language
   python:
     enabled: true
-    version: "3.10"  # Ubuntu 22.04 default Python version
+    version: "3.9"  # Amazon Linux 2023 compatible Python version
     config:
       pip_packages:
         - "virtualenv"
