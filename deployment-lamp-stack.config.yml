@@ -7,7 +7,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: lamp-stack-demo-v3
+  instance_name: lamp-stack-demo-v4
   static_ip: ""  # Will be assigned automatically
   
   # Lightsail Bucket Configuration (optional)
