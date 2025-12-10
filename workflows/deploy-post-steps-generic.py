@@ -10,6 +10,7 @@ import argparse
 from lightsail_common import LightsailBase
 from config_loader import DeploymentConfig
 from dependency_manager import DependencyManager
+from os_detector import OSDetector
 from app_configurators.configurator_factory import ConfiguratorFactory
 
 class GenericPostDeployer:
@@ -262,17 +263,25 @@ done
         return '/opt/app'
     
     def _get_file_owner(self, target_dir: str) -> str:
-        """Determine appropriate file owner based on target directory and dependencies"""
-        # Node.js and Python apps run as ubuntu user
+        """Determine appropriate file owner based on target directory and dependencies (OS-agnostic)"""
+        # Get OS-specific user information
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        user_info = OSDetector.get_user_info(os_type)
+        
+        default_user = user_info['default_user']
+        web_user = user_info['web_user']
+        web_group = user_info['web_group']
+        
+        # Node.js and Python apps run as default user
         if target_dir in ['/opt/nodejs-app', '/opt/python-app', '/opt/docker-app', '/opt/app']:
-            return 'ubuntu:ubuntu'
+            return f'{default_user}:{default_user}'
         
-        # Web server directories need www-data
+        # Web server directories need web user
         if any(dep in self.dependency_manager.installed_dependencies for dep in ['apache', 'nginx']):
-            return 'www-data:www-data'
+            return f'{web_user}:{web_group}'
         
-        # Default to ubuntu
-        return 'ubuntu:ubuntu'
+        # Default to default user
+        return f'{default_user}:{default_user}'
     
     def _deploy_application_files(self, package_file) -> bool:
         """Deploy application files to the appropriate location"""
@@ -381,13 +390,20 @@ ls -la {target_dir}/ | head -20
         # Get appropriate owner for this deployment
         owner = self._get_file_owner(target_dir)
         
+        # Get OS-specific user information for web user check
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        user_info = OSDetector.get_user_info(os_type)
+        web_user = user_info['web_user']
+        web_group = user_info['web_group']
+        web_owner = f"{web_user}:{web_group}"
+        
         script += f'''
 echo "📝 Setting file permissions ({owner})"
 sudo chown -R {owner} {target_dir}
 sudo chmod -R 755 {target_dir}
 
 # Set stricter permissions for web-served files
-if [ "{owner}" = "www-data:www-data" ]; then
+if [ "{owner}" = "{web_owner}" ]; then
     sudo find {target_dir} -type f -exec chmod 644 {{}} \\;
 fi
 
@@ -437,31 +453,36 @@ echo "✅ Application files deployed successfully"
         return success
 
     def _setup_app_specific_config(self) -> bool:
-        """Set up application-specific configurations"""
+        """Set up application-specific configurations (OS-agnostic)"""
         app_type = self.config.get('application.type', 'web')
         
-        script = '''
+        # Get OS-specific user information
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        user_info = OSDetector.get_user_info(os_type)
+        default_user = user_info['default_user']
+        
+        script = f'''
 set -e
 echo "Setting up application-specific configurations..."
 
 # Set up log rotation
 cat > /tmp/app-logs << 'EOF'
-/var/log/app/*.log {
+/var/log/app/*.log {{
     daily
     missingok
     rotate 14
     compress
     delaycompress
     notifempty
-    create 644 ubuntu ubuntu
-}
+    create 644 {default_user} {default_user}
+}}
 EOF
 
 sudo mv /tmp/app-logs /etc/logrotate.d/app
 
 # Create application log directory
 sudo mkdir -p /var/log/app
-sudo chown ubuntu:ubuntu /var/log/app
+sudo chown {default_user}:{default_user} /var/log/app
 
 # Set up cron jobs for maintenance (if needed)
 # This is a placeholder for application-specific maintenance tasks
@@ -473,7 +494,7 @@ echo "✅ Application-specific configurations completed"
         return success
 
     def _set_deployment_env_vars(self, env_vars):
-        """Set deployment-specific environment variables"""
+        """Set deployment-specific environment variables (OS-agnostic)"""
         if not env_vars:
             return
         
@@ -483,6 +504,12 @@ echo "✅ Application-specific configurations completed"
         
         env_file_content = '\n'.join(env_content)
         
+        # Get OS-specific user information
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        user_info = OSDetector.get_user_info(os_type)
+        web_user = user_info['web_user']
+        web_group = user_info['web_group']
+        
         script = f'''
 set -e
 echo "Setting deployment environment variables..."
@@ -491,12 +518,12 @@ echo "Setting deployment environment variables..."
 if [ -f /opt/app/database.env ] && [ ! -f /var/www/html/.env ]; then
     echo "Copying database configuration to .env file..."
     sudo cp /opt/app/database.env /var/www/html/.env
-    sudo chown www-data:www-data /var/www/html/.env
+    sudo chown {web_user}:{web_group} /var/www/html/.env
     sudo chmod 640 /var/www/html/.env
 elif [ ! -f /var/www/html/.env ]; then
     # Create empty .env file if neither exists
     sudo touch /var/www/html/.env
-    sudo chown www-data:www-data /var/www/html/.env
+    sudo chown {web_user}:{web_group} /var/www/html/.env
     sudo chmod 640 /var/www/html/.env
 fi
 
