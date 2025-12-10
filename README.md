@@ -540,6 +540,73 @@ lightsail:
 | medium_1_0 | 500GB | 250GB | Medium apps, production |
 | large_1_0 | 1TB | 500GB | Large apps, heavy usage |
 
+## 💻 Instance Size Configuration
+
+### Bundle ID Configuration
+
+Control your Lightsail instance size with the `bundle_id` parameter:
+
+```yaml
+lightsail:
+  instance_name: my-app-v3
+  static_ip: ""
+  
+  # Instance size configuration (optional)
+  # If not specified, defaults are: nano_3_0 (512MB) for traditional apps, small_3_0 (2GB) for Docker apps
+  bundle_id: "small_3_0"  # 2GB RAM, 2 vCPU, 60GB SSD
+```
+
+### Available Instance Bundles
+
+| Bundle ID | RAM | vCPU | Storage | Price/Month | Best For |
+|-----------|-----|------|---------|-------------|----------|
+| `nano_3_0` | 512MB | 1 | 20GB SSD | $3.50 | Static sites, simple APIs |
+| `micro_3_0` | 1GB | 2 | 40GB SSD | $7.00 | LAMP stack, Node.js apps |
+| `small_3_0` | 2GB | 2 | 60GB SSD | $12.00 | **Docker apps (minimum)**, Python Flask |
+| `medium_3_0` | 4GB | 2 | 80GB SSD | $24.00 | Heavy workloads, multiple services |
+| `large_3_0` | 8GB | 2 | 160GB SSD | $44.00 | High-traffic applications |
+| `xlarge_3_0` | 16GB | 4 | 320GB SSD | $88.00 | Enterprise applications |
+| `2xlarge_3_0` | 32GB | 8 | 640GB SSD | $176.00 | Large-scale production |
+
+### Automatic Bundle Selection
+
+If you don't specify `bundle_id`, the system automatically chooses:
+
+- **Docker deployments**: `small_3_0` (2GB RAM minimum required)
+- **Traditional deployments**: `nano_3_0` (512MB RAM sufficient)
+
+### Docker Requirements
+
+⚠️ **Important**: Docker deployments require **minimum 2GB RAM** (`small_3_0` or larger)
+
+The system will **automatically block deployment** if you try to deploy Docker to an instance with insufficient RAM to prevent freezing.
+
+### Configuration Examples
+
+**Static Site (Nginx):**
+```yaml
+lightsail:
+  bundle_id: "nano_3_0"  # 512MB - Perfect for static content
+```
+
+**LAMP Stack:**
+```yaml
+lightsail:
+  bundle_id: "micro_3_0"  # 1GB - Good for Apache + PHP + Database
+```
+
+**Docker Application:**
+```yaml
+lightsail:
+  bundle_id: "small_3_0"  # 2GB - Required minimum for Docker
+```
+
+**High-Traffic Production:**
+```yaml
+lightsail:
+  bundle_id: "medium_3_0"  # 4GB - Better performance under load
+```
+
 ### Using the Bucket
 
 **Web Interface:**

@@ -274,16 +274,30 @@ jobs:
             print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")
             instance_exists = False
             
-            # Determine bundle size based on deployment type
+            # Determine bundle size - check config first, then deployment type
             docker_enabled = config.get('dependencies', {}).get('docker', {}).get('enabled', False)
             use_docker = config.get('deployment', {}).get('use_docker', False)
             
-            if docker_enabled and use_docker:
+            # Check if bundle_id is specified in config
+            config_bundle_id = config.get('lightsail', {}).get('bundle_id', '')
+            
+            if config_bundle_id:
+                bundle_id = config_bundle_id
+                print(f"📋 Using configured bundle: {bundle_id}")
+                
+                # Validate bundle for Docker deployments
+                if docker_enabled and use_docker:
+                    docker_compatible_bundles = ['small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0']
+                    if bundle_id not in docker_compatible_bundles:
+                        print(f"⚠️  WARNING: Bundle '{bundle_id}' may not have enough RAM for Docker!")
+                        print(f"   Recommended Docker bundles: {', '.join(docker_compatible_bundles)}")
+                        print(f"   Proceeding with configured bundle...")
+            elif docker_enabled and use_docker:
                 bundle_id = 'small_3_0'  # 2 GB RAM minimum for Docker
-                print(f"🐳 Docker deployment detected - using bundle: {bundle_id} (2GB RAM)")
+                print(f"🐳 Docker deployment detected - using default bundle: {bundle_id} (2GB RAM)")
             else:
                 bundle_id = 'nano_3_0'  # 512 MB RAM for traditional deployments
-                print(f"📦 Traditional deployment - using bundle: {bundle_id} (512MB RAM)")
+                print(f"📦 Traditional deployment - using default bundle: {bundle_id} (512MB RAM)")
             
             # Create instance with appropriate settings
             try:
