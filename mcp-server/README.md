@@ -6,7 +6,9 @@ Model Context Protocol (MCP) server for automated AWS Lightsail deployment with 
 
 - **Setup New Repository**: Create GitHub repos with complete deployment automation
 - **Integrate Existing Repos**: Add Lightsail deployment to existing projects
-- **Generate Configs**: Create deployment configuration files
+- **Multi-OS Support**: Deploy to Ubuntu, Amazon Linux, or CentOS instances
+- **Flexible Instance Sizes**: Choose from Nano (512MB) to 2XLarge (32GB) instances
+- **Generate Configs**: Create deployment configuration files with OS-specific settings
 - **OIDC Setup**: Configure GitHub Actions authentication with AWS
 - **Deployment Status**: Monitor workflow runs and deployment health
 - **Example Apps**: List available application templates
@@ -27,7 +29,8 @@ Then configure clients:
 {
   "mcpServers": {
     "lightsail-deployment": {
-      "url": "http://your-instance-ip:3000/sse",
+      "url": "http://18.215.231.164:3000/sse",
+      "transport": "sse",
       "headers": {
         "Authorization": "Bearer YOUR_TOKEN"
       }
@@ -35,6 +38,11 @@ Then configure clients:
   }
 }
 ```
+
+**Current Live Server:** `http://18.215.231.164:3000`
+- Health Check: `http://18.215.231.164:3000/health`
+- Web Interface: `http://18.215.231.164:3000/`
+- SSE Endpoint: `http://18.215.231.164:3000/sse`
 
 See [DEPLOY.md](DEPLOY.md) for complete deployment guide.
 
@@ -111,53 +119,87 @@ For local development:
 
 ### 1. setup_new_repository
 
-Create a new GitHub repository with complete Lightsail deployment automation.
+Create a new GitHub repository with complete Lightsail deployment automation. **Now supports multiple operating systems and instance sizes!**
 
 **Parameters:**
 - `repo_name` (required): Name of the new repository
 - `app_type` (required): Application type (lamp, nginx, nodejs, python, react, docker)
 - `instance_name` (required): Lightsail instance name
 - `aws_region`: AWS region (default: us-east-1)
+- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
+  - `ubuntu_22_04`: Ubuntu 22.04 LTS (Recommended)
+  - `ubuntu_20_04`: Ubuntu 20.04 LTS
+  - `amazon_linux_2023`: Amazon Linux 2023
+  - `amazon_linux_2`: Amazon Linux 2
+  - `centos_7_2009_01`: CentOS 7
+- `bundle_id`: Instance size bundle (default: small_3_0)
+  - `nano_3_0`: Nano (512MB RAM, $3.50/month)
+  - `micro_3_0`: Micro (1GB RAM, $5/month)
+  - `small_3_0`: Small (2GB RAM, $10/month) - Recommended
+  - `medium_3_0`: Medium (4GB RAM, $20/month)
+  - `large_3_0`: Large (8GB RAM, $40/month)
+  - `xlarge_3_0`: XLarge (16GB RAM, $80/month)
+  - `2xlarge_3_0`: 2XLarge (32GB RAM, $160/month)
 - `enable_bucket`: Enable S3 bucket integration (default: false)
 - `bucket_name`: S3 bucket name (if enable_bucket is true)
 - `database_type`: Database type (none, mysql, postgresql)
 - `use_rds`: Use AWS RDS for database (default: false)
 
-**Example:**
+**Examples:**
 ```
 Create a new repository called "my-app" with Node.js deployment to Lightsail instance "my-nodejs-app" in us-west-2
 ```
 
+```
+Create a new Python app on Amazon Linux 2023 with a Medium instance size
+```
+
+```
+Set up a LAMP stack on Ubuntu 22.04 with XLarge instance for high traffic
+```
+
 ### 2. integrate_existing_repository
 
-Add Lightsail deployment automation to an existing GitHub repository.
+Add Lightsail deployment automation to an existing GitHub repository. **Supports multiple operating systems and instance sizes!**
 
 **Parameters:**
 - `repo_path` (required): Path to existing repository
 - `app_type` (required): Application type
 - `instance_name` (required): Lightsail instance name
 - `aws_region`: AWS region (default: us-east-1)
+- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
+- `bundle_id`: Instance size bundle (default: small_3_0)
 - `enable_bucket`: Enable S3 bucket (default: false)
 
-**Example:**
+**Examples:**
 ```
 Add Lightsail deployment to my existing repo at /path/to/repo for a LAMP stack app
 ```
 
+```
+Integrate Lightsail deployment with Amazon Linux 2023 and Small instance size
+```
+
 ### 3. generate_deployment_config
 
-Generate a deployment configuration file for Lightsail.
+Generate a deployment configuration file for Lightsail with OS and instance size selection.
 
 **Parameters:**
 - `app_type` (required): Application type
 - `instance_name` (required): Instance name
+- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
+- `bundle_id`: Instance size bundle (default: small_3_0)
 - `dependencies`: Additional dependencies (redis, git, etc.)
 - `enable_bucket`: Enable S3 bucket (default: false)
 - `bucket_config`: Bucket configuration object
 
-**Example:**
+**Examples:**
 ```
 Generate a deployment config for a Python app with Redis
+```
+
+```
+Create a config for Docker deployment on Amazon Linux 2023 with Large instance
 ```
 
 ### 4. setup_oidc_authentication
@@ -274,6 +316,32 @@ AI: [Uses get_deployment_status tool]
 - **Python**: Flask, Django, FastAPI
 - **React**: CRA, Vite, Next.js static
 - **Docker**: Multi-container, microservices
+
+## Operating System Support
+
+The MCP server now supports multiple operating systems with automatic package manager detection:
+
+- **Ubuntu 22.04 LTS** (Recommended) - `ubuntu_22_04`
+- **Ubuntu 20.04 LTS** - `ubuntu_20_04`
+- **Amazon Linux 2023** - `amazon_linux_2023`
+- **Amazon Linux 2** - `amazon_linux_2`
+- **CentOS 7** - `centos_7_2009_01`
+
+Each OS is automatically configured with the appropriate package manager (apt for Ubuntu, yum/dnf for Amazon Linux/CentOS) and system-specific settings.
+
+## Instance Size Options
+
+Choose the right instance size for your workload:
+
+| Size | RAM | vCPU | Storage | Monthly Cost | Best For |
+|------|-----|------|---------|--------------|----------|
+| Nano | 512MB | 1 | 20GB SSD | $3.50 | Lightest workloads |
+| Micro | 1GB | 1 | 40GB SSD | $5.00 | Small apps |
+| Small | 2GB | 2 | 60GB SSD | $10.00 | Most apps (Recommended) |
+| Medium | 4GB | 2 | 80GB SSD | $20.00 | High traffic apps |
+| Large | 8GB | 4 | 160GB SSD | $40.00 | Resource intensive |
+| XLarge | 16GB | 4 | 320GB SSD | $80.00 | Heavy workloads |
+| 2XLarge | 32GB | 8 | 640GB SSD | $160.00 | Enterprise |
 
 ## Development
 

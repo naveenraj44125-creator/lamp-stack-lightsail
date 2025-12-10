@@ -67,6 +67,45 @@ AWS_REGION=${AWS_REGION:-us-east-1}
 read -p "Lightsail Instance Name: " INSTANCE_NAME
 
 echo ""
+echo -e "${BLUE}Instance Configuration:${NC}"
+echo "Select Operating System:"
+echo "1) Ubuntu 22.04 LTS (Recommended)"
+echo "2) Ubuntu 20.04 LTS"
+echo "3) Amazon Linux 2023"
+echo "4) Amazon Linux 2"
+echo "5) CentOS 7"
+read -p "Choose OS (1-5, default: 1): " OS_CHOICE
+case ${OS_CHOICE:-1} in
+    1) BLUEPRINT_ID="ubuntu_22_04"; OS_NAME="Ubuntu 22.04 LTS";;
+    2) BLUEPRINT_ID="ubuntu_20_04"; OS_NAME="Ubuntu 20.04 LTS";;
+    3) BLUEPRINT_ID="amazon_linux_2023"; OS_NAME="Amazon Linux 2023";;
+    4) BLUEPRINT_ID="amazon_linux_2"; OS_NAME="Amazon Linux 2";;
+    5) BLUEPRINT_ID="centos_7_2009_01"; OS_NAME="CentOS 7";;
+    *) BLUEPRINT_ID="ubuntu_22_04"; OS_NAME="Ubuntu 22.04 LTS";;
+esac
+
+echo ""
+echo "Select Instance Size:"
+echo "1) Nano - 512MB RAM, 1 vCPU, 20GB SSD (Lightest workloads)"
+echo "2) Micro - 1GB RAM, 1 vCPU, 40GB SSD (Small apps)"
+echo "3) Small - 2GB RAM, 2 vCPU, 60GB SSD (Recommended for most apps)"
+echo "4) Medium - 4GB RAM, 2 vCPU, 80GB SSD (High traffic apps)"
+echo "5) Large - 8GB RAM, 4 vCPU, 160GB SSD (Resource intensive)"
+echo "6) XLarge - 16GB RAM, 4 vCPU, 320GB SSD (Heavy workloads)"
+echo "7) 2XLarge - 32GB RAM, 8 vCPU, 640GB SSD (Enterprise)"
+read -p "Choose size (1-7, default: 3): " SIZE_CHOICE
+case ${SIZE_CHOICE:-3} in
+    1) BUNDLE_ID="nano_3_0"; SIZE_NAME="Nano (512MB)";;
+    2) BUNDLE_ID="micro_3_0"; SIZE_NAME="Micro (1GB)";;
+    3) BUNDLE_ID="small_3_0"; SIZE_NAME="Small (2GB)";;
+    4) BUNDLE_ID="medium_3_0"; SIZE_NAME="Medium (4GB)";;
+    5) BUNDLE_ID="large_3_0"; SIZE_NAME="Large (8GB)";;
+    6) BUNDLE_ID="xlarge_3_0"; SIZE_NAME="XLarge (16GB)";;
+    7) BUNDLE_ID="2xlarge_3_0"; SIZE_NAME="2XLarge (32GB)";;
+    *) BUNDLE_ID="small_3_0"; SIZE_NAME="Small (2GB)";;
+esac
+
+echo ""
 echo -e "${BLUE}GitHub Actions OIDC Setup:${NC}"
 echo "1) Use existing IAM role (provide ARN)"
 echo "2) Create new IAM role with OIDC"
@@ -233,8 +272,9 @@ echo ""
 echo -e "${YELLOW}Summary:${NC}"
 echo "Repository: $REPO_NAME"
 echo "Application: $APP_NAME ($APP_TYPE_NAME)"
-echo "Instance: $INSTANCE_NAME"
+echo "Instance: $INSTANCE_NAME ($SIZE_NAME)"
 echo "Region: $AWS_REGION"
+echo "OS: $OS_NAME"
 echo "Dependencies: $DEPENDENCIES"
 if [[ "$DB_TYPE" != "none" ]]; then
     echo "Database: $DB_TYPE ($([ "$DB_EXTERNAL" = "true" ] && echo "external RDS" || echo "internal"))"
@@ -297,8 +337,8 @@ lightsail:
   
   # Instance will be auto-created if it doesn't exist
   auto_create: true
-  blueprint_id: "ubuntu_22_04"
-  bundle_id: "nano_3_0"  # 512 MB RAM, 1 vCPU, 20 GB SSD
+  blueprint_id: "${BLUEPRINT_ID}"  # ${OS_NAME}
+  bundle_id: "${BUNDLE_ID}"  # ${SIZE_NAME}
 
 dependencies:
 EOF

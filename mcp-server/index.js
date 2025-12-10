@@ -40,7 +40,7 @@ class LightsailDeploymentServer {
       tools: [
         {
           name: 'setup_new_repository',
-          description: 'Create a new GitHub repository with Lightsail deployment automation. Sets up workflows, OIDC, and deployment configuration.',
+          description: 'Create a new GitHub repository with Lightsail deployment automation. Supports multiple operating systems (Ubuntu, Amazon Linux, CentOS) and instance sizes (Nano to 2XLarge). Sets up workflows, OIDC, and deployment configuration.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -61,6 +61,18 @@ class LightsailDeploymentServer {
                 type: 'string',
                 default: 'us-east-1',
                 description: 'AWS region for deployment',
+              },
+              blueprint_id: {
+                type: 'string',
+                description: 'Operating system blueprint (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01)',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023', 'amazon_linux_2', 'centos_7_2009_01'],
+                default: 'ubuntu_22_04',
+              },
+              bundle_id: {
+                type: 'string',
+                description: 'Instance size bundle (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0)',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0'],
+                default: 'small_3_0',
               },
               enable_bucket: {
                 type: 'boolean',
@@ -88,7 +100,7 @@ class LightsailDeploymentServer {
         },
         {
           name: 'integrate_existing_repository',
-          description: 'Add Lightsail deployment automation to an existing GitHub repository',
+          description: 'Add Lightsail deployment automation to an existing GitHub repository. Supports multiple operating systems (Ubuntu, Amazon Linux, CentOS) and instance sizes (Nano to 2XLarge). Interactive configuration for OS, instance size, and application type.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -110,6 +122,18 @@ class LightsailDeploymentServer {
                 default: 'us-east-1',
                 description: 'AWS region',
               },
+              blueprint_id: {
+                type: 'string',
+                description: 'Operating system blueprint (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01)',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023', 'amazon_linux_2', 'centos_7_2009_01'],
+                default: 'ubuntu_22_04',
+              },
+              bundle_id: {
+                type: 'string',
+                description: 'Instance size bundle (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0)',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0'],
+                default: 'small_3_0',
+              },
               enable_bucket: {
                 type: 'boolean',
                 default: false,
@@ -121,7 +145,7 @@ class LightsailDeploymentServer {
         },
         {
           name: 'generate_deployment_config',
-          description: 'Generate a deployment configuration file for Lightsail',
+          description: 'Generate a deployment configuration file for Lightsail with OS and instance size selection',
           inputSchema: {
             type: 'object',
             properties: {
@@ -133,6 +157,18 @@ class LightsailDeploymentServer {
               instance_name: {
                 type: 'string',
                 description: 'Instance name',
+              },
+              blueprint_id: {
+                type: 'string',
+                description: 'Operating system blueprint (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01)',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023', 'amazon_linux_2', 'centos_7_2009_01'],
+                default: 'ubuntu_22_04',
+              },
+              bundle_id: {
+                type: 'string',
+                description: 'Instance size bundle (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0)',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0'],
+                default: 'small_3_0',
               },
               dependencies: {
                 type: 'array',
@@ -268,6 +304,8 @@ class LightsailDeploymentServer {
       app_type,
       instance_name,
       aws_region = 'us-east-1',
+      blueprint_id = 'ubuntu_22_04',
+      bundle_id = 'small_3_0',
       enable_bucket = false,
       bucket_name,
       database_type = 'none',
@@ -283,6 +321,8 @@ class LightsailDeploymentServer {
       app_type,
       instance_name,
       aws_region,
+      blueprint_id,
+      bundle_id,
       enable_bucket,
       bucket_name,
       database_type,
@@ -306,8 +346,9 @@ class LightsailDeploymentServer {
 4. Set up OIDC with: setup_oidc_authentication
 
 **Configuration Generated:**
-- Instance: ${instance_name}
+- Instance: ${instance_name} (${bundle_id})
 - Region: ${aws_region}
+- OS: ${blueprint_id}
 - Type: ${app_type}
 - Bucket: ${enable_bucket ? 'Enabled' : 'Disabled'}
 - Database: ${database_type}${use_rds ? ' (RDS)' : ''}
@@ -324,7 +365,15 @@ Run deployments with: git push origin main`,
   }
 
   async integrateExistingRepository(args) {
-    const { repo_path, app_type, instance_name, aws_region = 'us-east-1', enable_bucket = false } = args;
+    const { 
+      repo_path, 
+      app_type, 
+      instance_name, 
+      aws_region = 'us-east-1', 
+      blueprint_id = 'ubuntu_22_04',
+      bundle_id = 'small_3_0',
+      enable_bucket = false 
+    } = args;
 
     if (!existsSync(repo_path)) {
       throw new Error(`Repository path not found: ${repo_path}`);
@@ -339,7 +388,14 @@ Run deployments with: git push origin main`,
     execSync(`cp -r ${tempDir}/workflows ${repo_path}/`, { stdio: 'pipe' });
 
     // Generate config
-    const config = this.generateConfig({ app_type, instance_name, aws_region, enable_bucket });
+    const config = this.generateConfig({ 
+      app_type, 
+      instance_name, 
+      aws_region, 
+      blueprint_id, 
+      bundle_id, 
+      enable_bucket 
+    });
     writeFileSync(join(repo_path, `deployment-${app_type}.config.yml`), config);
 
     return {
@@ -392,6 +448,8 @@ Save this as \`deployment-${args.app_type}.config.yml\` in your repository root.
       app_type,
       instance_name,
       aws_region = 'us-east-1',
+      blueprint_id = 'ubuntu_22_04',
+      bundle_id = 'small_3_0',
       enable_bucket = false,
       bucket_name,
       bucket_config = {},
@@ -400,6 +458,26 @@ Save this as \`deployment-${args.app_type}.config.yml\` in your repository root.
       use_rds = false,
     } = args;
 
+    // Map blueprint_id to OS names for comments
+    const osNames = {
+      'ubuntu_22_04': 'Ubuntu 22.04 LTS',
+      'ubuntu_20_04': 'Ubuntu 20.04 LTS', 
+      'amazon_linux_2023': 'Amazon Linux 2023',
+      'amazon_linux_2': 'Amazon Linux 2',
+      'centos_7_2009_01': 'CentOS 7'
+    };
+
+    // Map bundle_id to size names for comments
+    const sizeNames = {
+      'nano_3_0': 'Nano (512MB)',
+      'micro_3_0': 'Micro (1GB)',
+      'small_3_0': 'Small (2GB)',
+      'medium_3_0': 'Medium (4GB)',
+      'large_3_0': 'Large (8GB)',
+      'xlarge_3_0': 'XLarge (16GB)',
+      '2xlarge_3_0': '2XLarge (32GB)'
+    };
+
     let config = `# ${app_type.toUpperCase()} Deployment Configuration
 aws:
   region: ${aws_region}
@@ -407,6 +485,11 @@ aws:
 lightsail:
   instance_name: ${instance_name}
   static_ip: ""
+  
+  # Instance will be auto-created if it doesn't exist
+  auto_create: true
+  blueprint_id: "${blueprint_id}"  # ${osNames[blueprint_id] || blueprint_id}
+  bundle_id: "${bundle_id}"  # ${sizeNames[bundle_id] || bundle_id}
 `;
 
     if (enable_bucket && bucket_name) {

@@ -66,7 +66,7 @@ class LightsailDeploymentServer {
       tools: [
         {
           name: 'setup_new_repository',
-          description: 'Create a new GitHub repository with Lightsail deployment automation',
+          description: 'Create a new GitHub repository with Lightsail deployment automation. Supports multiple operating systems (Ubuntu, Amazon Linux, CentOS) and instance sizes (Nano to 2XLarge). The script will interactively prompt for OS and instance size selection.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -74,6 +74,18 @@ class LightsailDeploymentServer {
               app_type: { type: 'string', enum: ['lamp', 'nginx', 'nodejs', 'python', 'react', 'docker'] },
               instance_name: { type: 'string', description: 'Lightsail instance name' },
               aws_region: { type: 'string', default: 'us-east-1' },
+              blueprint_id: { 
+                type: 'string', 
+                description: 'Operating system blueprint (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01)',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023', 'amazon_linux_2', 'centos_7_2009_01'],
+                default: 'ubuntu_22_04'
+              },
+              bundle_id: { 
+                type: 'string', 
+                description: 'Instance size bundle (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0)',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0'],
+                default: 'small_3_0'
+              },
             },
             required: ['repo_name', 'app_type', 'instance_name'],
           },
@@ -87,6 +99,32 @@ class LightsailDeploymentServer {
               repo_path: { type: 'string', description: 'Repository path' },
             },
             required: ['repo_path'],
+          },
+        },
+        {
+          name: 'integrate_lightsail_actions',
+          description: 'Add Lightsail deployment automation to an existing GitHub repository. Supports multiple operating systems (Ubuntu, Amazon Linux, CentOS) and instance sizes (Nano to 2XLarge). The script will interactively configure deployment based on your application type.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              app_type: { type: 'string', enum: ['lamp', 'nginx', 'nodejs', 'python', 'react', 'docker'] },
+              instance_name: { type: 'string', description: 'Lightsail instance name' },
+              aws_region: { type: 'string', default: 'us-east-1' },
+              blueprint_id: { 
+                type: 'string', 
+                description: 'Operating system blueprint (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01)',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023', 'amazon_linux_2', 'centos_7_2009_01'],
+                default: 'ubuntu_22_04'
+              },
+              bundle_id: { 
+                type: 'string', 
+                description: 'Instance size bundle (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0)',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0', '2xlarge_3_0'],
+                default: 'small_3_0'
+              },
+              repo_path: { type: 'string', description: 'Repository path (default: current directory)', default: '.' },
+            },
+            required: ['app_type', 'instance_name'],
           },
         },
         {
@@ -108,6 +146,10 @@ class LightsailDeploymentServer {
 
       try {
         switch (name) {
+          case 'setup_new_repository':
+            return await this.setupNewRepository(args);
+          case 'integrate_lightsail_actions':
+            return await this.integrateLightsailActions(args);
           case 'get_deployment_status':
             return await this.getDeploymentStatus(args);
           case 'diagnose_deployment':
@@ -142,6 +184,87 @@ class LightsailDeploymentServer {
       return { content: [{ type: 'text', text: status }] };
     } catch (error) {
       throw new Error('Failed to get deployment status');
+    }
+  }
+
+  async setupNewRepository(args) {
+    const { repo_name, app_type, instance_name, aws_region = 'us-east-1', blueprint_id = 'ubuntu_22_04', bundle_id = 'small_3_0' } = args;
+    
+    try {
+      // Create a temporary script with the provided parameters
+      const scriptContent = `#!/bin/bash
+# Auto-generated setup script with MCP parameters
+export REPO_NAME="${repo_name}"
+export APP_TYPE="${app_type}"
+export INSTANCE_NAME="${instance_name}"
+export AWS_REGION="${aws_region}"
+export BLUEPRINT_ID="${blueprint_id}"
+export BUNDLE_ID="${bundle_id}"
+
+# Run the setup script with environment variables
+./setup-new-repo.sh
+`;
+      
+      writeFileSync('/tmp/mcp-setup-repo.sh', scriptContent);
+      execSync('chmod +x /tmp/mcp-setup-repo.sh');
+      
+      const output = execSync('/tmp/mcp-setup-repo.sh', { 
+        encoding: 'utf-8',
+        cwd: process.cwd(),
+        timeout: 300000 // 5 minutes
+      });
+      
+      return { 
+        content: [{ 
+          type: 'text', 
+          text: `# Repository Setup Complete\n\n✅ Created repository: ${repo_name}\n✅ Application type: ${app_type}\n✅ Instance: ${instance_name} (${bundle_id})\n✅ Region: ${aws_region}\n✅ OS: ${blueprint_id}\n\n${output}` 
+        }] 
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Setup failed: ${error.message}` }],
+        isError: true,
+      };
+    }
+  }
+
+  async integrateLightsailActions(args) {
+    const { app_type, instance_name, aws_region = 'us-east-1', blueprint_id = 'ubuntu_22_04', bundle_id = 'small_3_0', repo_path = '.' } = args;
+    
+    try {
+      // Create a temporary script with the provided parameters
+      const scriptContent = `#!/bin/bash
+# Auto-generated integration script with MCP parameters
+export APP_TYPE="${app_type}"
+export INSTANCE_NAME="${instance_name}"
+export AWS_REGION="${aws_region}"
+export BLUEPRINT_ID="${blueprint_id}"
+export BUNDLE_ID="${bundle_id}"
+
+# Run the integration script with environment variables
+./integrate-lightsail-actions.sh
+`;
+      
+      writeFileSync('/tmp/mcp-integrate.sh', scriptContent);
+      execSync('chmod +x /tmp/mcp-integrate.sh');
+      
+      const output = execSync('/tmp/mcp-integrate.sh', { 
+        encoding: 'utf-8',
+        cwd: repo_path,
+        timeout: 300000 // 5 minutes
+      });
+      
+      return { 
+        content: [{ 
+          type: 'text', 
+          text: `# Lightsail Integration Complete\n\n✅ Application type: ${app_type}\n✅ Instance: ${instance_name} (${bundle_id})\n✅ Region: ${aws_region}\n✅ OS: ${blueprint_id}\n\n${output}` 
+        }] 
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Integration failed: ${error.message}` }],
+        isError: true,
+      };
     }
   }
 
@@ -292,7 +415,13 @@ app.get('/', (req, res) => {
             <div class="tools">
                 <div class="tool">
                     <strong>setup_new_repository</strong><br>
-                    Create GitHub repos with Lightsail deployment automation
+                    Create GitHub repos with Lightsail deployment automation.<br>
+                    <em>Supports multiple OS (Ubuntu, Amazon Linux, CentOS) and instance sizes (Nano to 2XLarge)</em>
+                </div>
+                <div class="tool">
+                    <strong>integrate_lightsail_actions</strong><br>
+                    Add Lightsail deployment to existing repositories.<br>
+                    <em>Interactive configuration for OS, instance size, and application type</em>
                 </div>
                 <div class="tool">
                     <strong>get_deployment_status</strong><br>
