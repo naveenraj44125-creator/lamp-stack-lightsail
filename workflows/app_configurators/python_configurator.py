@@ -19,21 +19,24 @@ class PythonConfigurator(BaseConfigurator):
         """Configure Python API application with systemd service"""
         print("🔧 Configuring Python API application...")
         
-        script = '''
+        # Get the document root from nginx config or use default
+        document_root = self.config.get('dependencies.nginx.config.document_root', '/opt/app')
+        
+        script = f'''
 set -e
 echo "Configuring Python for API application..."
 
 # Check if app files exist
-if [ ! -f "/opt/app/app.py" ]; then
-    echo "❌ No app.py found in /opt/app"
-    ls -la /opt/app/ || echo "Directory does not exist"
+if [ ! -f "{document_root}/app.py" ]; then
+    echo "❌ No app.py found in {document_root}"
+    ls -la {document_root}/ || echo "Directory does not exist"
     exit 1
 fi
 
 # Install Python dependencies if requirements.txt exists
-if [ -f "/opt/app/requirements.txt" ]; then
+if [ -f "{document_root}/requirements.txt" ]; then
     echo "📦 Installing Python dependencies..."
-    cd /opt/app
+    cd {document_root}
     
     # Ensure pip is installed
     if ! command -v pip3 &> /dev/null; then
@@ -61,7 +64,7 @@ sudo chown ubuntu:ubuntu /var/log/python-app
 
 # Create systemd service for Python app
 echo "📝 Creating systemd service file..."
-sudo tee /etc/systemd/system/python-app.service > /dev/null << 'EOF'
+sudo tee /etc/systemd/system/python-app.service > /dev/null << EOF
 [Unit]
 Description=Python Flask Application
 After=network.target
@@ -69,7 +72,7 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/opt/app
+WorkingDirectory={document_root}
 Environment=PATH=/usr/bin:/usr/local/bin
 Environment=FLASK_APP=app.py
 Environment=FLASK_ENV=production
