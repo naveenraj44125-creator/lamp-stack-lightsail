@@ -110,7 +110,7 @@ jobs:
             response = lightsail.get_instance(instanceName=instance_name)
             instance = response['instance']
             instance_exists = True
-            print(f"✅ Instance exists with state: {instance['state']['name']}")
+            print(f"✅ Instance '{instance_name}' already exists with state: {instance['state']['name']}")
             
             # Validate blueprint is Ubuntu
             blueprint_id = instance.get('blueprintId', '')
@@ -208,15 +208,15 @@ jobs:
             else:
                 print(f"\nℹ️  Non-Docker deployment - no minimum RAM requirement")
             
-            # Get public IP
+            # Get public IP from existing instance
             if 'publicIpAddress' in instance:
                 static_ip = instance['publicIpAddress']
-                print(f"✅ Public IP: {static_ip}")
+                print(f"✅ Using existing instance public IP: {static_ip}")
             else:
-                print("⚠️  No public IP found yet")
+                print("⚠️  No public IP found on existing instance")
             
             # Ensure firewall ports are open for existing instances
-            print("\n🔥 Ensuring firewall ports are open...")
+            print("\n🔥 Ensuring firewall ports are open on existing instance...")
             
             # Get custom ports from config
             firewall_config = config.get('dependencies', {}).get('firewall', {}).get('config', {})
@@ -228,7 +228,7 @@ jobs:
                 port_num = int(str(port).strip())
                 port_infos.append({'fromPort': port_num, 'toPort': port_num, 'protocol': 'tcp'})
             
-            print(f"   Opening ports: {', '.join(map(str, allowed_ports))}")
+            print(f"   Ensuring ports are open: {', '.join(map(str, allowed_ports))}")
             
             try:
                 lightsail.put_instance_public_ports(
@@ -239,12 +239,12 @@ jobs:
             except Exception as e:
                 print(f"⚠️  Could not update firewall: {e}")
             
-            # Setup Lightsail bucket if configured
+            # Setup Lightsail bucket if configured for existing instance
             bucket_config = config.get('lightsail', {}).get('bucket', {})
             if bucket_config.get('enabled', False):
                 bucket_name = bucket_config.get('name', '')
                 if bucket_name:
-                    print(f"\n🪣 Setting up Lightsail bucket...")
+                    print(f"\n🪣 Setting up Lightsail bucket for existing instance...")
                     import sys
                     sys.path.insert(0, 'workflows')
                     from lightsail_bucket import LightsailBucket
@@ -272,6 +272,7 @@ jobs:
                 
         except lightsail.exceptions.NotFoundException:
             print(f"⚠️  Instance '{instance_name}' not found. Creating new instance...")
+            instance_exists = False
             
             # Determine bundle size based on deployment type
             docker_enabled = config.get('dependencies', {}).get('docker', {}).get('enabled', False)
@@ -318,7 +319,7 @@ jobs:
                         if state == 'running':
                             if 'publicIpAddress' in instance:
                                 static_ip = instance['publicIpAddress']
-                                print(f"✅ Instance is running with IP: {static_ip}")
+                                print(f"✅ New instance is running with IP: {static_ip}")
                                 break
                     except Exception as e:
                         print(f"   Waiting... {e}")
@@ -327,8 +328,8 @@ jobs:
                     print("❌ Instance did not get a public IP within timeout")
                     exit(1)
                     
-                # Open firewall ports
-                print("\n🔥 Configuring firewall...")
+                # Open firewall ports for new instance
+                print("\n🔥 Configuring firewall for new instance...")
                 
                 # Get custom ports from config
                 firewall_config = config.get('dependencies', {}).get('firewall', {}).get('config', {})
@@ -348,9 +349,64 @@ jobs:
                 )
                 print(f"✅ Firewall configured: {', '.join(map(str, allowed_ports))}")
                 
-            except Exception as e:
-                print(f"❌ Failed to create instance: {e}")
-                exit(1)
+                # Setup Lightsail bucket for new instance if configured
+                bucket_config = config.get('lightsail', {}).get('bucket', {})
+                if bucket_config.get('enabled', False):
+                    bucket_name = bucket_config.get('name', '')
+                    if bucket_name:
+                        print(f"\n🪣 Setting up Lightsail bucket for new instance...")
+                        import sys
+                        sys.path.insert(0, 'workflows')
+                        from lightsail_bucket import LightsailBucket
+                        
+                        bucket_manager = LightsailBucket(region=aws_region)
+                        access_level = bucket_config.get('access_level', 'read_only')
+                        bundle_id_bucket = bucket_config.get('bundle_id', 'small_1_0')
+                        
+                        success, message = bucket_manager.setup_bucket_for_instance(
+                            bucket_name=bucket_name,
+                            instance_name=instance_name,
+                            access_level=access_level,
+                            bundle_id=bundle_id_bucket,
+                            create_if_missing=True
+                        )
+                        
+                        if success:
+                            print(f"✅ {message}")
+                        else:
+                            print(f"⚠️  {message}")
+                    else:
+                        print("⚠️  Bucket enabled but no name specified")
+                else:
+                    print("\nℹ️  Lightsail bucket not configured")
+                
+            except Exception as create_error:
+                # Check if the error is because instance already exists
+                error_message = str(create_error)
+                if 'already exists' in error_message.lower() or 'duplicate' in error_message.lower():
+                    print(f"⚠️  Instance '{instance_name}' already exists (race condition detected)")
+                    print("   This can happen if the instance was created between our check and creation attempt")
+                    print("   Attempting to use the existing instance...")
+                    
+                    # Try to get the existing instance
+                    try:
+                        response = lightsail.get_instance(instanceName=instance_name)
+                        instance = response['instance']
+                        if 'publicIpAddress' in instance:
+                            static_ip = instance['publicIpAddress']
+                            print(f"✅ Using existing instance with IP: {static_ip}")
+                        else:
+                            print("⚠️  Existing instance has no public IP")
+                    except Exception as get_error:
+                        print(f"❌ Could not retrieve existing instance: {get_error}")
+                        exit(1)
+                else:
+                    print(f"❌ Failed to create instance: {create_error}")
+                    exit(1)
+        
+        except Exception as e:
+            print(f"❌ Unexpected error while checking/creating instance: {e}")
+            exit(1)
         
         # Get enabled dependencies
         enabled_deps = []
