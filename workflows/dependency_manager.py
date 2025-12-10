@@ -3,6 +3,7 @@
 Generic Dependency Manager for AWS Lightsail Deployments
 This module handles installation and configuration of various dependencies
 based on configuration settings (Apache, MySQL, PHP, Python, Node.js, etc.)
+Supports multiple operating systems: Ubuntu, Amazon Linux, CentOS, RHEL
 """
 
 import sys
@@ -10,22 +11,37 @@ import json
 from typing import Dict, List, Any, Tuple
 from config_loader import DeploymentConfig
 from lightsail_rds import LightsailRDSManager
+from os_detector import OSDetector
 
 class DependencyManager:
     """Manages installation and configuration of application dependencies"""
     
-    def __init__(self, lightsail_client, config: DeploymentConfig):
+    def __init__(self, lightsail_client, config: DeploymentConfig, os_type: str = None, os_info: Dict[str, str] = None):
         """
         Initialize dependency manager
         
         Args:
             lightsail_client: Lightsail client instance for running commands
             config: Deployment configuration instance
+            os_type: Operating system type (ubuntu, amazon_linux, centos, rhel)
+            os_info: OS information dict with package_manager, service_manager, user
         """
         self.client = lightsail_client
         self.config = config
         self.installed_dependencies = []
         self.failed_dependencies = []
+        
+        # Set OS information
+        self.os_type = os_type or 'ubuntu'
+        self.os_info = os_info or {'package_manager': 'apt', 'service_manager': 'systemd', 'user': 'ubuntu'}
+        
+        # Get OS-specific command templates
+        self.pkg_commands = OSDetector.get_package_manager_commands(self.os_info['package_manager'])
+        self.svc_commands = OSDetector.get_service_commands(self.os_info['service_manager'])
+        self.os_packages = OSDetector.get_os_specific_packages(self.os_type, self.os_info['package_manager'])
+        self.user_info = OSDetector.get_user_info(self.os_type)
+        
+        print(f"🖥️  Detected OS: {self.os_type} with {self.os_info['package_manager']} package manager")
     
     def get_enabled_dependencies(self) -> List[str]:
         """Get list of enabled dependencies from configuration"""
@@ -53,9 +69,10 @@ class DependencyManager:
         
         print(f"📦 Installing {len(enabled_deps)} enabled dependencies: {', '.join(enabled_deps)}")
         
-        # First, check and fix dpkg if it's in a broken state
-        print("\n🔧 Checking dpkg state...")
-        dpkg_check_script = '''
+        # First, check and fix package manager if it's in a broken state
+        print(f"\n🔧 Checking {self.os_info['package_manager']} state...")
+        if self.os_info['package_manager'] == 'apt':
+            fix_script = '''
 # Check if dpkg is in a broken state
 if sudo dpkg --audit 2>&1 | grep -q "broken"; then
     echo "⚠️  dpkg is in a broken state, fixing..."
@@ -66,15 +83,25 @@ else
     echo "✅ dpkg is healthy"
 fi
 '''
-        success, output = self.client.run_command(dpkg_check_script, timeout=180)
-        if not success:
-            print("⚠️  dpkg check/fix failed, but continuing...")
         else:
-            print("✅ dpkg state verified")
+            # For yum/dnf systems
+            fix_script = f'''
+# Clean package manager cache and check for issues
+echo "Cleaning {self.os_info['package_manager']} cache..."
+{self.pkg_commands['fix_broken']}
+echo "✅ Package manager state verified"
+'''
         
-        # Run apt-get update once at the beginning to avoid repeated updates
-        print("\n🔄 Updating package lists...")
-        update_script = '''
+        success, output = self.client.run_command(fix_script, timeout=180)
+        if not success:
+            print(f"⚠️  {self.os_info['package_manager']} check/fix failed, but continuing...")
+        else:
+            print(f"✅ {self.os_info['package_manager']} state verified")
+        
+        # Update package lists/cache
+        print(f"\n🔄 Updating package lists using {self.os_info['package_manager']}...")
+        if self.os_info['package_manager'] == 'apt':
+            update_script = '''
 set -e
 echo "Running apt-get update..."
 # Use faster update with reduced timeout for GitHub Actions
@@ -82,9 +109,18 @@ export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -qq -o Acquire::Retries=2 -o Acquire::http::Timeout=30
 echo "✅ Package lists updated"
 '''
+        else:
+            # For yum/dnf systems
+            update_script = f'''
+set -e
+echo "Running {self.os_info['package_manager']} update..."
+{self.pkg_commands['update']}
+echo "✅ Package cache updated"
+'''
+        
         success, output = self.client.run_command(update_script, timeout=180)
         if not success:
-            print("⚠️  apt-get update failed, but continuing with installations...")
+            print(f"⚠️  {self.os_info['package_manager']} update failed, but continuing with installations...")
         else:
             print("✅ Package lists updated successfully")
         
@@ -129,7 +165,7 @@ echo "✅ Package lists updated"
         """Batch install common system packages for efficiency"""
         common_packages = []
         
-        # Collect common packages needed by multiple dependencies
+        # Collect common packages needed by multiple dependencies (OS-agnostic names)
         if any(dep in enabled_deps for dep in ['apache', 'nginx', 'php']):
             common_packages.extend(['curl', 'wget', 'unzip'])
         
@@ -137,26 +173,41 @@ echo "✅ Package lists updated"
             common_packages.append('git')
         
         if 'nodejs' in enabled_deps:
-            common_packages.extend(['curl', 'software-properties-common'])
+            common_packages.append('curl')
+            # Add OS-specific packages for Node.js setup
+            if self.os_info['package_manager'] == 'apt':
+                common_packages.append('software-properties-common')
         
         if 'python' in enabled_deps:
-            common_packages.extend(['python3', 'python3-pip', 'python3-venv'])
+            if self.os_info['package_manager'] == 'apt':
+                common_packages.extend(['python3', 'python3-pip', 'python3-venv'])
+            else:
+                common_packages.extend(['python3', 'python3-pip'])
         
-        if 'php' in enabled_deps:
-            common_packages.extend(['software-properties-common'])
+        if 'php' in enabled_deps and self.os_info['package_manager'] == 'apt':
+            common_packages.append('software-properties-common')
         
         # Remove duplicates and install in batch
         if common_packages:
             unique_packages = list(set(common_packages))
             print(f"\n📦 Batch installing common packages: {', '.join(unique_packages)}")
             
-            batch_script = f'''
+            if self.os_info['package_manager'] == 'apt':
+                batch_script = f'''
 set -e
 export DEBIAN_FRONTEND=noninteractive
 echo "Installing common packages in batch for efficiency..."
-sudo apt-get install -y -qq {' '.join(unique_packages)}
+{self.pkg_commands['install']} {' '.join(unique_packages)}
 echo "✅ Common packages installed"
 '''
+            else:
+                batch_script = f'''
+set -e
+echo "Installing common packages in batch for efficiency..."
+{self.pkg_commands['install']} {' '.join(unique_packages)}
+echo "✅ Common packages installed"
+'''
+            
             success, output = self.client.run_command(batch_script, timeout=300)
             if success:
                 print("✅ Batch installation completed successfully")
@@ -164,16 +215,20 @@ echo "✅ Common packages installed"
                 print("⚠️  Batch installation had issues, individual installs will proceed")
     
     def _is_dependency_installed(self, dep_name: str) -> bool:
-        """Quick check if a dependency is already installed"""
+        """Quick check if a dependency is already installed (OS-agnostic)"""
+        # Get OS-specific service names
+        apache_service = self.os_packages.get('apache', {}).get('service', 'apache2')
+        redis_service = self.os_packages.get('redis', {}).get('service', 'redis-server')
+        
         check_commands = {
-            'apache': 'systemctl is-active apache2 >/dev/null 2>&1',
-            'nginx': 'systemctl is-active nginx >/dev/null 2>&1',
+            'apache': f'{self.svc_commands["is_active"]} {apache_service}',
+            'nginx': f'{self.svc_commands["is_active"]} nginx',
             'mysql': 'command -v mysql >/dev/null 2>&1',
             'postgresql': 'command -v psql >/dev/null 2>&1',
             'php': 'command -v php >/dev/null 2>&1',
             'python': 'command -v python3 >/dev/null 2>&1',
             'nodejs': 'command -v node >/dev/null 2>&1',
-            'redis': 'systemctl is-active redis-server >/dev/null 2>&1 || systemctl is-active redis >/dev/null 2>&1',
+            'redis': f'{self.svc_commands["is_active"]} {redis_service} || {self.svc_commands["is_active"]} redis',
             'git': 'command -v git >/dev/null 2>&1',
             'docker': 'command -v docker >/dev/null 2>&1'
         }
@@ -184,9 +239,10 @@ echo "✅ Common packages installed"
         success, _ = self.client.run_command(check_commands[dep_name], timeout=10, max_retries=1)
         return success
     
-    def _wait_for_dpkg_lock(self, timeout=60):
-        """Wait for dpkg lock to be released (optimized)"""
-        wait_script = '''
+    def _wait_for_package_lock(self, timeout=60):
+        """Wait for package manager lock to be released (OS-agnostic)"""
+        if self.os_info['package_manager'] == 'apt':
+            wait_script = '''
 # Quick check for dpkg lock
 if ! sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && ! sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
     echo "✅ dpkg lock is available"
@@ -211,26 +267,51 @@ while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || sudo fuser /var/
 done
 echo "✅ Proceeding with installation"
 '''
+        else:
+            # For yum/dnf systems, check for yum lock
+            wait_script = f'''
+# Quick check for yum lock
+if ! sudo fuser /var/run/yum.pid >/dev/null 2>&1; then
+    echo "✅ {self.os_info['package_manager']} lock is available"
+    exit 0
+fi
+
+# Wait for lock to be released
+echo "⏳ Waiting for {self.os_info['package_manager']} lock (max 60s)..."
+timeout=60
+elapsed=0
+while sudo fuser /var/run/yum.pid >/dev/null 2>&1; do
+    if [ $elapsed -ge $timeout ]; then
+        echo "⚠️  {self.os_info['package_manager']} still locked after ${{timeout}}s, proceeding anyway..."
+        # Kill any stuck yum processes
+        sudo killall yum dnf 2>/dev/null || true
+        sleep 2
+        break
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+    [ $((elapsed % 10)) -eq 0 ] && echo "   Still waiting... (${{elapsed}}s)"
+done
+echo "✅ Proceeding with installation"
+'''
+        
         self.client.run_command(wait_script, timeout=timeout + 10)
     
     def _install_dependency(self, dep_name: str) -> bool:
         """Install a specific dependency with retry logic"""
         dep_config = self.config.get(f'dependencies.{dep_name}', {})
         
-        # Wait for any existing dpkg locks before starting
-        self._wait_for_dpkg_lock()
+        # Wait for any existing package manager locks before starting
+        self._wait_for_package_lock()
         
         # Try installation with retry on failure
         max_retries = 2
         for attempt in range(max_retries):
             if attempt > 0:
                 print(f"🔄 Retry attempt {attempt + 1}/{max_retries} for {dep_name}...")
-                # On retry, wait for locks and try to fix dpkg
-                self._wait_for_dpkg_lock()
-                fix_script = '''
-sudo dpkg --configure -a 2>/dev/null || true
-sudo apt-get install -f -y 2>/dev/null || true
-'''
+                # On retry, wait for locks and try to fix package manager
+                self._wait_for_package_lock()
+                fix_script = self.pkg_commands['fix_broken']
                 self.client.run_command(fix_script, timeout=60)
             
             success = self._do_install_dependency(dep_name, dep_config)
@@ -287,137 +368,162 @@ sudo apt-get install -f -y 2>/dev/null || true
             return False
     
     def _install_apache(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Apache web server"""
+        """Install and configure Apache web server (OS-agnostic)"""
         version = config.get('version', 'latest')
         apache_config = config.get('config', {})
         document_root = apache_config.get('document_root', '/var/www/html')
         
-        print("🔧 Installing Apache web server step by step...")
+        # Get OS-specific package and service names
+        apache_packages = self.os_packages.get('apache', {}).get('packages', ['apache2'])
+        apache_service = self.os_packages.get('apache', {}).get('service', 'apache2')
+        web_user = self.user_info['web_user']
+        web_group = self.user_info['web_group']
         
-        # Step 1: Update package list (now done once at start)
-        print("\n📦 Step 1: Package list already updated")
+        print(f"🔧 Installing Apache web server on {self.os_type}...")
         
-        # Step 2: Install Apache
-        print("\n📦 Step 2: Installing Apache package")
-        success, output = self.client.run_command("sudo apt-get install -y apache2")
+        # Step 1: Install Apache
+        print(f"\n📦 Step 1: Installing Apache packages: {', '.join(apache_packages)}")
+        install_cmd = f"{self.pkg_commands['install']} {' '.join(apache_packages)}"
+        success, output = self.client.run_command(install_cmd)
         if not success:
             return False
         
-        # Step 3: Enable Apache service
-        print("\n🔧 Step 3: Enabling Apache service")
-        success, output = self.client.run_command("sudo systemctl enable apache2")
+        # Step 2: Enable Apache service
+        print(f"\n🔧 Step 2: Enabling Apache service ({apache_service})")
+        enable_cmd = f"{self.svc_commands['enable']} {apache_service}"
+        success, output = self.client.run_command(enable_cmd)
         if not success:
             return False
         
-        # Step 4: Create document root
-        print(f"\n📁 Step 4: Creating document root: {document_root}")
+        # Step 3: Create document root
+        print(f"\n📁 Step 3: Creating document root: {document_root}")
         success, output = self.client.run_command(f"sudo mkdir -p {document_root}")
         if not success:
             return False
         
-        # Step 5: Set ownership
-        print("\n🔐 Step 5: Setting proper ownership")
-        success, output = self.client.run_command(f"sudo chown -R www-data:www-data {document_root}")
+        # Step 4: Set ownership
+        print(f"\n🔐 Step 4: Setting proper ownership ({web_user}:{web_group})")
+        success, output = self.client.run_command(f"sudo chown -R {web_user}:{web_group} {document_root}")
         if not success:
             return False
         
-        # Step 6: Set permissions
-        print("\n🔐 Step 6: Setting proper permissions")
+        # Step 5: Set permissions
+        print("\n🔐 Step 5: Setting proper permissions")
         success, output = self.client.run_command(f"sudo chmod -R 755 {document_root}")
         if not success:
             return False
         
-        # Step 7: Enable mod_rewrite if requested
-        if apache_config.get('enable_rewrite', True):
-            print("\n🔧 Step 7: Enabling mod_rewrite")
+        # Step 6: Enable mod_rewrite if requested (Ubuntu/Debian specific)
+        if apache_config.get('enable_rewrite', True) and self.os_info['package_manager'] == 'apt':
+            print("\n🔧 Step 6: Enabling mod_rewrite")
             success, output = self.client.run_command("sudo a2enmod rewrite")
             if not success:
-                return False
+                print("⚠️  mod_rewrite enable failed, but continuing...")
         
-        # Step 8: Configure security settings
+        # Step 7: Configure security settings (if config files exist)
         if config.get('hide_version', True):
-            print("\n🔒 Step 8: Configuring security settings")
-            success, output = self.client.run_command('echo "ServerTokens Prod" | sudo tee -a /etc/apache2/conf-available/security.conf')
-            if not success:
-                return False
+            print("\n🔒 Step 7: Configuring security settings")
+            if self.os_info['package_manager'] == 'apt':
+                # Ubuntu/Debian Apache config
+                security_script = '''
+echo "ServerTokens Prod" | sudo tee -a /etc/apache2/conf-available/security.conf
+echo "ServerSignature Off" | sudo tee -a /etc/apache2/conf-available/security.conf
+sudo a2enconf security 2>/dev/null || true
+'''
+            else:
+                # RHEL/CentOS/Amazon Linux Apache config
+                security_script = '''
+echo "ServerTokens Prod" | sudo tee -a /etc/httpd/conf/httpd.conf
+echo "ServerSignature Off" | sudo tee -a /etc/httpd/conf/httpd.conf
+'''
             
-            success, output = self.client.run_command('echo "ServerSignature Off" | sudo tee -a /etc/apache2/conf-available/security.conf')
+            success, output = self.client.run_command(security_script)
             if not success:
-                return False
-            
-            success, output = self.client.run_command("sudo a2enconf security")
-            if not success:
-                return False
+                print("⚠️  Security configuration failed, but continuing...")
         
-        # Step 9: Start Apache
-        print("\n🚀 Step 9: Starting Apache service")
-        success, output = self.client.run_command("sudo systemctl start apache2")
+        # Step 8: Start Apache
+        print(f"\n🚀 Step 8: Starting Apache service ({apache_service})")
+        start_cmd = f"{self.svc_commands['start']} {apache_service}"
+        success, output = self.client.run_command(start_cmd)
         if not success:
             return False
         
-        # Step 10: Reload Apache
-        print("\n🔄 Step 10: Reloading Apache configuration")
-        success, output = self.client.run_command("sudo systemctl reload apache2")
+        # Step 9: Reload Apache
+        print(f"\n🔄 Step 9: Reloading Apache configuration")
+        reload_cmd = f"{self.svc_commands['restart']} {apache_service}"
+        success, output = self.client.run_command(reload_cmd)
         if not success:
             return False
         
-        print("\n✅ Apache installation completed successfully!")
+        print(f"\n✅ Apache installation completed successfully on {self.os_type}!")
         return True
     
     def _install_nginx(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Nginx web server"""
+        """Install and configure Nginx web server (OS-agnostic)"""
+        nginx_config = config.get('config', {})
+        document_root = nginx_config.get('document_root', '/var/www/html')
+        
+        # Get OS-specific package and service names
+        nginx_packages = self.os_packages.get('nginx', {}).get('packages', ['nginx'])
+        nginx_service = self.os_packages.get('nginx', {}).get('service', 'nginx')
+        web_user = self.user_info['web_user']
+        web_group = self.user_info['web_group']
+        
         script = f'''
 set -e
-echo "Installing Nginx web server..."
+echo "Installing Nginx web server on {self.os_type}..."
 
 # Install Nginx
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y nginx
+{self.pkg_commands['install']} {' '.join(nginx_packages)}
 
 # Enable Nginx to start on boot
-sudo systemctl enable nginx
+{self.svc_commands['enable']} {nginx_service}
 
 # Configure document root
-DOCUMENT_ROOT="{config.get('config', {}).get('document_root', '/var/www/html')}"
+DOCUMENT_ROOT="{document_root}"
 sudo mkdir -p "$DOCUMENT_ROOT"
-sudo chown -R www-data:www-data "$DOCUMENT_ROOT"
+sudo chown -R {web_user}:{web_group} "$DOCUMENT_ROOT"
 sudo chmod -R 755 "$DOCUMENT_ROOT"
 
 # Start Nginx
-sudo systemctl start nginx
+{self.svc_commands['start']} {nginx_service}
 
-echo "✅ Nginx installation completed"
+echo "✅ Nginx installation completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=420)
         return success
     
     def _install_mysql(self, config: Dict[str, Any]) -> bool:
-        """Install and configure MySQL database (local only, not for external RDS)"""
+        """Install and configure MySQL database (local only, not for external RDS) - OS-agnostic"""
         # This method should only be called for local MySQL installations
         # External databases are handled by _install_external_database
         
         mysql_config = config.get('config', {})
         
-        print("📦 Installing local MySQL database server...")
+        # Get OS-specific package and service names
+        mysql_packages = self.os_packages.get('mysql_server', {}).get('packages', ['mysql-server'])
+        mysql_service = self.os_packages.get('mysql_server', {}).get('service', 'mysql')
+        
+        print(f"📦 Installing local MySQL database server on {self.os_type}...")
         print("⚠️  Note: For external RDS databases, only the MySQL client will be installed")
         
-        script = f'''
+        if self.os_info['package_manager'] == 'apt':
+            script = f'''
 set -e
-echo "Installing MySQL database server..."
+echo "Installing MySQL database server on Ubuntu/Debian..."
 
 # Set non-interactive mode
 export DEBIAN_FRONTEND=noninteractive
 
 # Install MySQL
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y mysql-server
+{self.pkg_commands['install']} {' '.join(mysql_packages)}
 
 # Enable MySQL to start on boot
-sudo systemctl enable mysql
+{self.svc_commands['enable']} {mysql_service}
 
 # Start MySQL
-sudo systemctl start mysql
+{self.svc_commands['start']} {mysql_service}
 
 # Secure MySQL installation (basic)
 sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" || true
@@ -429,35 +535,65 @@ if [ "{mysql_config.get('create_app_database', True)}" = "True" ]; then
     echo "✅ Database '$DB_NAME' created"
 fi
 
-echo "✅ MySQL installation completed"
+echo "✅ MySQL installation completed on Ubuntu/Debian"
+'''
+        else:
+            # For RHEL/CentOS/Amazon Linux
+            script = f'''
+set -e
+echo "Installing MySQL database server on RHEL/CentOS/Amazon Linux..."
+
+# Install MySQL
+{self.pkg_commands['install']} {' '.join(mysql_packages)}
+
+# Enable MySQL to start on boot
+{self.svc_commands['enable']} {mysql_service}
+
+# Start MySQL
+{self.svc_commands['start']} {mysql_service}
+
+# Secure MySQL installation (basic) - different service name on RHEL systems
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" || true
+
+# Create application database if requested
+if [ "{mysql_config.get('create_app_database', True)}" = "True" ]; then
+    DB_NAME="{mysql_config.get('database_name', 'app_db')}"
+    sudo mysql -u root -proot123 -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;" || true
+    echo "✅ Database '$DB_NAME' created"
+fi
+
+echo "✅ MySQL installation completed on RHEL/CentOS/Amazon Linux"
 '''
         
         success, output = self.client.run_command_with_live_output(script, timeout=300)
         return success
     
     def _install_postgresql(self, config: Dict[str, Any]) -> bool:
-        """Install and configure PostgreSQL database (local only, not for external RDS)"""
+        """Install and configure PostgreSQL database (local only, not for external RDS) - OS-agnostic"""
         # This method should only be called for local PostgreSQL installations
         # External databases are handled by _install_external_database
         
         pg_config = config.get('config', {})
         
-        print("📦 Installing local PostgreSQL database server...")
+        # Get OS-specific package and service names
+        pg_packages = self.os_packages.get('postgresql_server', {}).get('packages', ['postgresql', 'postgresql-contrib'])
+        pg_service = self.os_packages.get('postgresql_server', {}).get('service', 'postgresql')
+        
+        print(f"📦 Installing local PostgreSQL database server on {self.os_type}...")
         print("⚠️  Note: For external RDS databases, only the PostgreSQL client will be installed")
         
         script = f'''
 set -e
-echo "Installing PostgreSQL database server..."
+echo "Installing PostgreSQL database server on {self.os_type}..."
 
 # Install PostgreSQL
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y postgresql postgresql-contrib
+{self.pkg_commands['install']} {' '.join(pg_packages)}
 
 # Enable PostgreSQL to start on boot
-sudo systemctl enable postgresql
+{self.svc_commands['enable']} {pg_service}
 
 # Start PostgreSQL
-sudo systemctl start postgresql
+{self.svc_commands['start']} {pg_service}
 
 # Create application database if requested
 if [ "{pg_config.get('create_app_database', True)}" = "True" ]; then
@@ -466,60 +602,72 @@ if [ "{pg_config.get('create_app_database', True)}" = "True" ]; then
     echo "✅ Database '$DB_NAME' created"
 fi
 
-echo "✅ PostgreSQL installation completed"
+echo "✅ PostgreSQL installation completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=300)
         return success
     
     def _install_php(self, config: Dict[str, Any]) -> bool:
-        """Install and configure PHP"""
+        """Install and configure PHP (OS-agnostic)"""
         version = config.get('version', '8.1')
         php_config = config.get('config', {})
         extensions = php_config.get('extensions', ['pdo', 'pdo_mysql'])
         
-        # Build extension list
+        # Get OS-specific package and service names
+        php_packages = self.os_packages.get('php', {}).get('packages', ['php', 'php-fpm'])
+        php_service = self.os_packages.get('php', {}).get('service', 'php8.1-fpm')
+        apache_service = self.os_packages.get('apache', {}).get('service', 'apache2')
+        
+        # Build extension list based on OS
         ext_packages = []
         for ext in extensions:
             # Skip 'pdo' as it's built into PHP (part of php-common)
             if ext == 'pdo':
-                continue  # PDO is included in php{version}-common, no separate package
+                continue  # PDO is included in php-common, no separate package
             elif ext == 'pdo_mysql' or ext == 'mysql':
-                # Install both generic and version-specific MySQL packages
-                ext_packages.append('php-mysql')
-                ext_packages.append(f'php{version}-mysql')
+                if self.os_info['package_manager'] == 'apt':
+                    ext_packages.extend(['php-mysql', f'php{version}-mysql'])
+                else:
+                    ext_packages.append('php-mysqlnd')
             elif ext == 'pdo_pgsql' or ext == 'pgsql':
-                # Install both generic and version-specific PostgreSQL packages
-                ext_packages.append('php-pgsql')
-                ext_packages.append(f'php{version}-pgsql')
+                if self.os_info['package_manager'] == 'apt':
+                    ext_packages.extend(['php-pgsql', f'php{version}-pgsql'])
+                else:
+                    ext_packages.append('php-pgsql')
             elif ext == 'redis':
-                # Install both generic and version-specific Redis packages
-                ext_packages.append('php-redis')
-                ext_packages.append(f'php{version}-redis')
+                if self.os_info['package_manager'] == 'apt':
+                    ext_packages.extend(['php-redis', f'php{version}-redis'])
+                else:
+                    ext_packages.append('php-redis')
             elif ext == 'json':
                 continue  # JSON is built into PHP 8.0+, no separate package needed
             else:
-                ext_packages.append(f'php-{ext}')
+                if self.os_info['package_manager'] == 'apt':
+                    ext_packages.append(f'php-{ext}')
+                else:
+                    ext_packages.append(f'php-{ext}')
         
         ext_list = ' '.join(ext_packages) if ext_packages else ''
         
-        script = f'''
+        if self.os_info['package_manager'] == 'apt':
+            script = f'''
 set -e
-echo "Installing PHP {version}..."
+echo "Installing PHP {version} on Ubuntu/Debian..."
 
 # Add Ondrej PPA for PHP (required for PHP 8.1+ on Ubuntu 22.04)
 if ! grep -q "ondrej/php" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
     echo "Adding Ondrej PHP PPA..."
-    sudo apt-get install -y software-properties-common
+    {self.pkg_commands['install']} software-properties-common
     sudo add-apt-repository -y ppa:ondrej/php
-    sudo apt-get update -qq
+    {self.pkg_commands['update']}
     echo "✅ Ondrej PHP PPA added"
 else
     echo "✅ Ondrej PHP PPA already present"
 fi
 
 # Install PHP and extensions
-sudo apt-get install -y php{version} php{version}-fpm {ext_list}
+{self.pkg_commands['install']} php{version} php{version}-fpm {ext_list}
 
 # Install Composer if requested
 if [ "{php_config.get('enable_composer', True)}" = "True" ]; then
@@ -530,37 +678,72 @@ if [ "{php_config.get('enable_composer', True)}" = "True" ]; then
 fi
 
 # Configure PHP-FPM if Apache is also enabled
-if systemctl is-active --quiet apache2; then
-    sudo apt-get install -y libapache2-mod-php{version}
+if {self.svc_commands['is_active']} {apache_service}; then
+    {self.pkg_commands['install']} libapache2-mod-php{version}
     sudo a2enmod php{version}
-    sudo systemctl reload apache2
+    {self.svc_commands['reload']} {apache_service}
 fi
 
-echo "✅ PHP {version} installation completed"
+echo "✅ PHP {version} installation completed on Ubuntu/Debian"
+'''
+        else:
+            # For RHEL/CentOS/Amazon Linux
+            script = f'''
+set -e
+echo "Installing PHP {version} on RHEL/CentOS/Amazon Linux..."
+
+# Enable EPEL and Remi repositories for PHP
+if ! rpm -q epel-release >/dev/null 2>&1; then
+    {self.pkg_commands['install']} epel-release
+fi
+
+# Install PHP and extensions
+{self.pkg_commands['install']} php php-fpm {ext_list}
+
+# Install Composer if requested
+if [ "{php_config.get('enable_composer', True)}" = "True" ]; then
+    curl -sS https://getcomposer.org/installer | php
+    sudo mv composer.phar /usr/local/bin/composer
+    sudo chmod +x /usr/local/bin/composer
+    echo "✅ Composer installed"
+fi
+
+# Configure PHP-FPM if Apache is also enabled
+if {self.svc_commands['is_active']} {apache_service}; then
+    {self.svc_commands['restart']} {apache_service}
+fi
+
+echo "✅ PHP installation completed on RHEL/CentOS/Amazon Linux"
 '''
         
         success, output = self.client.run_command(script, timeout=300)
         return success
     
     def _install_python(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Python"""
+        """Install and configure Python (OS-agnostic)"""
         version = config.get('version', '3.9')
         python_config = config.get('config', {})
         
-        script = f'''
+        # Get OS-specific package names
+        python_packages = self.os_packages.get('python', {}).get('packages', ['python3', 'python3-pip'])
+        web_user = self.user_info['web_user']
+        web_group = self.user_info['web_group']
+        
+        if self.os_info['package_manager'] == 'apt':
+            script = f'''
 set -e
-echo "Installing Python {version}..."
+echo "Installing Python {version} on Ubuntu/Debian..."
 
 # Install Python and pip
 # For Ubuntu 22.04, python3 is already installed, just install additional tools
 if [ "{version}" = "3.10" ] || [ "{version}" = "3" ]; then
     # Use system Python3 - install version-specific venv package
-    sudo apt-get install -y python3 python3-pip python3-dev python3.10-venv
+    {self.pkg_commands['install']} python3 python3-pip python3-dev python3.10-venv
 else
     # Try to install specific version
-    sudo apt-get install -y python{version} python{version}-pip python{version}-venv python{version}-dev || {{
+    {self.pkg_commands['install']} python{version} python{version}-pip python{version}-venv python{version}-dev || {{
         echo "⚠️  Python {version} not available, using system python3"
-        sudo apt-get install -y python3 python3-pip python3-dev python3.10-venv
+        {self.pkg_commands['install']} python3 python3-pip python3-dev python3.10-venv
     }}
 fi
 
@@ -572,11 +755,30 @@ if [ "{python_config.get('virtual_env', True)}" = "True" ]; then
     else
         sudo python{version} -m venv /opt/python-venv/app || sudo python3 -m venv /opt/python-venv/app
     fi
-    sudo chown -R www-data:www-data /opt/python-venv
+    sudo chown -R {web_user}:{web_group} /opt/python-venv
     echo "✅ Python virtual environment created"
 fi
 
-echo "✅ Python {version} installation completed"
+echo "✅ Python {version} installation completed on Ubuntu/Debian"
+'''
+        else:
+            # For RHEL/CentOS/Amazon Linux
+            script = f'''
+set -e
+echo "Installing Python {version} on RHEL/CentOS/Amazon Linux..."
+
+# Install Python and pip
+{self.pkg_commands['install']} {' '.join(python_packages)}
+
+# Create virtual environment if requested
+if [ "{python_config.get('virtual_env', True)}" = "True" ]; then
+    sudo mkdir -p /opt/python-venv
+    sudo python3 -m venv /opt/python-venv/app
+    sudo chown -R {web_user}:{web_group} /opt/python-venv
+    echo "✅ Python virtual environment created"
+fi
+
+echo "✅ Python installation completed on RHEL/CentOS/Amazon Linux"
 '''
         
         success, output = self.client.run_command(script, timeout=300)
@@ -607,27 +809,46 @@ echo "✅ Python packages installed"
         return success
     
     def _install_nodejs(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Node.js"""
+        """Install and configure Node.js (OS-agnostic)"""
         version = config.get('version', '18')
         node_config = config.get('config', {})
         
-        script = f'''
+        if self.os_info['package_manager'] == 'apt':
+            script = f'''
 set -e
-echo "Installing Node.js {version}..."
+echo "Installing Node.js {version} on Ubuntu/Debian..."
 
-# Install Node.js
+# Install Node.js via NodeSource repository
 curl -fsSL https://deb.nodesource.com/setup_{version}.x | sudo -E bash -
-sudo apt-get install -y nodejs
+{self.pkg_commands['install']} nodejs
 
 # Install Yarn if requested
 if [ "{node_config.get('package_manager', 'npm')}" = "yarn" ]; then
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
-#     sudo apt-get update  # Removed: apt-get update now runs once at start
-    sudo apt-get install -y yarn
+    {self.pkg_commands['update']}
+    {self.pkg_commands['install']} yarn
 fi
 
-echo "✅ Node.js {version} installation completed"
+echo "✅ Node.js {version} installation completed on Ubuntu/Debian"
+'''
+        else:
+            # For RHEL/CentOS/Amazon Linux
+            script = f'''
+set -e
+echo "Installing Node.js {version} on RHEL/CentOS/Amazon Linux..."
+
+# Install Node.js via NodeSource repository
+curl -fsSL https://rpm.nodesource.com/setup_{version}.x | sudo bash -
+{self.pkg_commands['install']} nodejs
+
+# Install Yarn if requested
+if [ "{node_config.get('package_manager', 'npm')}" = "yarn" ]; then
+    curl -sL https://dl.yarnpkg.com/rpm/yarn.repo | sudo tee /etc/yum.repos.d/yarn.repo
+    {self.pkg_commands['install']} yarn
+fi
+
+echo "✅ Node.js {version} installation completed on RHEL/CentOS/Amazon Linux"
 '''
         
         success, output = self.client.run_command(script, timeout=300)
@@ -647,22 +868,25 @@ echo "✅ Node.js packages installed"
         return success
     
     def _install_redis(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Redis"""
-        script = '''
+        """Install and configure Redis (OS-agnostic)"""
+        # Get OS-specific package and service names
+        redis_packages = self.os_packages.get('redis', {}).get('packages', ['redis-server'])
+        redis_service = self.os_packages.get('redis', {}).get('service', 'redis-server')
+        
+        script = f'''
 set -e
-echo "Installing Redis..."
+echo "Installing Redis on {self.os_type}..."
 
 # Install Redis
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y redis-server
+{self.pkg_commands['install']} {' '.join(redis_packages)}
 
 # Enable Redis to start on boot
-sudo systemctl enable redis-server
+{self.svc_commands['enable']} {redis_service}
 
 # Start Redis
-sudo systemctl start redis-server
+{self.svc_commands['start']} {redis_service}
 
-echo "✅ Redis installation completed"
+echo "✅ Redis installation completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=420)
@@ -731,25 +955,27 @@ echo "✅ Docker installation completed"
         return success
     
     def _install_git(self, config: Dict[str, Any]) -> bool:
-        """Install and configure Git"""
+        """Install and configure Git (OS-agnostic)"""
         git_config = config.get('config', {})
+        
+        # Get OS-specific package names
+        git_packages = self.os_packages.get('git', {}).get('packages', ['git'])
         
         script = f'''
 set -e
-echo "Installing Git..."
+echo "Installing Git on {self.os_type}..."
 
 # Install Git
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y git
+{self.pkg_commands['install']} {' '.join(git_packages)}
 
-# Install Git LFS if requested
-if [ "{git_config.get('install_lfs', False)}" = "True" ]; then
+# Install Git LFS if requested (Ubuntu/Debian only for now)
+if [ "{git_config.get('install_lfs', False)}" = "True" ] && [ "{self.os_info['package_manager']}" = "apt" ]; then
     curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-    sudo apt-get install -y git-lfs
+    {self.pkg_commands['install']} git-lfs
     echo "✅ Git LFS installed"
 fi
 
-echo "✅ Git installation completed"
+echo "✅ Git installation completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=420)
@@ -797,7 +1023,7 @@ echo "✅ AWS CLI v1 installation completed"
         return success
     
     def _configure_firewall(self, config: Dict[str, Any]) -> bool:
-        """Configure firewall settings"""
+        """Configure firewall settings (OS-agnostic)"""
         firewall_config = config.get('config', {})
         allowed_ports = firewall_config.get('allowed_ports', ['22', '80', '443'])
         
@@ -805,14 +1031,20 @@ echo "✅ AWS CLI v1 installation completed"
         if '22' not in allowed_ports and 22 not in allowed_ports:
             allowed_ports.insert(0, '22')
         
-        script = f'''
+        # Get OS-specific firewall packages
+        firewall_packages = self.os_packages.get('firewall', {}).get('packages', ['ufw'])
+        firewall_service = self.os_packages.get('firewall', {}).get('service', 'ufw')
+        
+        if self.os_info['package_manager'] == 'apt':
+            # Ubuntu/Debian uses UFW
+            script = f'''
 set -e
-echo "Configuring firewall..."
+echo "Configuring UFW firewall on Ubuntu/Debian..."
 
 # Check if UFW is already installed
 if ! command -v ufw &> /dev/null; then
     echo "Installing UFW..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ufw
+    {self.pkg_commands['install']} {' '.join(firewall_packages)}
 else
     echo "UFW already installed"
 fi
@@ -832,19 +1064,48 @@ sudo ufw allow 22/tcp
 
 # Allow other specified ports
 '''
-        
-        for port in allowed_ports:
-            if str(port) != '22':  # Skip 22 since we already added it
-                script += f'sudo ufw allow {port}\n'
-        
-        script += '''
+            for port in allowed_ports:
+                if str(port) != '22':  # Skip 22 since we already added it
+                    script += f'sudo ufw allow {port}\n'
+            
+            script += '''
 # Enable UFW
 sudo ufw --force enable
 
 # Verify SSH is allowed
 sudo ufw status | grep 22 || echo "⚠️  Warning: SSH port may not be properly configured"
 
-echo "✅ Firewall configuration completed"
+echo "✅ UFW firewall configuration completed"
+'''
+        else:
+            # RHEL/CentOS/Amazon Linux uses firewalld
+            script = f'''
+set -e
+echo "Configuring firewalld on RHEL/CentOS/Amazon Linux..."
+
+# Install firewalld if not present
+if ! command -v firewall-cmd &> /dev/null; then
+    echo "Installing firewalld..."
+    {self.pkg_commands['install']} firewalld
+fi
+
+# Enable and start firewalld
+{self.svc_commands['enable']} firewalld
+{self.svc_commands['start']} firewalld
+
+# Allow specified ports
+'''
+            for port in allowed_ports:
+                script += f'sudo firewall-cmd --permanent --add-port={port}/tcp\n'
+            
+            script += '''
+# Reload firewall rules
+sudo firewall-cmd --reload
+
+# Verify SSH is allowed
+sudo firewall-cmd --list-ports | grep 22 || echo "⚠️  Warning: SSH port may not be properly configured"
+
+echo "✅ firewalld configuration completed"
 '''
         
         success, output = self.client.run_command(script, timeout=120)
@@ -913,20 +1174,23 @@ echo "✅ Monitoring tools installation completed"
         return success
     
     def _configure_web_server(self) -> bool:
-        """Configure web server for application"""
-        script = '''
+        """Configure web server for application (OS-agnostic)"""
+        web_user = self.user_info['web_user']
+        web_group = self.user_info['web_group']
+        
+        script = f'''
 set -e
-echo "Configuring web server..."
+echo "Configuring web server on {self.os_type}..."
 
 # Set proper permissions for web directory
-sudo chown -R www-data:www-data /var/www/html
+sudo chown -R {web_user}:{web_group} /var/www/html
 sudo chmod -R 755 /var/www/html
 
 # Remove default index files that might conflict
 sudo rm -f /var/www/html/index.html
 sudo rm -f /var/www/html/index.nginx-debian.html
 
-echo "✅ Web server configuration completed"
+echo "✅ Web server configuration completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=60)
@@ -979,15 +1243,16 @@ echo "✅ PostgreSQL application access configured"
         return success
     
     def restart_services(self) -> bool:
-        """Restart all installed services"""
-        print("🔄 Restarting installed services...")
+        """Restart all installed services (OS-agnostic)"""
+        print(f"🔄 Restarting installed services on {self.os_type}...")
         
+        # Get OS-specific service names
         service_map = {
-            'apache': 'apache2',
-            'nginx': 'nginx',
-            'mysql': 'mysql',
-            'postgresql': 'postgresql',
-            'redis': 'redis-server',
+            'apache': self.os_packages.get('apache', {}).get('service', 'apache2'),
+            'nginx': self.os_packages.get('nginx', {}).get('service', 'nginx'),
+            'mysql': self.os_packages.get('mysql_server', {}).get('service', 'mysql'),
+            'postgresql': self.os_packages.get('postgresql_server', {}).get('service', 'postgresql'),
+            'redis': self.os_packages.get('redis', {}).get('service', 'redis-server'),
             'memcached': 'memcached',
             'docker': 'docker',
             'nodejs': 'nodejs-app'
@@ -1000,20 +1265,20 @@ echo "✅ PostgreSQL application access configured"
                 service_name = service_map[dep]
                 restart_script = f'''
 set -e
-echo "Restarting {service_name}..."
+echo "Restarting {service_name} on {self.os_type}..."
 
 # Check if service exists first
-if systemctl list-unit-files | grep -q "^{service_name}.service"; then
-    sudo systemctl restart {service_name}
-    sudo systemctl enable {service_name}
+if {self.svc_commands['status']} {service_name} >/dev/null 2>&1 || systemctl list-unit-files | grep -q "^{service_name}.service"; then
+    {self.svc_commands['restart']} {service_name}
+    {self.svc_commands['enable']} {service_name}
     
     # Wait a moment and verify it's running
     sleep 2
-    if systemctl is-active --quiet {service_name}; then
+    if {self.svc_commands['is_active']} {service_name}; then
         echo "✅ {service_name} restarted and running"
     else
         echo "⚠️  {service_name} restarted but not active"
-        sudo systemctl status {service_name} --no-pager || true
+        {self.svc_commands['status']} {service_name} --no-pager || true
     fi
 else
     echo "ℹ️  {service_name} service not found, skipping"
@@ -1109,28 +1374,32 @@ fi
             return False
     
     def _install_database_client(self, db_type: str) -> bool:
-        """Install database client tools"""
+        """Install database client tools (OS-agnostic)"""
         if db_type == 'mysql':
-            script = '''
+            # Get OS-specific MySQL client packages
+            mysql_client_packages = self.os_packages.get('mysql_client', {}).get('packages', ['mysql-client'])
+            
+            script = f'''
 set -e
-echo "Installing MySQL client..."
+echo "Installing MySQL client on {self.os_type}..."
 
 # Install MySQL client
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y mysql-client
+{self.pkg_commands['install']} {' '.join(mysql_client_packages)}
 
-echo "✅ MySQL client installation completed"
+echo "✅ MySQL client installation completed on {self.os_type}"
 '''
         elif db_type == 'postgresql':
-            script = '''
+            # Get OS-specific PostgreSQL client packages
+            pg_client_packages = self.os_packages.get('postgresql_client', {}).get('packages', ['postgresql-client'])
+            
+            script = f'''
 set -e
-echo "Installing PostgreSQL client..."
+echo "Installing PostgreSQL client on {self.os_type}..."
 
 # Install PostgreSQL client
-# sudo apt-get update  # Removed: apt-get update now runs once at start
-sudo apt-get install -y postgresql-client
+{self.pkg_commands['install']} {' '.join(pg_client_packages)}
 
-echo "✅ PostgreSQL client installation completed"
+echo "✅ PostgreSQL client installation completed on {self.os_type}"
 '''
         else:
             print(f"❌ Unsupported database type: {db_type}")

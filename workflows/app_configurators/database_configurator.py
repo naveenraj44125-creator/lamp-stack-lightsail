@@ -1,5 +1,6 @@
 """Database configurator for MySQL and PostgreSQL"""
 from .base_configurator import BaseConfigurator
+from ..os_detector import OSDetector
 
 class DatabaseConfigurator(BaseConfigurator):
     """Handles database configuration (MySQL, PostgreSQL, RDS)"""
@@ -7,6 +8,15 @@ class DatabaseConfigurator(BaseConfigurator):
     def configure(self) -> bool:
         """Configure database connections based on enabled dependencies"""
         print("🔧 Configuring database connections...")
+        
+        # Get OS information from client
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
+        
+        # Get OS-specific information
+        self.user_info = OSDetector.get_user_info(os_type)
+        self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
+        self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
         
         # Check if MySQL is enabled in config
         mysql_enabled = self.config.get('dependencies.mysql.enabled', False)
@@ -38,8 +48,9 @@ set -e
 echo "Setting up RDS database connection..."
 
 # Install MySQL client
-sudo apt-get update
-sudo apt-get install -y mysql-client
+{self.pkg_commands['update']}
+mysql_client_pkg=$(if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then echo "mysql-client"; else echo "mysql"; fi)
+{self.pkg_commands['install']} $mysql_client_pkg
 
 # Create fallback environment file
 if [ ! -f /var/www/html/.env ]; then
@@ -61,7 +72,7 @@ APP_DEBUG=false
 APP_NAME="Generic Application"
 EOF
 
-    sudo chown www-data:www-data /var/www/html/.env
+    sudo chown {self.user_info['web_user']}:{self.user_info['web_group']} /var/www/html/.env
     sudo chmod 644 /var/www/html/.env
     echo "✅ Fallback environment file created"
 fi
@@ -88,12 +99,18 @@ echo "Setting up local MySQL database..."
 # Install MySQL if not present
 if ! command -v mysql &> /dev/null; then
     echo "Installing MySQL server..."
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server
+    mysql_server_pkg=$(if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then echo "mysql-server"; else echo "mysql-server"; fi)
+    if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then
+        sudo DEBIAN_FRONTEND=noninteractive {self.pkg_commands['install']} $mysql_server_pkg
+    else
+        {self.pkg_commands['install']} $mysql_server_pkg
+    fi
 fi
 
 # Start and enable MySQL
-sudo systemctl start mysql
-sudo systemctl enable mysql
+mysql_service=$(if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then echo "mysql"; else echo "mysqld"; fi)
+{self.svc_commands['start']} $mysql_service
+{self.svc_commands['enable']} $mysql_service
 
 # Configure MySQL root user
 echo "Configuring MySQL root user..."
@@ -137,7 +154,7 @@ APP_NAME="Generic Application"
 EOF
 
 # Set proper permissions
-sudo chown www-data:www-data /var/www/html/.env
+sudo chown {self.user_info['web_user']}:{self.user_info['web_group']} /var/www/html/.env
 sudo chmod 644 /var/www/html/.env
 
 echo "✅ Local MySQL database setup completed"
@@ -155,12 +172,14 @@ set -e
 echo "Setting up local PostgreSQL database..."
 
 # Install PostgreSQL
-sudo apt-get update
-sudo apt-get install -y postgresql postgresql-contrib
+{self.pkg_commands['update']}
+pg_packages=$(if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then echo "postgresql postgresql-contrib"; else echo "postgresql-server postgresql-contrib"; fi)
+{self.pkg_commands['install']} $pg_packages
 
 # Start and enable PostgreSQL
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+pg_service=$(if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then echo "postgresql"; else echo "postgresql"; fi)
+{self.svc_commands['start']} $pg_service
+{self.svc_commands['enable']} $pg_service
 
 # Create application database and user
 sudo -u postgres psql -c "CREATE DATABASE app_db;" 2>/dev/null || echo "Database may already exist"
@@ -186,7 +205,7 @@ APP_NAME="Generic Application"
 EOF
 
 # Set proper permissions
-sudo chown www-data:www-data /var/www/html/.env
+sudo chown {self.user_info['web_user']}:{self.user_info['web_group']} /var/www/html/.env
 sudo chmod 644 /var/www/html/.env
 
 echo "✅ Local PostgreSQL database setup completed"

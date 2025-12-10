@@ -14,6 +14,11 @@ lightsail:
   # Available bundles: nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0, xlarge_3_0, 2xlarge_3_0
   bundle_id: "small_3_0"  # 2GB RAM, 2 vCPU, 60GB SSD - Good performance for Node.js apps
   
+  # Operating system blueprint configuration (optional)
+  # If not specified, defaults to ubuntu_22_04
+  # Available blueprints: ubuntu_22_04, ubuntu_20_04, amazon_linux_2023, amazon_linux_2, centos_7_2009_01
+  blueprint_id: "ubuntu_22_04"  # Ubuntu 22.04 LTS - Default choice with apt package manager
+  
 # Application Configuration
 application:
   name: nodejs-demo-app

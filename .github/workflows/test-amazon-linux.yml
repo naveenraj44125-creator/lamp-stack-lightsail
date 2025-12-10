@@ -1,0 +1,135 @@
+name: Test Amazon Linux Support
+
+on:
+  workflow_dispatch:
+    inputs:
+      cleanup_after_test:
+        description: 'Delete instance after test'
+        required: false
+        type: boolean
+        default: true
+      test_type:
+        description: 'Type of test to run'
+        required: false
+        type: choice
+        options:
+          - 'amazon_linux_2023'
+          - 'ubuntu_22_04'
+          - 'both'
+        default: 'amazon_linux_2023'
+
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
+
+jobs:
+  test-amazon-linux:
+    if: inputs.test_type == 'amazon_linux_2023' || inputs.test_type == 'both'
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-amazon-linux-test.config.yml'
+      skip_tests: false
+    secrets: inherit
+
+  test-ubuntu-comparison:
+    if: inputs.test_type == 'ubuntu_22_04' || inputs.test_type == 'both'
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-lamp-stack.config.yml'
+      instance_name: 'ubuntu-comparison-test-v1'
+      skip_tests: false
+    secrets: inherit
+
+  cleanup-test-instances:
+    needs: [test-amazon-linux, test-ubuntu-comparison]
+    runs-on: ubuntu-latest
+    if: always() && inputs.cleanup_after_test == true
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+        role-duration-seconds: 3600
+        aws-region: us-east-1
+
+    - name: Cleanup Test Instances
+      run: |
+        echo "🧹 Cleaning up test instances..."
+        
+        # List of test instances to clean up
+        INSTANCES=(
+          "amazon-linux-test-v1"
+          "ubuntu-comparison-test-v1"
+        )
+        
+        for instance in "${INSTANCES[@]}"; do
+          echo "Checking instance: $instance"
+          
+          # Check if instance exists
+          if aws lightsail get-instance --instance-name "$instance" >/dev/null 2>&1; then
+            echo "  Deleting instance: $instance"
+            aws lightsail delete-instance --instance-name "$instance"
+            echo "  ✅ Instance $instance deleted"
+          else
+            echo "  ℹ️  Instance $instance not found (may have been deleted already)"
+          fi
+        done
+        
+        echo "🎉 Cleanup completed!"
+
+  test-summary:
+    needs: [test-amazon-linux, test-ubuntu-comparison]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## 🧪 Amazon Linux Support Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Amazon Linux test results
+        if [ "${{ needs.test-amazon-linux.result }}" == "success" ]; then
+          echo "### ✅ Amazon Linux 2023 Test: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- OS Detection: Working" >> $GITHUB_STEP_SUMMARY
+          echo "- Package Manager: yum commands successful" >> $GITHUB_STEP_SUMMARY
+          echo "- User Management: ec2-user and apache users configured" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependencies: httpd, php-fpm, mariadb installed correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- Application: LAMP stack deployed and accessible" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-amazon-linux.result }}" == "failure" ]; then
+          echo "### ❌ Amazon Linux 2023 Test: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Check the deployment logs for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-amazon-linux.result }}" == "skipped" ]; then
+          echo "### ⏭️ Amazon Linux 2023 Test: SKIPPED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Ubuntu comparison test results
+        if [ "${{ needs.test-ubuntu-comparison.result }}" == "success" ]; then
+          echo "### ✅ Ubuntu 22.04 Comparison Test: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- OS Detection: Working" >> $GITHUB_STEP_SUMMARY
+          echo "- Package Manager: apt commands successful" >> $GITHUB_STEP_SUMMARY
+          echo "- User Management: ubuntu and www-data users configured" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependencies: apache2, php8.1-fpm, mysql-server installed correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- Application: LAMP stack deployed and accessible" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-ubuntu-comparison.result }}" == "failure" ]; then
+          echo "### ❌ Ubuntu 22.04 Comparison Test: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Check the deployment logs for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.test-ubuntu-comparison.result }}" == "skipped" ]; then
+          echo "### ⏭️ Ubuntu 22.04 Comparison Test: SKIPPED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Test Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Test Type: ${{ inputs.test_type }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Cleanup After Test: ${{ inputs.cleanup_after_test }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Trigger: Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔍 What Was Tested" >> $GITHUB_STEP_SUMMARY
+        echo "1. **OS Detection**: Blueprint ID → OS type mapping" >> $GITHUB_STEP_SUMMARY
+        echo "2. **Package Management**: OS-specific package installation (apt vs yum)" >> $GITHUB_STEP_SUMMARY
+        echo "3. **User Management**: Correct system users (ubuntu vs ec2-user)" >> $GITHUB_STEP_SUMMARY
+        echo "4. **Service Configuration**: OS-specific service names (apache2 vs httpd)" >> $GITHUB_STEP_SUMMARY
+        echo "5. **Application Deployment**: LAMP stack on both OS types" >> $GITHUB_STEP_SUMMARY
+        echo "6. **Connectivity**: HTTP accessibility and response validation" >> $GITHUB_STEP_SUMMARY

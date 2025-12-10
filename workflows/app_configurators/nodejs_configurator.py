@@ -5,12 +5,17 @@ class NodeJSConfigurator(BaseConfigurator):
     """Handles Node.js application configuration"""
     
     def configure(self) -> bool:
-        """Configure Node.js application with systemd service"""
+        """Configure Node.js application with systemd service (OS-agnostic)"""
         print("🔧 Configuring Node.js application...")
         
-        script = '''
+        # Get OS information from config if available
+        os_type = getattr(self.config, 'os_type', 'ubuntu')
+        os_info = getattr(self.config, 'os_info', {'user': 'ubuntu'})
+        default_user = os_info.get('user', 'ubuntu')
+        
+        script = f'''
 set -e
-echo "Configuring Node.js for application..."
+echo "Configuring Node.js for application on {os_type}..."
 
 # Detect entry point file
 ENTRY_POINT=""
@@ -32,7 +37,7 @@ fi
 # Install dependencies if package.json exists
 if [ -f "/opt/nodejs-app/package.json" ]; then
     echo "📦 Installing Node.js dependencies..."
-    cd /opt/nodejs-app && sudo -u ubuntu npm install --production 2>&1 | tee /tmp/npm-install.log
+    cd /opt/nodejs-app && sudo -u {default_user} npm install --production 2>&1 | tee /tmp/npm-install.log
     echo "✅ Dependencies installed"
 else
     echo "ℹ️  No package.json found, skipping dependency installation"
@@ -40,7 +45,7 @@ fi
 
 # Create log directory
 sudo mkdir -p /var/log/nodejs-app
-sudo chown ubuntu:ubuntu /var/log/nodejs-app
+sudo chown {default_user}:{default_user} /var/log/nodejs-app
 
 # Create systemd service for Node.js app
 echo "📝 Creating systemd service file with entry point: $ENTRY_POINT"
@@ -51,7 +56,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
+User={default_user}
 WorkingDirectory=/opt/nodejs-app
 ExecStart=/usr/bin/node $ENTRY_POINT
 Restart=always
@@ -109,7 +114,7 @@ else
     exit 1
 fi
 
-echo "✅ Node.js application configured successfully"
+echo "✅ Node.js application configured successfully on {os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=420)

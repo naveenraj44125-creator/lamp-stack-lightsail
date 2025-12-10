@@ -1,5 +1,6 @@
 """Docker application configurator"""
 from .base_configurator import BaseConfigurator
+from ..os_detector import OSDetector
 import os
 
 class DockerConfigurator(BaseConfigurator):
@@ -16,6 +17,14 @@ class DockerConfigurator(BaseConfigurator):
     def deploy_with_docker(self, package_file, env_vars=None) -> bool:
         """Deploy application using Docker and docker-compose"""
         print("🐳 Deploying application with Docker...")
+        
+        # Get OS information from client
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
+        
+        # Get OS-specific information
+        self.user_info = OSDetector.get_user_info(os_type)
+        self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
         
         # Check if using pre-built image
         docker_image_tag = os.environ.get('DOCKER_IMAGE_TAG', '')
@@ -100,8 +109,8 @@ fi
 
 echo "✅ Docker found at $DOCKER_BIN"
 
-# Add ubuntu user to docker group
-sudo usermod -aG docker ubuntu || true
+# Add default user to docker group
+sudo usermod -aG docker {self.user_info['default_user']} || true
 
 # Stop existing containers
 echo "🛑 Stopping existing containers..."

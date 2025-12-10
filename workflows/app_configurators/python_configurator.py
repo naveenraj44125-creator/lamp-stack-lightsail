@@ -1,6 +1,7 @@
 """Python application configurator"""
 
 from .base_configurator import BaseConfigurator
+from ..os_detector import OSDetector
 
 
 class PythonConfigurator(BaseConfigurator):
@@ -8,6 +9,15 @@ class PythonConfigurator(BaseConfigurator):
     
     def configure(self) -> bool:
         """Configure Python for the application"""
+        # Get OS information from client
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
+        
+        # Get OS-specific information
+        self.user_info = OSDetector.get_user_info(os_type)
+        self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
+        self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
+        
         app_type = self.config.get('application.type', 'web')
         
         if app_type == 'api':
@@ -41,8 +51,8 @@ if [ -f "{document_root}/requirements.txt" ]; then
     # Ensure pip is installed
     if ! command -v pip3 &> /dev/null; then
         echo "Installing pip3..."
-        sudo apt-get update
-        sudo apt-get install -y python3-pip
+        {self.pkg_commands['update']}
+        {self.pkg_commands['install']} python3-pip
     fi
     
     # Install dependencies
@@ -60,7 +70,7 @@ fi
 
 # Create log directory
 sudo mkdir -p /var/log/python-app
-sudo chown ubuntu:ubuntu /var/log/python-app
+sudo chown {self.user_info['default_user']}:{self.user_info['default_user']} /var/log/python-app
 
 # Create systemd service for Python app
 echo "📝 Creating systemd service file..."
@@ -71,7 +81,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
+User={self.user_info['default_user']}
 WorkingDirectory={document_root}
 Environment=PATH=/usr/bin:/usr/local/bin
 Environment=FLASK_APP=app.py
@@ -147,10 +157,15 @@ set -e
 echo "Configuring Python for web application..."
 
 # Install mod_wsgi if Apache is present
-if systemctl is-active --quiet apache2; then
-    sudo apt-get update
-    sudo apt-get install -y libapache2-mod-wsgi-py3
-    sudo a2enmod wsgi
+apache_service=$(if [ "{self.user_info.get('web_user', 'www-data')}" = "www-data" ]; then echo "apache2"; else echo "httpd"; fi)
+if {self.svc_commands['is_active']} $apache_service; then
+    {self.pkg_commands['update']}
+    if [ "{self.pkg_commands['install']}" = *"apt-get"* ]; then
+        {self.pkg_commands['install']} libapache2-mod-wsgi-py3
+        sudo a2enmod wsgi
+    else
+        {self.pkg_commands['install']} python3-mod_wsgi
+    fi
     echo "✅ mod_wsgi configured for Apache"
 fi
 '''

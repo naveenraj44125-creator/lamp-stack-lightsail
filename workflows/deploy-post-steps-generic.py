@@ -13,7 +13,7 @@ from dependency_manager import DependencyManager
 from app_configurators.configurator_factory import ConfiguratorFactory
 
 class GenericPostDeployer:
-    def __init__(self, instance_name=None, region=None, config=None):
+    def __init__(self, instance_name=None, region=None, config=None, os_type=None, package_manager=None):
         # Initialize configuration
         if config is None:
             config = DeploymentConfig()
@@ -26,7 +26,22 @@ class GenericPostDeployer:
             
         self.config = config
         self.client = LightsailBase(instance_name, region)
-        self.dependency_manager = DependencyManager(self.client, config)
+        
+        # Set OS information on client for configurators to use
+        if os_type:
+            self.client.os_type = os_type
+        if package_manager:
+            self.client.os_info = {'package_manager': package_manager, 'user': 'ubuntu' if package_manager == 'apt' else 'ec2-user'}
+        
+        # Initialize dependency manager with OS information
+        from os_detector import OSDetector
+        if os_type and package_manager:
+            os_info = OSDetector.get_user_info(os_type)
+            os_info['package_manager'] = package_manager
+            os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
+            self.dependency_manager = DependencyManager(self.client, config, os_type, os_info)
+        else:
+            self.dependency_manager = DependencyManager(self.client, config)
         
         # Load installed dependencies from the system
         self._detect_installed_dependencies()
@@ -730,6 +745,8 @@ def main():
     parser.add_argument('--verify', action='store_true', help='Verify deployment')
     parser.add_argument('--cleanup', action='store_true', help='Clean up temporary files')
     parser.add_argument('--env', action='append', help='Environment variables (KEY=VALUE)')
+    parser.add_argument('--os-type', help='Operating system type (ubuntu, amazon_linux, centos, rhel)')
+    parser.add_argument('--package-manager', help='Package manager (apt, yum, dnf)')
     
     args = parser.parse_args()
     
@@ -761,7 +778,13 @@ def main():
             print("ℹ️  Dependency configuration steps are disabled in configuration")
         
         # Create generic post-deployer and deploy application
-        post_deployer = GenericPostDeployer(instance_name, region, config)
+        post_deployer = GenericPostDeployer(
+            instance_name, 
+            region, 
+            config, 
+            os_type=args.os_type, 
+            package_manager=args.package_manager
+        )
         
         if post_deployer.deploy_application(
             args.package_file, 

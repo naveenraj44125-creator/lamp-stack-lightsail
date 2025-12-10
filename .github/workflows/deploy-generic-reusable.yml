@@ -54,7 +54,8 @@ jobs:
       should_deploy: ${{ steps.config.outputs.should_deploy }}
       enabled_dependencies: ${{ steps.config.outputs.enabled_dependencies }}
       test_enabled: ${{ steps.config.outputs.test_enabled }}
-      is_ubuntu: ${{ steps.config.outputs.is_ubuntu }}
+      os_type: ${{ steps.config.outputs.os_type }}
+      package_manager: ${{ steps.config.outputs.package_manager }}
       verification_port: ${{ steps.config.outputs.verification_port }}
       verification_path: ${{ steps.config.outputs.verification_path }}
     steps:
@@ -112,29 +113,35 @@ jobs:
             instance_exists = True
             print(f"✅ Instance '{instance_name}' already exists with state: {instance['state']['name']}")
             
-            # Validate blueprint is Ubuntu
+            # Detect operating system from blueprint
             blueprint_id = instance.get('blueprintId', '')
             blueprint_name = instance.get('blueprintName', '')
             print(f"📋 Blueprint: {blueprint_name} ({blueprint_id})")
             
+            # Determine OS type from blueprint
             is_ubuntu = 'ubuntu' in blueprint_id.lower() or 'ubuntu' in blueprint_name.lower()
+            is_amazon_linux = 'amazon' in blueprint_id.lower() or 'amzn' in blueprint_id.lower()
+            is_centos = 'centos' in blueprint_id.lower()
             
-            if not is_ubuntu:
-                print(f"⚠️  WARNING: Instance is not running Ubuntu blueprint!")
-                print(f"   Current blueprint: {blueprint_name} ({blueprint_id})")
-                print(f"   This deployment system only supports Ubuntu instances.")
-                print(f"   Skipping deployment for this instance.")
-                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                    f.write(f"is_ubuntu=false\n")
-                    f.write(f"instance_name={instance_name}\n")
-                    f.write(f"aws_region={aws_region}\n")
-                    f.write(f"app_name={app_name}\n")
-                    f.write(f"app_type={app_type}\n")
-                    f.write(f"app_version={app_version}\n")
-                    f.write(f"should_deploy=false\n")
-                exit(0)
+            if is_ubuntu:
+                os_type = 'ubuntu'
+                package_manager = 'apt'
+                print(f"✅ Ubuntu OS detected: {blueprint_name}")
+            elif is_amazon_linux:
+                os_type = 'amazon_linux'
+                package_manager = 'yum'
+                print(f"✅ Amazon Linux OS detected: {blueprint_name}")
+            elif is_centos:
+                os_type = 'centos'
+                package_manager = 'yum'
+                print(f"✅ CentOS OS detected: {blueprint_name}")
             else:
-                print(f"✅ Ubuntu blueprint confirmed: {blueprint_name}")
+                os_type = 'unknown'
+                package_manager = 'unknown'
+                print(f"⚠️  Unknown OS type from blueprint: {blueprint_name}")
+                print(f"   Deployment will attempt to proceed with best-effort support")
+            
+            print(f"🔧 Package manager: {package_manager}")
             
             # Validate instance size for Docker deployments
             docker_enabled = config.get('dependencies', {}).get('docker', {}).get('enabled', False)
@@ -299,12 +306,22 @@ jobs:
                 bundle_id = 'small_3_0'  # 2 GB RAM for traditional deployments
                 print(f"📦 Traditional deployment - using default bundle: {bundle_id} (2GB RAM)")
             
+            # Check if blueprint_id is specified in config
+            config_blueprint_id = config.get('lightsail', {}).get('blueprint_id', '')
+            
+            if config_blueprint_id:
+                blueprint_id = config_blueprint_id
+                print(f"📋 Using configured blueprint: {blueprint_id}")
+            else:
+                blueprint_id = 'ubuntu_22_04'  # Default to Ubuntu 22.04
+                print(f"📋 Using default blueprint: {blueprint_id}")
+            
             # Create instance with appropriate settings
             try:
                 response = lightsail.create_instances(
                     instanceNames=[instance_name],
                     availabilityZone=f'{aws_region}a',
-                    blueprintId='ubuntu_22_04',
+                    blueprintId=blueprint_id,
                     bundleId=bundle_id,
                     tags=[
                         {'key': 'Application', 'value': app_name},
@@ -466,7 +483,8 @@ jobs:
             f.write(f"should_deploy={str(should_deploy).lower()}\n")
             f.write(f"enabled_dependencies={enabled_dependencies}\n")
             f.write(f"test_enabled={str(test_enabled).lower()}\n")
-            f.write(f"is_ubuntu=true\n")
+            f.write(f"os_type={os_type}\n")
+            f.write(f"package_manager={package_manager}\n")
             f.write(f"verification_port={verification_port}\n")
             f.write(f"verification_path={verification_path}\n")
         EOF
@@ -474,7 +492,7 @@ jobs:
   test:
     needs: load-config
     runs-on: ubuntu-latest
-    if: needs.load-config.outputs.test_enabled == 'true' && needs.load-config.outputs.is_ubuntu == 'true'
+    if: needs.load-config.outputs.test_enabled == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -604,7 +622,6 @@ jobs:
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&
-      needs.load-config.outputs.is_ubuntu == 'true' &&
       (needs.test.result == 'success' || needs.test.result == 'skipped')
     environment: ${{ inputs.environment }}
     steps:
@@ -712,7 +729,7 @@ jobs:
   application-package:
     needs: [load-config]
     runs-on: ubuntu-latest
-    if: needs.load-config.outputs.should_deploy == 'true' && needs.load-config.outputs.is_ubuntu == 'true'
+    if: needs.load-config.outputs.should_deploy == 'true'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -813,7 +830,6 @@ jobs:
     if: |
       always() &&
       needs.load-config.outputs.should_deploy == 'true' &&
-      needs.load-config.outputs.is_ubuntu == 'true' &&
       needs.pre-steps-generic.result == 'success' &&
       needs.application-package.result == 'success'
     environment: ${{ inputs.environment }}
@@ -861,6 +877,8 @@ jobs:
           --instance-name ${{ needs.load-config.outputs.instance_name }} \
           --region ${{ needs.load-config.outputs.aws_region }} \
           --config-file ${{ inputs.config_file }} \
+          --os-type ${{ needs.load-config.outputs.os_type }} \
+          --package-manager ${{ needs.load-config.outputs.package_manager }} \
           --verify \
           --cleanup \
           --env GITHUB_SHA=${{ github.sha }} \
@@ -879,21 +897,10 @@ jobs:
       app_url: ${{ steps.set-outputs.outputs.app_url }}
       status: ${{ steps.set-outputs.outputs.status }}
     steps:
-    - name: Check if Ubuntu
-      if: needs.load-config.outputs.is_ubuntu != 'true'
-      id: set-outputs
-      run: |
-        echo "⚠️ Deployment skipped - Instance is not running Ubuntu"
-        echo "This deployment system only supports Ubuntu Lightsail instances"
-        echo "status=skipped" >> $GITHUB_OUTPUT
-        echo "app_url=N/A" >> $GITHUB_OUTPUT
-    
     - name: Checkout code
-      if: needs.load-config.outputs.is_ubuntu == 'true'
       uses: actions/checkout@v4
 
     - name: Configure AWS credentials
-      if: needs.load-config.outputs.is_ubuntu == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
@@ -901,13 +908,11 @@ jobs:
         aws-region: ${{ needs.load-config.outputs.aws_region }}
 
     - name: Setup Python environment
-      if: needs.load-config.outputs.is_ubuntu == 'true'
       run: |
         python3 -m pip install --upgrade pip
         python3 -m pip install boto3 pyyaml
 
     - name: External Connectivity Test
-      if: needs.load-config.outputs.is_ubuntu == 'true'
       id: connectivity
       run: |
         echo "🌐 Testing external connectivity..."
@@ -953,7 +958,7 @@ jobs:
         exit 1
 
     - name: Set Outputs
-      if: always() && needs.load-config.outputs.is_ubuntu == 'true' && steps.set-outputs.outcome != 'success'
+      if: always() && steps.connectivity.outcome != 'skipped'
       run: |
         echo "app_url=http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_OUTPUT
         echo "status=${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_OUTPUT
@@ -963,14 +968,7 @@ jobs:
       run: |
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "- **Application**: ${{ needs.load-config.outputs.app_name }} v${{ needs.load-config.outputs.app_version }}" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ needs.load-config.outputs.is_ubuntu }}" != "true" ]; then
-          echo "- **Status**: ⚠️ Skipped (Non-Ubuntu instance)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ⚠️ Deployment Skipped" >> $GITHUB_STEP_SUMMARY
-          echo "This deployment system only supports Ubuntu Lightsail instances." >> $GITHUB_STEP_SUMMARY
-          echo "The target instance is not running an Ubuntu blueprint." >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- **URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_STEP_SUMMARY
-        fi
+        echo "- **OS Type**: ${{ needs.load-config.outputs.os_type }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package Manager**: ${{ needs.load-config.outputs.package_manager }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **URL**: http://${{ needs.load-config.outputs.static_ip }}/" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ${{ steps.connectivity.outputs.status || 'failed' }}" >> $GITHUB_STEP_SUMMARY

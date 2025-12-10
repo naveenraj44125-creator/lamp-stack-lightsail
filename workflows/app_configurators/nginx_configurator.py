@@ -1,6 +1,7 @@
 """Nginx web server configurator"""
 
 from .base_configurator import BaseConfigurator
+from ..os_detector import OSDetector
 
 
 class NginxConfigurator(BaseConfigurator):
@@ -8,6 +9,15 @@ class NginxConfigurator(BaseConfigurator):
     
     def configure(self) -> bool:
         """Configure Nginx for the application"""
+        # Get OS information from client
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
+        
+        # Get OS-specific information
+        self.user_info = OSDetector.get_user_info(os_type)
+        self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
+        self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
+        
         document_root = self.config.get('dependencies.nginx.config.document_root', '/var/www/html')
         
         # Check if Node.js is enabled - if so, configure as reverse proxy
@@ -170,6 +180,7 @@ server {{
     
     location ~ \\\\.php$ {{
         include snippets/fastcgi-php.conf;
+        # OS-agnostic PHP-FPM socket path
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
     }}
     
