@@ -1586,6 +1586,10 @@ echo "✅ PostgreSQL client installation completed on {self.os_type}"
             # Create environment file
             env_content = '\n'.join([f'{key}={value}' for key, value in env_vars.items()])
             
+            # Get OS-specific user and group information
+            web_user = self.user_info.get('web_user', 'www-data')
+            web_group = self.user_info.get('web_group', 'www-data')
+            
             script = f'''
 set -e
 echo "Configuring database environment variables..."
@@ -1596,14 +1600,14 @@ cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
 {env_content}
 EOF
 
-# Set proper permissions for /opt/app/database.env (readable by www-data group)
+# Set proper permissions for /opt/app/database.env (readable by web group)
 sudo chmod 640 /opt/app/database.env
-sudo chown root:www-data /opt/app/database.env
+sudo chown root:{web_group} /opt/app/database.env
 
 # Also create a copy in web directory for direct access
 sudo cp /opt/app/database.env /var/www/html/.env
 sudo chmod 640 /var/www/html/.env
-sudo chown www-data:www-data /var/www/html/.env
+sudo chown {web_user}:{web_group} /var/www/html/.env
 
 echo "✅ Database environment configuration completed"
 echo "Environment file created at: /opt/app/database.env"
@@ -1647,6 +1651,10 @@ echo "Environment file copied to: /var/www/html/.env"
             # Create environment file
             env_content = '\n'.join([f'{key}={value}' for key, value in env_vars.items()])
             
+            # Get OS-specific user and group information
+            web_user = self.user_info.get('web_user', 'www-data')
+            web_group = self.user_info.get('web_group', 'www-data')
+            
             script = f'''
 set -e
 echo "Configuring database environment variables..."
@@ -1657,14 +1665,14 @@ cat << 'EOF' | sudo tee /opt/app/database.env > /dev/null
 {env_content}
 EOF
 
-# Set proper permissions for /opt/app/database.env (readable by www-data group)
+# Set proper permissions for /opt/app/database.env (readable by web group)
 sudo chmod 640 /opt/app/database.env
-sudo chown root:www-data /opt/app/database.env
+sudo chown root:{web_group} /opt/app/database.env
 
 # Also create a copy in web directory for direct access
 sudo cp /opt/app/database.env /var/www/html/.env
 sudo chmod 640 /var/www/html/.env
-sudo chown www-data:www-data /var/www/html/.env
+sudo chown {web_user}:{web_group} /var/www/html/.env
 
 echo "✅ Database environment configuration completed"
 echo "Environment file created at: /opt/app/database.env"
