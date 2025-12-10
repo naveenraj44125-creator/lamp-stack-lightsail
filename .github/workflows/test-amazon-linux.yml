@@ -39,7 +39,6 @@ jobs:
       instance_name: 'ubuntu-comparison-test-v1'
       skip_tests: false
     secrets: inherit
-    secrets: inherit
 
   cleanup-test-instances:
     needs: [test-amazon-linux, test-ubuntu-comparison]
