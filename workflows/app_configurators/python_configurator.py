@@ -45,6 +45,12 @@ if [ -f "/opt/app/requirements.txt" ]; then
     # Install dependencies
     sudo pip3 install -r requirements.txt 2>&1 | tee /tmp/pip-install.log
     echo "✅ Dependencies installed"
+    
+    # Ensure Gunicorn is installed (fallback)
+    if ! command -v gunicorn &> /dev/null; then
+        echo "📦 Installing Gunicorn as fallback..."
+        sudo pip3 install gunicorn
+    fi
 else
     echo "ℹ️  No requirements.txt found, skipping dependency installation"
 fi
@@ -67,7 +73,8 @@ WorkingDirectory=/opt/app
 Environment=PATH=/usr/bin:/usr/local/bin
 Environment=FLASK_APP=app.py
 Environment=FLASK_ENV=production
-ExecStart=/usr/bin/python3 /opt/app/app.py
+Environment=PORT=5000
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 60 app:app
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/python-app/output.log
