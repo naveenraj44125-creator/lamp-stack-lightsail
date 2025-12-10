@@ -30,7 +30,12 @@ class GenericPreDeployer:
         if os_type:
             self.client.os_type = os_type
         if package_manager:
-            self.client.os_info = {'package_manager': package_manager, 'user': 'ubuntu' if package_manager == 'apt' else 'ec2-user'}
+            # Use OSDetector to get proper user info structure
+            from os_detector import OSDetector
+            os_info = OSDetector.get_user_info(os_type) if os_type else {}
+            os_info['package_manager'] = package_manager
+            os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
+            self.client.os_info = os_info
         
         # Initialize dependency manager with OS information
         from os_detector import OSDetector
@@ -47,6 +52,50 @@ class GenericPreDeployer:
         print("="*60)
         print("🔧 PREPARING APPLICATION ENVIRONMENT")
         print("="*60)
+        
+        # CRITICAL: Verify instance exists and is running before starting
+        print("🔍 CRITICAL CHECK: Verifying instance exists and is running...")
+        try:
+            response = self.client.lightsail.get_instance(instanceName=self.client.instance_name)
+            instance = response['instance']
+            state = instance['state']['name']
+            public_ip = instance.get('publicIpAddress', 'No IP')
+            
+            print(f"✅ Instance '{self.client.instance_name}' found:")
+            print(f"   State: {state}")
+            print(f"   Public IP: {public_ip}")
+            print(f"   Blueprint: {instance.get('blueprintName', 'Unknown')}")
+            print(f"   Bundle: {instance.get('bundleId', 'Unknown')}")
+            
+            if state != 'running':
+                print(f"❌ CRITICAL ERROR: Instance is not running!")
+                print(f"   Current state: {state}")
+                if state in ['stopping', 'stopped', 'terminated']:
+                    print(f"   Instance has been terminated or stopped!")
+                    print(f"   This suggests the instance failed during startup or was cleaned up by another process.")
+                    return False
+                elif state in ['pending', 'rebooting']:
+                    print(f"   Instance is still starting up, waiting...")
+                    import time
+                    for i in range(6):  # Wait up to 3 minutes
+                        time.sleep(30)
+                        response = self.client.lightsail.get_instance(instanceName=self.client.instance_name)
+                        instance = response['instance']
+                        state = instance['state']['name']
+                        print(f"   Wait {i+1}/6: Instance state is now: {state}")
+                        if state == 'running':
+                            print(f"✅ Instance is now running!")
+                            break
+                    else:
+                        print(f"❌ Instance did not reach running state within 3 minutes")
+                        return False
+            else:
+                print(f"✅ Instance is running and ready for deployment")
+                
+        except Exception as e:
+            print(f"❌ CRITICAL ERROR: Cannot access instance '{self.client.instance_name}': {e}")
+            print(f"   This means the instance was deleted, terminated, or never existed.")
+            return False
         
         # Get application configuration
         app_name = self.config.get('application.name', 'Generic Application')
@@ -135,6 +184,36 @@ class GenericPreDeployer:
 
     def _prepare_app_directories(self) -> bool:
         """Prepare application directory structure"""
+        # First, verify the instance still exists
+        print("🔍 Verifying instance exists before preparing directories...")
+        try:
+            response = self.client.lightsail.get_instance(instanceName=self.client.instance_name)
+            instance = response['instance']
+            state = instance['state']['name']
+            print(f"✅ Instance '{self.client.instance_name}' exists with state: {state}")
+            
+            if state != 'running':
+                print(f"⚠️  Instance is not in running state: {state}")
+                if state in ['stopping', 'stopped', 'terminated']:
+                    print(f"❌ Instance has been terminated or stopped!")
+                    return False
+                elif state in ['pending', 'rebooting']:
+                    print(f"⏳ Instance is {state}, waiting for it to be ready...")
+                    # Wait a bit for the instance to be ready
+                    import time
+                    time.sleep(30)
+                    # Check again
+                    response = self.client.lightsail.get_instance(instanceName=self.client.instance_name)
+                    instance = response['instance']
+                    state = instance['state']['name']
+                    print(f"   Instance state after wait: {state}")
+                    if state != 'running':
+                        print(f"❌ Instance still not running after wait: {state}")
+                        return False
+        except Exception as e:
+            print(f"❌ Error checking instance existence: {e}")
+            return False
+        
         app_type = self.config.get('application.type', 'web')
         
         # Determine web root based on installed web server and app type
@@ -240,7 +319,28 @@ echo "✅ Application directories prepared"
         """Perform system health checks before deployment with enhanced resilience"""
         print("🔍 Checking system health...")
         
-        # First, test SSH connectivity with reduced retries for faster deployment
+        # First, verify the instance still exists and is running
+        print("🔍 Verifying instance state before health check...")
+        try:
+            response = self.client.lightsail.get_instance(instanceName=self.client.instance_name)
+            instance = response['instance']
+            state = instance['state']['name']
+            print(f"✅ Instance '{self.client.instance_name}' state: {state}")
+            
+            if state != 'running':
+                print(f"⚠️  Instance is not running: {state}")
+                if state in ['stopping', 'stopped', 'terminated']:
+                    print(f"❌ Instance has been terminated or stopped during health check!")
+                    return False
+                else:
+                    print(f"⏳ Instance is {state}, waiting for it to be ready...")
+                    import time
+                    time.sleep(30)
+        except Exception as e:
+            print(f"❌ Error checking instance during health check: {e}")
+            return False
+        
+        # Test SSH connectivity with reduced retries for faster deployment
         print("🔗 Testing SSH connectivity...")
         # Reduce retries in pre-steps to speed up deployment
         max_retries = 3 if "GITHUB_ACTIONS" in os.environ else 5
