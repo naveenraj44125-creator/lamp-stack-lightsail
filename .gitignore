@@ -42,3 +42,4 @@ aws-creds.sh
 monitor-*.sh
 test-v*.sh
 enhanced-monitor.sh
+run-all-examples-enhanced.sh
