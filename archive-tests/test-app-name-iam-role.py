@@ -27,7 +27,7 @@ def test_mcp_server_app_name_iam_role():
             "method": "tools/list"
         }
         
-        response = requests.post(f"{mcp_url}/message", json=list_tools_payload, timeout=30)
+        response = requests.post(f"{mcp_url}/sse", json=list_tools_payload, timeout=30)
         
         if response.status_code != 200:
             print(f"❌ Failed to get tools list: {response.status_code}")
@@ -77,7 +77,7 @@ def test_mcp_server_app_name_iam_role():
             }
         }
         
-        response = requests.post(f"{mcp_url}/message", json=setup_payload, timeout=30)
+        response = requests.post(f"{mcp_url}/sse", json=setup_payload, timeout=30)
         
         if response.status_code != 200:
             print(f"❌ Failed to call setup_complete_deployment: {response.status_code}")
