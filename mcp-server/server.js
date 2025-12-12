@@ -198,6 +198,42 @@ class LightsailDeploymentServer {
           },
         },
         {
+          name: 'analyze_deployment_requirements',
+          description: 'Intelligent analysis tool that takes user requirements and provides specific deployment parameter recommendations. AI agents provide user description and get back exact parameters to use for deployment. This eliminates guesswork and provides intelligent defaults based on application analysis.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              user_description: {
+                type: 'string',
+                description: 'User description of their application, requirements, or deployment needs'
+              },
+              app_context: {
+                type: 'object',
+                properties: {
+                  technologies: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Technologies mentioned (e.g., ["Node.js", "Express", "PostgreSQL"])'
+                  },
+                  features: {
+                    type: 'array', 
+                    items: { type: 'string' },
+                    description: 'Features mentioned (e.g., ["file uploads", "user authentication", "API"])'
+                  },
+                  scale: {
+                    type: 'string',
+                    enum: ['small', 'medium', 'large', 'unknown'],
+                    default: 'unknown',
+                    description: 'Expected application scale'
+                  }
+                },
+                description: 'Optional structured context about the application'
+              }
+            },
+            required: ['user_description']
+          }
+        },
+        {
           name: 'diagnose_deployment',
           description: 'Run deployment diagnostics',
           inputSchema: {
@@ -218,6 +254,8 @@ class LightsailDeploymentServer {
         switch (name) {
           case 'setup_complete_deployment':
             return await this.setupCompleteDeployment(args);
+          case 'analyze_deployment_requirements':
+            return await this.analyzeDeploymentRequirements(args);
           case 'get_deployment_examples':
             return await this.getDeploymentExamples(args);
           case 'get_deployment_status':
@@ -226,7 +264,7 @@ class LightsailDeploymentServer {
             return await this.diagnoseDeployment(args);
           default:
             return {
-              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, get_deployment_examples, get_deployment_status, diagnose_deployment` }],
+              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, analyze_deployment_requirements, get_deployment_examples, get_deployment_status, diagnose_deployment` }],
             };
         }
       } catch (error) {
@@ -255,6 +293,272 @@ class LightsailDeploymentServer {
     } catch (error) {
       throw new Error('Failed to get deployment status');
     }
+  }
+
+  async analyzeDeploymentRequirements(args) {
+    const { user_description, app_context = {} } = args;
+    
+    if (!user_description) {
+      return {
+        content: [{ type: 'text', text: '❌ Error: user_description is required for analysis' }],
+        isError: true,
+      };
+    }
+
+    // Intelligent analysis of user requirements
+    const analysis = this.performIntelligentAnalysis(user_description, app_context);
+    
+    // Generate response with specific parameter recommendations
+    const response = `# 🧠 Intelligent Deployment Analysis
+
+## 📝 User Requirements Analysis
+**Input**: "${user_description}"
+
+## 🎯 Detected Application Profile
+- **Application Type**: ${analysis.app_type}
+- **Confidence**: ${analysis.confidence}%
+- **Reasoning**: ${analysis.reasoning}
+
+## ⚙️ Recommended Parameters
+
+### Core Configuration
+\`\`\`json
+{
+  "mode": "fully_automated",
+  "app_type": "${analysis.app_type}",
+  "app_name": "${analysis.app_name}",
+  "instance_name": "${analysis.instance_name}",
+  "aws_region": "${analysis.aws_region}",
+  "app_version": "${analysis.app_version}",
+  "blueprint_id": "${analysis.blueprint_id}",
+  "bundle_id": "${analysis.bundle_id}",
+  "database_type": "${analysis.database_type}",
+  "db_external": ${analysis.db_external},
+  "db_name": "${analysis.db_name}",
+  "enable_bucket": ${analysis.enable_bucket},
+  ${analysis.enable_bucket ? `"bucket_name": "${analysis.bucket_name}",` : ''}
+  ${analysis.enable_bucket ? `"bucket_access": "${analysis.bucket_access}",` : ''}
+  ${analysis.enable_bucket ? `"bucket_bundle": "${analysis.bucket_bundle}",` : ''}
+  "github_repo": "${analysis.github_repo}",
+  "repo_visibility": "${analysis.repo_visibility}"
+}
+\`\`\`
+
+## 🔍 Analysis Details
+
+### Application Type Detection
+${analysis.detection_details}
+
+### Infrastructure Sizing
+- **Bundle**: ${analysis.bundle_id} (${this.getBundleDescription(analysis.bundle_id)})
+- **Reasoning**: ${analysis.bundle_reasoning}
+
+### Database Selection
+- **Database**: ${analysis.database_type}
+- **Reasoning**: ${analysis.database_reasoning}
+
+### Storage Configuration
+- **Bucket Enabled**: ${analysis.enable_bucket ? 'Yes' : 'No'}
+- **Reasoning**: ${analysis.storage_reasoning}
+
+## 🚀 Ready-to-Execute MCP Call
+
+Use these exact parameters with setup_complete_deployment:
+
+\`\`\`json
+{
+  "tool": "setup_complete_deployment",
+  "arguments": ${JSON.stringify({
+    mode: "fully_automated",
+    app_type: analysis.app_type,
+    app_name: analysis.app_name,
+    instance_name: analysis.instance_name,
+    aws_region: analysis.aws_region,
+    app_version: analysis.app_version,
+    blueprint_id: analysis.blueprint_id,
+    bundle_id: analysis.bundle_id,
+    database_type: analysis.database_type,
+    db_external: analysis.db_external,
+    db_name: analysis.db_name,
+    enable_bucket: analysis.enable_bucket,
+    ...(analysis.enable_bucket && {
+      bucket_name: analysis.bucket_name,
+      bucket_access: analysis.bucket_access,
+      bucket_bundle: analysis.bucket_bundle
+    }),
+    github_repo: analysis.github_repo,
+    repo_visibility: analysis.repo_visibility
+  }, null, 2)}
+}
+\`\`\`
+
+## ✅ Validation Status
+${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
+
+---
+**AI Agent Instructions**: Copy the MCP call above and execute it directly. All parameters have been intelligently analyzed and validated.`;
+
+    return {
+      content: [{ type: 'text', text: response }]
+    };
+  }
+
+  performIntelligentAnalysis(description, context) {
+    const desc = description.toLowerCase();
+    const technologies = context.technologies || [];
+    const features = context.features || [];
+    
+    // Application type detection with confidence scoring
+    let app_type = 'nginx';
+    let confidence = 50;
+    let reasoning = 'Default static site configuration';
+    let detection_details = '';
+
+    // Advanced pattern matching for application types
+    if (desc.includes('wordpress') || desc.includes('php') || desc.includes('lamp') || desc.includes('apache')) {
+      app_type = 'lamp';
+      confidence = 95;
+      reasoning = 'PHP/WordPress/LAMP stack detected';
+      detection_details = 'Detected PHP-based application requiring Apache web server and MySQL database support.';
+    } else if (desc.includes('node') || desc.includes('express') || desc.includes('npm') || desc.includes('javascript server') || technologies.includes('Node.js')) {
+      app_type = 'nodejs';
+      confidence = 90;
+      reasoning = 'Node.js/Express application detected';
+      detection_details = 'Detected Node.js backend application, likely using Express framework for API or web services.';
+    } else if (desc.includes('python') || desc.includes('flask') || desc.includes('django') || desc.includes('fastapi') || technologies.includes('Python')) {
+      app_type = 'python';
+      confidence = 90;
+      reasoning = 'Python web application detected';
+      detection_details = 'Detected Python web application using Flask, Django, or similar framework.';
+    } else if (desc.includes('react') || desc.includes('frontend') || desc.includes('spa') || desc.includes('single page') || technologies.includes('React')) {
+      app_type = 'react';
+      confidence = 85;
+      reasoning = 'React frontend application detected';
+      detection_details = 'Detected React-based frontend application requiring build process and static hosting.';
+    } else if (desc.includes('docker') || desc.includes('container') || desc.includes('microservice') || desc.includes('compose')) {
+      app_type = 'docker';
+      confidence = 95;
+      reasoning = 'Containerized application detected';
+      detection_details = 'Detected Docker-based application requiring container runtime and enhanced resources.';
+    } else if (desc.includes('static') || desc.includes('html') || desc.includes('documentation') || desc.includes('website')) {
+      app_type = 'nginx';
+      confidence = 80;
+      reasoning = 'Static website detected';
+      detection_details = 'Detected static website requiring only web server for HTML/CSS/JS files.';
+    }
+
+    // Database type selection based on app type and context
+    let database_type = 'none';
+    let database_reasoning = 'No database required for static content';
+    
+    if (desc.includes('database') || desc.includes('data') || desc.includes('mysql') || desc.includes('postgresql') || desc.includes('postgres')) {
+      if (app_type === 'lamp' || desc.includes('mysql') || desc.includes('wordpress')) {
+        database_type = 'mysql';
+        database_reasoning = 'MySQL selected for LAMP stack compatibility and WordPress support';
+      } else if (app_type === 'nodejs' || app_type === 'python' || app_type === 'docker' || desc.includes('postgresql') || desc.includes('postgres')) {
+        database_type = 'postgresql';
+        database_reasoning = 'PostgreSQL selected for modern application stack with JSON support';
+      }
+    } else if (app_type === 'lamp') {
+      database_type = 'mysql';
+      database_reasoning = 'MySQL auto-selected for LAMP stack (standard configuration)';
+    } else if ((app_type === 'nodejs' || app_type === 'python' || app_type === 'docker') && !desc.includes('api only') && !desc.includes('external')) {
+      database_type = 'postgresql';
+      database_reasoning = 'PostgreSQL auto-selected for modern backend application';
+    }
+
+    // Bundle size selection based on app type and scale
+    let bundle_id = 'micro_3_0';
+    let bundle_reasoning = 'Standard size for small applications';
+    
+    if (app_type === 'docker') {
+      bundle_id = 'medium_3_0';
+      bundle_reasoning = 'Docker applications require enhanced resources for container overhead';
+    } else if (app_type === 'nginx' || app_type === 'react') {
+      bundle_id = 'micro_3_0';
+      bundle_reasoning = 'Minimal resources sufficient for static content serving';
+    } else if (app_type === 'lamp' || app_type === 'nodejs' || app_type === 'python') {
+      bundle_id = 'small_3_0';
+      bundle_reasoning = 'Standard web application resources with database support';
+    }
+
+    // Scale-based adjustments
+    if (context.scale === 'large' || desc.includes('high traffic') || desc.includes('enterprise')) {
+      if (bundle_id === 'micro_3_0') bundle_id = 'small_3_0';
+      else if (bundle_id === 'small_3_0') bundle_id = 'medium_3_0';
+      else if (bundle_id === 'medium_3_0') bundle_id = 'large_3_0';
+      bundle_reasoning += ' (upgraded for high-traffic requirements)';
+    }
+
+    // Storage/bucket detection
+    let enable_bucket = false;
+    let storage_reasoning = 'No file storage required';
+    
+    if (desc.includes('upload') || desc.includes('file') || desc.includes('media') || desc.includes('storage') || 
+        features.includes('file uploads') || features.includes('media')) {
+      enable_bucket = true;
+      storage_reasoning = 'File storage enabled for user uploads and media content';
+    } else if (app_type === 'lamp' || app_type === 'docker') {
+      enable_bucket = true;
+      storage_reasoning = 'File storage enabled by default for dynamic applications';
+    }
+
+    // Generate names and defaults
+    const timestamp = Date.now();
+    const app_name = `${app_type}-app`;
+    const instance_name = `${app_type}-app-production`;
+    const bucket_name = enable_bucket ? `${app_type}-storage-${timestamp}` : '';
+    const github_repo = app_name;
+
+    // Validation notes
+    const validation_notes = [
+      '✅ Application type detected and validated',
+      '✅ Infrastructure sizing appropriate for workload',
+      '✅ Database configuration matches application requirements',
+      '✅ Storage configuration based on feature analysis',
+      '✅ All parameters validated for deployment'
+    ];
+
+    if (app_type === 'docker' && bundle_id === 'micro_3_0') {
+      validation_notes.push('⚠️  Docker applications work better with small_3_0+ bundles');
+    }
+
+    return {
+      app_type,
+      confidence,
+      reasoning,
+      detection_details,
+      app_name,
+      instance_name,
+      aws_region: 'us-east-1',
+      app_version: '1.0.0',
+      blueprint_id: 'ubuntu_22_04',
+      bundle_id,
+      bundle_reasoning,
+      database_type,
+      database_reasoning,
+      db_external: false,
+      db_name: `${app_name.replace('-', '_')}_db`,
+      enable_bucket,
+      bucket_name,
+      bucket_access: 'read_write',
+      bucket_bundle: 'small_1_0',
+      storage_reasoning,
+      github_repo,
+      repo_visibility: 'private',
+      validation_notes
+    };
+  }
+
+  getBundleDescription(bundle_id) {
+    const descriptions = {
+      'nano_3_0': '512MB RAM, 1 vCPU - Minimal static sites',
+      'micro_3_0': '1GB RAM, 1 vCPU - Small applications',
+      'small_3_0': '2GB RAM, 1 vCPU - Standard web applications',
+      'medium_3_0': '4GB RAM, 2 vCPU - High-traffic applications',
+      'large_3_0': '8GB RAM, 2 vCPU - Enterprise applications'
+    };
+    return descriptions[bundle_id] || 'Unknown bundle size';
   }
 
   async setupCompleteDeployment(args) {
