@@ -15,6 +15,10 @@ on:
       - '.github/workflows/deploy-social-media-app.yml'
   workflow_dispatch:
 
+permissions:
+  id-token: write   # Required for OIDC authentication
+  contents: read    # Required to checkout code
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -55,7 +59,31 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
-      config-file: 'deployment-social-media-app.config.yml'
-      app-name: 'social-media-app'
-      artifact-retention-days: 1
+      config_file: 'deployment-social-media-app.config.yml'
+      skip_tests: false
     secrets: inherit
+
+  summary:
+    name: Deployment Summary
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Show Deployment Results
+        run: |
+          echo "## 🚀 Social Media App Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.deploy.outputs.deployment_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.deploy.outputs.deployment_status }}" = "success" ]; then
+            echo "✅ Social Media App deployed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📡 Endpoints" >> $GITHUB_STEP_SUMMARY
+            echo "- **Home**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Health**: ${{ needs.deploy.outputs.deployment_url }}api/health" >> $GITHUB_STEP_SUMMARY
+            echo "- **API**: ${{ needs.deploy.outputs.deployment_url }}api/" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Deployment failed. Check logs above." >> $GITHUB_STEP_SUMMARY
+          fi
