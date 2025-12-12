@@ -62,7 +62,7 @@ class LightsailDeploymentServer {
       tools: [
         {
           name: 'setup_complete_deployment',
-          description: 'Get the enhanced setup script for creating complete Lightsail deployment automation. This returns instructions and commands to run the setup script locally on your machine, not on the MCP server. Supports 6 application types (LAMP, Node.js, Python, React, Docker, Nginx) with database configuration (MySQL, PostgreSQL, none), bucket integration, GitHub OIDC setup, and comprehensive deployment automation. In automated mode, AI agents can specify all deployment requirements without interactive prompts.',
+          description: 'Get the enhanced setup script for creating complete Lightsail deployment automation. This returns direct commands to download and execute the setup script locally on your machine with all parameters configured. Supports 6 application types (LAMP, Node.js, Python, React, Docker, Nginx) with database configuration (MySQL, PostgreSQL, none), bucket integration, GitHub OIDC setup, and comprehensive deployment automation. In automated mode, AI agents can specify all deployment requirements without interactive prompts.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -76,6 +76,10 @@ class LightsailDeploymentServer {
                 type: 'string', 
                 default: 'us-east-1',
                 description: 'AWS region for deployment'
+              },
+              aws_role_arn: {
+                type: 'string',
+                description: 'Custom AWS IAM role ARN for GitHub Actions OIDC authentication. If not provided, will use default role naming convention: GitHubActions-{app_type}-deployment. Format: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME'
               },
               app_version: {
                 type: 'string',
@@ -363,11 +367,9 @@ class LightsailDeploymentServer {
 This guide shows the recommended project structure for **${app_type}** applications to ensure successful deployment with GitHub Actions and AWS Lightsail.
 
 ## 🔗 Reference Example Application
-**Live Example**: [example-${app_type}-app](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/example-${app_type}-app)
+**Live Example**: [example-${app_type}-app](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
 
 Use this as a complete working reference for your ${app_type} application structure and implementation.
-
-> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above link.
 
 ## 📂 Required Directory Structure
 
@@ -997,8 +999,8 @@ ${hasBucket ? '- [ ] File upload/storage functionality works' : ''}
 
 ### Option 1: Download Complete Example Application
 \`\`\`bash
-# Download the complete working example (replace YOUR_USERNAME/YOUR_REPOSITORY)
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git temp-repo
+# Download the complete working example
+git clone https://github.com/naveenraj44125-creator/lamp-stack-lightsail.git temp-repo
 cp -r temp-repo/example-${app_type}-app ./
 cp temp-repo/deployment-${app_type}.config.yml ./
 mkdir -p .github/workflows
@@ -1017,11 +1019,11 @@ git push origin main
 mkdir -p .github/workflows
 mkdir -p example-${app_type}-app
 
-# 2. Download deployment configuration (replace YOUR_USERNAME/YOUR_REPOSITORY)
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/deployment-${app_type}.config.yml
+# 2. Download deployment configuration
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/deployment-${app_type}.config.yml
 
-# 3. Download GitHub Actions workflow (replace YOUR_USERNAME/YOUR_REPOSITORY)
-curl -o .github/workflows/deploy-${app_type}.yml https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/.github/workflows/deploy-${app_type}.yml
+# 3. Download GitHub Actions workflow
+curl -o .github/workflows/deploy-${app_type}.yml https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/.github/workflows/deploy-${app_type}.yml
 
 # 4. Add your application code to example-${app_type}-app/
 # (Use the structure shown above)
@@ -1035,47 +1037,45 @@ git push origin main
 ## 📚 Additional Resources
 
 ### Example Application Files
-- **Complete Example**: [example-${app_type}-app/](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/example-${app_type}-app)
-- **Deployment Config**: [deployment-${app_type}.config.yml](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/blob/main/deployment-${app_type}.config.yml)
-- **GitHub Workflow**: [deploy-${app_type}.yml](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/blob/main/.github/workflows/deploy-${app_type}.yml)
-
-> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above links.
+- **Complete Example**: [example-${app_type}-app/](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
+- **Deployment Config**: [deployment-${app_type}.config.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/deployment-${app_type}.config.yml)
+- **GitHub Workflow**: [deploy-${app_type}.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/.github/workflows/deploy-${app_type}.yml)
 
 ### Direct File Downloads
 \`\`\`bash
 # Download individual example files
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-${app_type}-app/README.md`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-${app_type}-app/README.md`;
 
     // Add app-specific download examples
     switch (app_type) {
       case 'lamp':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-lamp-app/index.php
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-lamp-app/bucket-manager.php`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/index.php
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/bucket-manager.php`;
         break;
       case 'nodejs':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nodejs-app/app.js
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nodejs-app/package.json`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/app.js
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/package.json`;
         break;
       case 'python':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-python-app/app.py
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-python-app/requirements.txt`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/app.py
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/requirements.txt`;
         break;
       case 'react':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-react-app/package.json
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-react-app/src/App.js`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/package.json
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/src/App.js`;
         break;
       case 'docker':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-docker-app/Dockerfile
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-docker-app/docker-compose.yml`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/Dockerfile
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/docker-compose.yml`;
         break;
       case 'nginx':
         guide += `
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nginx-app/index.html`;
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nginx-app/index.html`;
         break;
     }
 
@@ -1397,6 +1397,7 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
     const { 
       mode = 'interactive', 
       aws_region = 'us-east-1', 
+      aws_role_arn,
       app_version = '1.0.0',
       app_type,
       app_name,
@@ -1415,7 +1416,7 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
       repo_visibility = 'private'
     } = args;
     
-    const scriptUrl = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/setup-complete-deployment.sh';
+    const scriptUrl = 'https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh';
     
     // Validate required parameters for fully_automated mode
     if (mode === 'fully_automated') {
@@ -1447,25 +1448,23 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
           isError: true,
         };
       }
+      
+      // Validate IAM role ARN format if provided
+      if (aws_role_arn && !aws_role_arn.match(/^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/)) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: Invalid AWS IAM role ARN format. Expected: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME' }],
+          isError: true,
+        };
+      }
     }
     
-    let instructions = `# 🚀 Complete Lightsail Deployment Setup
+    let instructions = `# 🚀 Complete Lightsail Deployment Commands
 
-## Overview
-The enhanced setup script provides comprehensive deployment automation with:
-- **6 Application Types**: LAMP, Node.js, Python, React, Docker, Nginx
-- **Universal Database Support**: MySQL, PostgreSQL, or none (available for ALL app types)
-- **GitHub OIDC Integration**: Secure AWS authentication without storing credentials
-- **Lightsail Bucket Storage**: Optional S3-compatible storage integration
-- **Multi-OS Support**: Ubuntu, Amazon Linux, CentOS
-- **Instance Sizing**: Nano (512MB) to 2XLarge (8GB RAM)
-- **Automated CI/CD**: GitHub Actions workflows with reusable patterns
+## 📥 Ready-to-Execute Commands
 
-## 📥 Download and Run
-
-### Method 1: Direct Download and Execute
+### Method 1: Download and Execute
 \`\`\`bash
-# Download the script
+# Download the setup script
 curl -O ${scriptUrl}
 
 # Make it executable  
@@ -1490,26 +1489,35 @@ chmod +x setup-complete-deployment.sh
       instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
       
       // Add environment variables for fully automated mode
+      const envVars = [
+        `export AUTO_MODE=true`,
+        `export AWS_REGION="${aws_region}"`,
+        `export APP_VERSION="${app_version}"`,
+        `export APP_TYPE="${app_type}"`,
+        `export APP_NAME="${finalAppName}"`,
+        `export INSTANCE_NAME="${finalInstanceName}"`,
+        `export BLUEPRINT_ID="${blueprint_id}"`,
+        `export BUNDLE_ID="${bundle_id}"`,
+        `export DATABASE_TYPE="${database_type}"`,
+        `export DB_EXTERNAL="${db_external}"`,
+        `export DB_RDS_NAME="${finalDbRdsName}"`,
+        `export DB_NAME="${db_name}"`,
+        `export ENABLE_BUCKET="${enable_bucket}"`,
+        `export BUCKET_NAME="${finalBucketName}"`,
+        `export BUCKET_ACCESS="${bucket_access}"`,
+        `export BUCKET_BUNDLE="${bucket_bundle}"`,
+        `export GITHUB_REPO="${finalGithubRepo}"`,
+        `export REPO_VISIBILITY="${repo_visibility}"`
+      ];
+      
+      // Add custom IAM role ARN if provided
+      if (aws_role_arn) {
+        envVars.push(`export AWS_ROLE_ARN="${aws_role_arn}"`);
+      }
+      
       instructions = instructions.replace('# Run the script\n./setup-complete-deployment.sh', 
         `# Set environment variables for fully automated deployment
-export AUTO_MODE=true
-export AWS_REGION="${aws_region}"
-export APP_VERSION="${app_version}"
-export APP_TYPE="${app_type}"
-export APP_NAME="${finalAppName}"
-export INSTANCE_NAME="${finalInstanceName}"
-export BLUEPRINT_ID="${blueprint_id}"
-export BUNDLE_ID="${bundle_id}"
-export DATABASE_TYPE="${database_type}"
-export DB_EXTERNAL="${db_external}"
-export DB_RDS_NAME="${finalDbRdsName}"
-export DB_NAME="${db_name}"
-export ENABLE_BUCKET="${enable_bucket}"
-export BUCKET_NAME="${finalBucketName}"
-export BUCKET_ACCESS="${bucket_access}"
-export BUCKET_BUNDLE="${bucket_bundle}"
-export GITHUB_REPO="${finalGithubRepo}"
-export REPO_VISIBILITY="${repo_visibility}"
+${envVars.join('\n')}
 
 # Run the script in fully automated mode
 ./setup-complete-deployment.sh`);
@@ -1530,13 +1538,35 @@ export REPO_VISIBILITY="${repo_visibility}"
       const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
       const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
       
+      // Build environment variables for direct execution
+      const directEnvVars = [
+        `AUTO_MODE=true`,
+        `AWS_REGION="${aws_region}"`,
+        `APP_VERSION="${app_version}"`,
+        `APP_TYPE="${app_type}"`,
+        `APP_NAME="${finalAppName}"`,
+        `INSTANCE_NAME="${finalInstanceName}"`,
+        `BLUEPRINT_ID="${blueprint_id}"`,
+        `BUNDLE_ID="${bundle_id}"`,
+        `DATABASE_TYPE="${database_type}"`,
+        `DB_EXTERNAL="${db_external}"`,
+        `DB_RDS_NAME="${finalDbRdsName}"`,
+        `DB_NAME="${db_name}"`,
+        `ENABLE_BUCKET="${enable_bucket}"`,
+        `BUCKET_NAME="${finalBucketName}"`,
+        `BUCKET_ACCESS="${bucket_access}"`,
+        `BUCKET_BUNDLE="${bucket_bundle}"`,
+        `GITHUB_REPO="${finalGithubRepo}"`,
+        `REPO_VISIBILITY="${repo_visibility}"`
+      ];
+      
+      // Add custom IAM role ARN if provided
+      if (aws_role_arn) {
+        directEnvVars.push(`AWS_ROLE_ARN="${aws_role_arn}"`);
+      }
+      
       instructions += `# Run directly from GitHub with environment variables
-AUTO_MODE=true AWS_REGION="${aws_region}" APP_VERSION="${app_version}" \\
-APP_TYPE="${app_type}" APP_NAME="${finalAppName}" INSTANCE_NAME="${finalInstanceName}" \\
-BLUEPRINT_ID="${blueprint_id}" BUNDLE_ID="${bundle_id}" DATABASE_TYPE="${database_type}" \\
-DB_EXTERNAL="${db_external}" DB_RDS_NAME="${finalDbRdsName}" DB_NAME="${db_name}" \\
-ENABLE_BUCKET="${enable_bucket}" BUCKET_NAME="${finalBucketName}" BUCKET_ACCESS="${bucket_access}" \\
-BUCKET_BUNDLE="${bucket_bundle}" GITHUB_REPO="${finalGithubRepo}" REPO_VISIBILITY="${repo_visibility}" \\
+${directEnvVars.join(' \\\n')} \\
 bash <(curl -s ${scriptUrl}) --auto --aws-region ${aws_region} --app-version ${app_version}`;
     } else {
       instructions += `# Run directly from GitHub
@@ -1574,12 +1604,62 @@ bash <(curl -s ${scriptUrl})`;
 - Validates all parameters before execution
 - Perfect for AI-driven deployment workflows
 - All configuration specified via environment variables
+- **Configurable IAM Role**: Use custom IAM role ARN or default naming convention
 - **Use with MCP analyze_deployment_requirements tool for intelligent parameter selection**
 
 ### Help Mode  
 - Shows comprehensive usage information and examples
 - Lists all supported application types and features
 - Add \`--help\` flag
+
+## 🔐 IAM Role Configuration ⭐ **NEW**
+
+### Custom IAM Role ARN
+You can now specify a custom IAM role ARN for GitHub Actions OIDC authentication:
+
+\`\`\`json
+{
+  "aws_role_arn": "arn:aws:iam::123456789012:role/MyCustomGitHubActionsRole"
+}
+\`\`\`
+
+### Default IAM Role Naming
+If no custom role ARN is provided, the script will create/use a role with this naming convention:
+- **Pattern**: \`GitHubActions-{app_type}-deployment\`
+- **Examples**: 
+  - \`GitHubActions-nodejs-deployment\`
+  - \`GitHubActions-lamp-deployment\`
+  - \`GitHubActions-docker-deployment\`
+
+### IAM Role Requirements
+The IAM role (custom or default) must have these policies attached:
+- \`AmazonLightsailFullAccess\`
+- \`AmazonS3FullAccess\` (if using bucket storage)
+
+### Trust Policy Requirements
+The role must trust GitHub Actions OIDC provider:
+\`\`\`json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:USERNAME/REPOSITORY:*"
+        }
+      }
+    }
+  ]
+}
+\`\`\`
 
 ## 🧠 **NEW: Intelligent Analysis Tool** ⭐
 
@@ -1712,9 +1792,14 @@ ${enable_bucket ? `- **Bucket Name**: ${bucket_name || `${app_type}-bucket-${Dat
 - **Repository**: ${github_repo || app_name || `${app_type}-app`}
 - **Visibility**: ${repo_visibility}
 
+**IAM Role Configuration:**
+- **Custom Role ARN**: ${aws_role_arn ? 'Yes' : 'No'}
+${aws_role_arn ? `- **Role ARN**: ${aws_role_arn}` : `- **Default Role**: GitHubActions-${app_type}-deployment`}
+
 **Validation Results:**
 ✅ All required parameters provided
 ✅ Configuration validated successfully
+${aws_role_arn ? '✅ Custom IAM role ARN format validated' : '✅ Default IAM role naming will be used'}
 ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ? 
   '⚠️  Warning: Docker applications work better with small_3_0+ bundles' : 
   '✅ Bundle size appropriate for application type'}
@@ -1749,6 +1834,7 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 \`\`\`json
 {
   "aws_region": "us-east-1",
+  "aws_role_arn": "arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME",
   "app_version": "1.0.0", 
   "blueprint_id": "ubuntu_22_04",
   "bundle_id": "micro_3_0|small_3_0|medium_3_0|large_3_0",
@@ -1864,6 +1950,7 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 - ✅ **Docker apps**: Require minimum \`small_3_0\` bundle (2GB RAM)
 - ✅ **Bucket enabled**: Must provide \`bucket_name\` when \`enable_bucket: true\`
 - ✅ **External DB**: Must provide \`db_rds_name\` when \`db_external: true\`
+- ✅ **Custom IAM role**: Must follow format \`arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME\`
 - ✅ **Required fields**: Always include \`app_type\`, \`app_name\`, \`instance_name\`
 
 ### Error Recovery:
@@ -1918,7 +2005,7 @@ Total time: ~30 seconds from request to deployment
   async getDeploymentExamples(args) {
     const { app_type = 'all', include_configs = true, include_workflows = true } = args;
     
-    const baseUrl = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main';
+    const baseUrl = 'https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main';
     
     let examples = `# 📚 Deployment Examples and Configurations
 
@@ -1995,11 +2082,9 @@ rm -rf temp-repo
 
 ## 📖 Documentation
 
-- **Main Repository**: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY
+- **Main Repository**: https://github.com/naveenraj44125-creator/lamp-stack-lightsail
 - **Setup Guide**: [README.md](${baseUrl}/README.md)
 - **MCP Server**: [mcp-server/README.md](${baseUrl}/mcp-server/README.md)
-
-> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above link.
 
 ---
 **Note**: All files are downloaded to your local machine. No installation occurs on the MCP server.`;
@@ -2405,7 +2490,7 @@ app.get('/', (req, res) => {
 
         <div class="section">
             <a href="/health" class="button">Health Check</a>
-            <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/mcp-server" class="button">Documentation</a>
+            <a href="https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/mcp-server" class="button">Documentation</a>
         </div>
     </div>
 </body>
