@@ -20,12 +20,27 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from React build
 const buildPath = path.join(__dirname, 'build');
+const altBuildPath = path.join(process.cwd(), 'build');
+
+let activeBuildPath = buildPath;
+let buildExists = false;
+
 if (fs.existsSync(buildPath)) {
+    activeBuildPath = buildPath;
+    buildExists = true;
     app.use(express.static(buildPath));
     console.log('✅ Serving React build from:', buildPath);
+} else if (fs.existsSync(altBuildPath)) {
+    activeBuildPath = altBuildPath;
+    buildExists = true;
+    app.use(express.static(altBuildPath));
+    console.log('✅ Serving React build from:', altBuildPath);
 } else {
     console.log('⚠️  React build not found at:', buildPath);
+    console.log('⚠️  Also checked:', altBuildPath);
     console.log('📝 Run "npm run build" to generate the build');
+    console.log('📂 Current working directory:', process.cwd());
+    console.log('📂 Script directory:', __dirname);
 }
 
 // API Routes
@@ -37,8 +52,9 @@ app.get('/api/health', (req, res) => {
         uptime: process.uptime(),
         version: '1.0.0',
         features: {
-            react_app: fs.existsSync(buildPath) ? 'active' : 'build_missing',
-            static_files: 'active'
+            react_app: buildExists ? 'active' : 'build_missing',
+            static_files: 'active',
+            build_path: activeBuildPath
         }
     });
 });
@@ -48,8 +64,8 @@ app.get('/api/status', (req, res) => {
         app: 'Instagram Clone',
         version: '1.0.0',
         status: 'operational',
-        build_exists: fs.existsSync(buildPath),
-        build_path: buildPath
+        build_exists: buildExists,
+        build_path: activeBuildPath
     });
 });
 
@@ -89,14 +105,17 @@ app.get('/api/user/:username', (req, res) => {
 
 // Catch all handler: send back React's index.html file for client-side routing
 app.get('*', (req, res) => {
-    const indexPath = path.join(buildPath, 'index.html');
+    const indexPath = path.join(activeBuildPath, 'index.html');
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
         res.status(404).json({
             error: 'React build not found',
             message: 'Please run "npm run build" to generate the React build',
-            buildPath: buildPath,
+            buildPath: activeBuildPath,
+            checkedPaths: [buildPath, altBuildPath],
+            currentDir: process.cwd(),
+            scriptDir: __dirname,
             suggestion: 'This is a React app that needs to be built for production'
         });
     }
@@ -119,12 +138,13 @@ app.listen(PORT, () => {
     console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
     console.log(`📱 App: http://localhost:${PORT}`);
     
-    if (!fs.existsSync(buildPath)) {
+    if (!buildExists) {
         console.log('');
         console.log('⚠️  IMPORTANT: React build not found!');
         console.log('📝 Run the following commands to build the React app:');
         console.log('   npm install');
         console.log('   npm run build');
+        console.log('📂 Checked paths:', [buildPath, altBuildPath]);
     }
 });
 

@@ -154,14 +154,16 @@ deployment:
         optimize_performance: true
       react:
         enabled: true
-        build_command: "npm run build"
+        build_command: "cd /var/www/html && npm install && npm run build"
         build_directory: "build"
         install_dependencies: true
+        working_directory: "/var/www/html"
       nodejs:
         enabled: true
-        start_command: "npm start"
+        start_command: "cd /var/www/html && npm start"
         process_manager: "pm2"
         auto_restart: true
+        working_directory: "/var/www/html"
     
     verification:
       enabled: true
