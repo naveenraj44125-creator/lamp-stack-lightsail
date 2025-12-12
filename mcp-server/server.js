@@ -277,6 +277,29 @@ class LightsailDeploymentServer {
             },
           },
         },
+        {
+          name: 'configure_github_repository',
+          description: 'Configure GitHub repository settings and provide dynamic repository URLs. This tool helps set up the correct GitHub repository information and provides personalized links for the user\'s specific repository.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              github_username: {
+                type: 'string',
+                description: 'GitHub username for the repository'
+              },
+              repository_name: {
+                type: 'string',
+                description: 'Name of the GitHub repository'
+              },
+              app_type: {
+                type: 'string',
+                enum: ['lamp', 'nodejs', 'python', 'react', 'docker', 'nginx'],
+                description: 'Type of application for customized repository setup'
+              }
+            },
+            required: ['github_username', 'repository_name']
+          }
+        },
       ],
     }));
 
@@ -297,9 +320,11 @@ class LightsailDeploymentServer {
             return await this.getDeploymentStatus(args);
           case 'diagnose_deployment':
             return await this.diagnoseDeployment(args);
+          case 'configure_github_repository':
+            return await this.configureGitHubRepository(args);
           default:
             return {
-              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, analyze_deployment_requirements, get_deployment_examples, get_project_structure_guide, get_deployment_status, diagnose_deployment` }],
+              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, analyze_deployment_requirements, get_deployment_examples, get_project_structure_guide, get_deployment_status, diagnose_deployment, configure_github_repository` }],
             };
         }
       } catch (error) {
@@ -338,9 +363,11 @@ class LightsailDeploymentServer {
 This guide shows the recommended project structure for **${app_type}** applications to ensure successful deployment with GitHub Actions and AWS Lightsail.
 
 ## 🔗 Reference Example Application
-**Live Example**: [example-${app_type}-app](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
+**Live Example**: [example-${app_type}-app](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/example-${app_type}-app)
 
 Use this as a complete working reference for your ${app_type} application structure and implementation.
+
+> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above link.
 
 ## 📂 Required Directory Structure
 
@@ -970,8 +997,8 @@ ${hasBucket ? '- [ ] File upload/storage functionality works' : ''}
 
 ### Option 1: Download Complete Example Application
 \`\`\`bash
-# Download the complete working example
-git clone https://github.com/naveenraj44125-creator/lamp-stack-lightsail.git temp-repo
+# Download the complete working example (replace YOUR_USERNAME/YOUR_REPOSITORY)
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git temp-repo
 cp -r temp-repo/example-${app_type}-app ./
 cp temp-repo/deployment-${app_type}.config.yml ./
 mkdir -p .github/workflows
@@ -990,11 +1017,11 @@ git push origin main
 mkdir -p .github/workflows
 mkdir -p example-${app_type}-app
 
-# 2. Download deployment configuration
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/deployment-${app_type}.config.yml
+# 2. Download deployment configuration (replace YOUR_USERNAME/YOUR_REPOSITORY)
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/deployment-${app_type}.config.yml
 
-# 3. Download GitHub Actions workflow
-curl -o .github/workflows/deploy-${app_type}.yml https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/.github/workflows/deploy-${app_type}.yml
+# 3. Download GitHub Actions workflow (replace YOUR_USERNAME/YOUR_REPOSITORY)
+curl -o .github/workflows/deploy-${app_type}.yml https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/.github/workflows/deploy-${app_type}.yml
 
 # 4. Add your application code to example-${app_type}-app/
 # (Use the structure shown above)
@@ -1008,45 +1035,47 @@ git push origin main
 ## 📚 Additional Resources
 
 ### Example Application Files
-- **Complete Example**: [example-${app_type}-app/](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
-- **Deployment Config**: [deployment-${app_type}.config.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/deployment-${app_type}.config.yml)
-- **GitHub Workflow**: [deploy-${app_type}.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/.github/workflows/deploy-${app_type}.yml)
+- **Complete Example**: [example-${app_type}-app/](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/example-${app_type}-app)
+- **Deployment Config**: [deployment-${app_type}.config.yml](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/blob/main/deployment-${app_type}.config.yml)
+- **GitHub Workflow**: [deploy-${app_type}.yml](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/blob/main/.github/workflows/deploy-${app_type}.yml)
+
+> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above links.
 
 ### Direct File Downloads
 \`\`\`bash
 # Download individual example files
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-${app_type}-app/README.md`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-${app_type}-app/README.md`;
 
     // Add app-specific download examples
     switch (app_type) {
       case 'lamp':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/index.php
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/bucket-manager.php`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-lamp-app/index.php
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-lamp-app/bucket-manager.php`;
         break;
       case 'nodejs':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/app.js
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/package.json`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nodejs-app/app.js
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nodejs-app/package.json`;
         break;
       case 'python':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/app.py
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/requirements.txt`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-python-app/app.py
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-python-app/requirements.txt`;
         break;
       case 'react':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/package.json
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/src/App.js`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-react-app/package.json
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-react-app/src/App.js`;
         break;
       case 'docker':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/Dockerfile
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/docker-compose.yml`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-docker-app/Dockerfile
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-docker-app/docker-compose.yml`;
         break;
       case 'nginx':
         guide += `
-curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nginx-app/index.html`;
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/example-nginx-app/index.html`;
         break;
     }
 
@@ -1386,7 +1415,7 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
       repo_visibility = 'private'
     } = args;
     
-    const scriptUrl = 'https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh';
+    const scriptUrl = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/setup-complete-deployment.sh';
     
     // Validate required parameters for fully_automated mode
     if (mode === 'fully_automated') {
@@ -1803,11 +1832,32 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 
 ## 🎯 **AI Agent Best Practices**
 
+### 5. configure_github_repository ⭐ **NEW GITHUB CONFIGURATION TOOL**
+
+**Purpose**: Configure GitHub repository settings and provide dynamic repository URLs with personalized links
+
+**Parameters**:
+- \`github_username\` (required): GitHub username for the repository
+- \`repository_name\` (required): Name of the GitHub repository  
+- \`app_type\` (optional): Application type for customized setup
+
+**Example**:
+\`\`\`json
+{
+  "github_username": "your-username",
+  "repository_name": "my-app-deployment", 
+  "app_type": "nodejs"
+}
+\`\`\`
+
+**Returns**: Personalized repository URLs, setup commands, and configuration instructions
+
 ### Recommended Workflow for AI Agents:
-1. **Always start with intelligent analysis**: Call \`analyze_deployment_requirements\`
-2. **Get project structure guidance**: Call \`get_project_structure_guide\` to help users organize their code
-3. **Use exact parameters**: Copy parameters from analysis response
-4. **Execute deployment**: Call \`setup_complete_deployment\` with \`fully_automated\` mode
+1. **Configure GitHub repository**: Call \`configure_github_repository\` to set up personalized repository URLs
+2. **Analyze requirements**: Call \`analyze_deployment_requirements\` for intelligent parameter detection
+3. **Get project structure guidance**: Call \`get_project_structure_guide\` to help users organize their code
+4. **Use exact parameters**: Copy parameters from analysis response
+5. **Execute deployment**: Call \`setup_complete_deployment\` with \`fully_automated\` mode
 5. **Explain results**: Tell user what was configured and why
 
 ### Parameter Validation Rules:
@@ -1868,7 +1918,7 @@ Total time: ~30 seconds from request to deployment
   async getDeploymentExamples(args) {
     const { app_type = 'all', include_configs = true, include_workflows = true } = args;
     
-    const baseUrl = 'https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main';
+    const baseUrl = 'https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main';
     
     let examples = `# 📚 Deployment Examples and Configurations
 
@@ -1945,9 +1995,11 @@ rm -rf temp-repo
 
 ## 📖 Documentation
 
-- **Main Repository**: https://github.com/naveenraj44125-creator/lamp-stack-lightsail
+- **Main Repository**: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY
 - **Setup Guide**: [README.md](${baseUrl}/README.md)
 - **MCP Server**: [mcp-server/README.md](${baseUrl}/mcp-server/README.md)
+
+> **Note**: Replace YOUR_USERNAME with your GitHub username and YOUR_REPOSITORY with your repository name in the above link.
 
 ---
 **Note**: All files are downloaded to your local machine. No installation occurs on the MCP server.`;
@@ -2082,6 +2134,114 @@ rm -rf temp-repo
     report += '4. **Test Deployment**: Push changes to trigger GitHub Actions workflow\n';
 
     return { content: [{ type: 'text', text: report }] };
+  }
+
+  async configureGitHubRepository(args) {
+    const { github_username, repository_name, app_type = 'nodejs' } = args;
+    
+    if (!github_username || !repository_name) {
+      return {
+        content: [{ type: 'text', text: 'Error: github_username and repository_name are required parameters' }]
+      };
+    }
+
+    const repoUrl = `https://github.com/${github_username}/${repository_name}`;
+    
+    let response = `# 🔧 GitHub Repository Configuration
+
+## ✅ Repository Information Configured
+- **GitHub Username**: ${github_username}
+- **Repository Name**: ${repository_name}
+- **Repository URL**: ${repoUrl}
+- **Application Type**: ${app_type}
+
+## 🔗 Personalized Repository Links
+
+### Example Application Files
+- **Complete Example**: [example-${app_type}-app/](${repoUrl}/tree/main/example-${app_type}-app)
+- **Deployment Config**: [deployment-${app_type}.config.yml](${repoUrl}/blob/main/deployment-${app_type}.config.yml)
+- **GitHub Workflow**: [deploy-${app_type}.yml](${repoUrl}/blob/main/.github/workflows/deploy-${app_type}.yml)
+
+### Quick Start Commands (Personalized)
+\`\`\`bash
+# Clone your repository
+git clone ${repoUrl}.git
+cd ${repository_name}
+
+# Download example files from your repository
+curl -o deployment-${app_type}.config.yml "${repoUrl}/raw/main/deployment-${app_type}.config.yml"
+curl -o .github/workflows/deploy-${app_type}.yml "${repoUrl}/raw/main/.github/workflows/deploy-${app_type}.yml"
+
+# Download complete example application
+git clone ${repoUrl}.git temp-repo
+cp -r temp-repo/example-${app_type}-app ./
+rm -rf temp-repo
+\`\`\`
+
+## 🚀 Setup Commands for Your Repository
+
+### Initialize New Repository
+\`\`\`bash
+# If you haven't created the repository yet
+gh repo create ${github_username}/${repository_name} --private --description "${app_type} application deployment"
+
+# Clone and setup
+git clone ${repoUrl}.git
+cd ${repository_name}
+\`\`\`
+
+### Setup Complete Deployment (Automated)
+\`\`\`bash
+# Run the setup script with your repository configured
+export GITHUB_REPO="${github_username}/${repository_name}"
+export APP_TYPE="${app_type}"
+export APP_NAME="${repository_name}"
+export INSTANCE_NAME="${app_type}-${repository_name}-app"
+
+# Run automated setup
+./setup-complete-deployment.sh --auto
+\`\`\`
+
+## 📋 Environment Variables for Automation
+
+Set these environment variables for fully automated deployment:
+
+\`\`\`bash
+export GITHUB_REPO="${github_username}/${repository_name}"
+export APP_TYPE="${app_type}"
+export APP_NAME="${repository_name}"
+export INSTANCE_NAME="${app_type}-${repository_name}-app"
+export AWS_REGION="us-east-1"
+export BLUEPRINT_ID="ubuntu_22_04"
+export BUNDLE_ID="micro_3_0"
+export DATABASE_TYPE="mysql"
+export ENABLE_BUCKET="true"
+export BUCKET_NAME="${app_type}-${repository_name}-bucket"
+\`\`\`
+
+## 🔄 Next Steps
+
+1. **Create Repository**: Use \`gh repo create\` command above if repository doesn't exist
+2. **Run Setup**: Use the setup script with your repository configured
+3. **Customize**: Edit the generated configuration files for your needs
+4. **Deploy**: Push changes to trigger GitHub Actions deployment
+
+## 📖 Documentation Links
+
+- **Main Repository**: ${repoUrl}
+- **Setup Guide**: [README.md](${repoUrl}/blob/main/README.md)
+- **MCP Server**: [mcp-server/README.md](${repoUrl}/blob/main/mcp-server/README.md)
+
+## ⚠️ Important Notes
+
+- Replace placeholder URLs in generated files with your actual repository URL
+- Ensure GitHub CLI (\`gh\`) is authenticated: \`gh auth login\`
+- Configure AWS CLI credentials: \`aws configure\`
+- Set up GitHub OIDC for AWS authentication in your repository settings
+
+Your repository is now configured for automated deployment! 🎉`;
+
+    return { content: [{ type: 'text', text: response }] };
   }
 
   async connect(transport) {
@@ -2245,7 +2405,7 @@ app.get('/', (req, res) => {
 
         <div class="section">
             <a href="/health" class="button">Health Check</a>
-            <a href="https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/mcp-server" class="button">Documentation</a>
+            <a href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/tree/main/mcp-server" class="button">Documentation</a>
         </div>
     </div>
 </body>

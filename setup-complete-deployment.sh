@@ -1859,8 +1859,44 @@ main() {
                 GITHUB_REPO="$APP_NAME"
                 echo -e "${GREEN}✓ Using repository name: $GITHUB_REPO${NC}"
             else
-                echo -e "${RED}❌ Failed to determine GitHub repository${NC}"
-                exit 1
+                # Ask for GitHub username and repository name
+                echo -e "${YELLOW}⚠️  No GitHub repository found in git remote${NC}"
+                echo "We need to create a new GitHub repository for your deployment."
+                echo ""
+                
+                # Get GitHub username
+                GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
+                while [[ -z "$GITHUB_USERNAME" ]]; do
+                    echo -e "${RED}GitHub username is required${NC}"
+                    GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
+                done
+                
+                # Get repository name (default to app name in lowercase)
+                DEFAULT_REPO_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+                REPO_NAME=$(get_input "Enter repository name" "$DEFAULT_REPO_NAME")
+                
+                # Construct full repository path
+                GITHUB_REPO="${GITHUB_USERNAME}/${REPO_NAME}"
+                
+                # Ask about repository visibility
+                REPO_VISIBILITY=$(get_yes_no "Make repository private?" "true")
+                if [[ "$REPO_VISIBILITY" == "true" ]]; then
+                    REPO_VISIBILITY="--private"
+                else
+                    REPO_VISIBILITY="--public"
+                fi
+                
+                # Create the repository
+                echo -e "${BLUE}Creating GitHub repository: $GITHUB_REPO${NC}"
+                if create_github_repo_if_needed "$GITHUB_REPO" "$APP_NAME deployment repository" "$REPO_VISIBILITY"; then
+                    # Add the remote to current git repository
+                    git remote add origin "https://github.com/${GITHUB_REPO}.git" 2>/dev/null || \
+                    git remote set-url origin "https://github.com/${GITHUB_REPO}.git"
+                    echo -e "${GREEN}✓ Git remote configured${NC}"
+                else
+                    echo -e "${RED}❌ Failed to create GitHub repository${NC}"
+                    exit 1
+                fi
             fi
         else
             echo -e "${GREEN}✓ GitHub Repository: $GITHUB_REPO${NC}"
