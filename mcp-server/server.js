@@ -1485,19 +1485,21 @@ chmod +x setup-complete-deployment.sh
 # Run the script
 ./setup-complete-deployment.sh`;
 
+    // Define variables that are used in templates (move outside conditional blocks)
+    const timestamp = Date.now();
+    const finalAppName = app_name || `${app_type}-app`;
+    const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
+    const repoName = github_repo || finalAppName;
+    const finalGithubRepo = github_username ? `${github_username}/${repoName}` : repoName;
+    const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
+    const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
+
     if (mode === 'auto') {
       instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
     } else if (mode === 'help') {
       instructions += ` --help`;
     } else if (mode === 'fully_automated') {
       // Generate environment variables for fully automated execution
-      const timestamp = Date.now();
-      const finalAppName = app_name || `${app_type}-app`;
-      const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
-      const repoName = github_repo || finalAppName;
-      const finalGithubRepo = github_username ? `${github_username}/${repoName}` : repoName;
-      const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
-      const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
       
       instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
       
@@ -1544,13 +1546,7 @@ ${envVars.join('\n')}
 
     if (mode === 'fully_automated') {
       // For direct execution, we need to set environment variables inline
-      const timestamp = Date.now();
-      const finalAppName = app_name || `${app_type}-app`;
-      const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
-      const repoName = github_repo || finalAppName;
-      const finalGithubRepo = github_username ? `${github_username}/${repoName}` : repoName;
-      const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
-      const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
+      // (variables already defined above)
       
       // Build environment variables for direct execution
       const directEnvVars = [
