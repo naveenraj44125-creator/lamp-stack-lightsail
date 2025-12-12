@@ -736,17 +736,121 @@ bash <(curl -s ${scriptUrl})`;
 - Ideal for CI/CD pipelines and batch deployments
 - Add \`--auto\` flag
 
-### Fully Automated Mode (AI Agent Mode)
+### Fully Automated Mode (AI Agent Mode) ⭐ **NEW**
 - **Zero prompts** - AI agents provide all parameters via environment variables
 - Complete deployment automation without human intervention
 - Validates all parameters before execution
 - Perfect for AI-driven deployment workflows
 - All configuration specified via environment variables
+- **Use with MCP analyze_deployment_requirements tool for intelligent parameter selection**
 
 ### Help Mode  
 - Shows comprehensive usage information and examples
 - Lists all supported application types and features
 - Add \`--help\` flag
+
+## 🧠 **NEW: Intelligent Analysis Tool** ⭐
+
+### analyze_deployment_requirements
+**Purpose**: AI agents can get intelligent parameter recommendations instead of manual configuration
+
+**Usage**:
+\`\`\`json
+{
+  "tool": "analyze_deployment_requirements",
+  "arguments": {
+    "user_description": "Node.js Express API with MySQL database and file uploads",
+    "app_context": {
+      "technologies": ["Node.js", "Express", "MySQL"],
+      "features": ["API", "file uploads", "authentication"],
+      "scale": "medium"
+    }
+  }
+}
+\`\`\`
+
+**Returns**:
+- ✅ **Application Type Detection** with confidence scoring (85-95%)
+- ✅ **Complete Parameter Recommendations** with detailed reasoning
+- ✅ **Ready-to-Execute MCP Call** with all parameters filled
+- ✅ **Infrastructure Sizing** based on workload analysis
+- ✅ **Database Selection** (MySQL/PostgreSQL/none) based on requirements
+- ✅ **Storage Configuration** (bucket enabled/disabled) based on features
+- ✅ **Validation Status** and compatibility checks
+
+**Benefits for AI Agents**:
+- 🚫 **No Parameter Guesswork** - MCP server analyzes and recommends
+- 📊 **Confidence Scoring** - Know how reliable the detection is (85-95%)
+- 🔍 **Detailed Reasoning** - Understand why each parameter was selected
+- ✅ **Built-in Validation** - All parameters validated for compatibility
+- 🎯 **Consistent Results** - Same analysis logic across all AI agents
+- ⚡ **Instant Execution** - Get complete MCP call ready to execute
+
+**Example Workflow for AI Agents**:
+1. **Step 1**: Call \`analyze_deployment_requirements\` with user description
+2. **Step 2**: Get intelligent analysis with exact parameters and confidence
+3. **Step 3**: Call \`setup_complete_deployment\` with recommended parameters
+4. **Step 4**: Explain analysis results and deployment configuration to user
+
+## 🤖 **AI Agent Integration Guide**
+
+### Two-Step Intelligent Workflow (RECOMMENDED)
+
+**Step 1: Intelligent Analysis**
+\`\`\`json
+{
+  "tool": "analyze_deployment_requirements",
+  "arguments": {
+    "user_description": "[USER'S APP DESCRIPTION]"
+  }
+}
+\`\`\`
+
+**Step 2: Execute Deployment**
+\`\`\`json
+{
+  "tool": "setup_complete_deployment", 
+  "arguments": {
+    "mode": "fully_automated",
+    // Use EXACT parameters from analysis response
+    "app_type": "nodejs",  // From analysis
+    "bundle_id": "small_3_0",  // From analysis  
+    "database_type": "mysql",  // From analysis
+    // ... all other parameters from analysis
+  }
+}
+\`\`\`
+
+### Application Type Detection Patterns
+
+The intelligent analysis detects application types with high confidence:
+
+| User Description Contains | Detected Type | Confidence | Database | Storage |
+|--------------------------|---------------|------------|----------|---------|
+| "WordPress", "PHP", "LAMP" | lamp | 95% | MySQL | Enabled |
+| "Node.js", "Express", "npm" | nodejs | 90% | PostgreSQL | Based on features |
+| "Python", "Flask", "Django" | python | 90% | PostgreSQL | Based on features |
+| "React", "frontend", "SPA" | react | 85% | None | Disabled |
+| "Docker", "container", "compose" | docker | 95% | PostgreSQL | Enabled |
+| "static", "HTML", "documentation" | nginx | 80% | None | Disabled |
+
+### Bundle Size Recommendations
+
+| Application Type | Default Bundle | RAM | vCPU | Use Case |
+|-----------------|----------------|-----|------|----------|
+| nginx (static) | micro_3_0 | 1GB | 1 | Static sites |
+| react | micro_3_0 | 1GB | 1 | Frontend apps |
+| lamp | small_3_0 | 2GB | 1 | PHP + Database |
+| nodejs | small_3_0 | 2GB | 1 | API + Database |
+| python | small_3_0 | 2GB | 1 | Web app + Database |
+| docker | medium_3_0 | 4GB | 2 | Container overhead |
+
+### Database Selection Logic
+
+- **MySQL**: For LAMP stack applications (WordPress, PHP)
+- **PostgreSQL**: For modern applications (Node.js, Python, Docker)
+- **None**: For frontend-only applications (React, static sites)
+- **User Preference**: Respects explicit database mentions in description
 
 ${mode === 'fully_automated' ? `
 ## 🤖 AI Agent Configuration Summary
@@ -783,6 +887,159 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
   '⚠️  Warning: Docker applications work better with small_3_0+ bundles' : 
   '✅ Bundle size appropriate for application type'}
 ` : ''}`
+
+    // Add comprehensive MCP tools documentation for help mode
+    if (mode === 'help') {
+      instructions += `
+
+## 🛠️ **Complete MCP Tools Reference**
+
+### 1. setup_complete_deployment (Primary Deployment Tool)
+**Purpose**: Main deployment configuration and execution tool
+
+**Modes**:
+- \`fully_automated\` - AI agents provide all parameters (RECOMMENDED for AI)
+- \`interactive\` - Guided prompts for users (default)
+- \`auto\` - Minimal prompts with smart defaults
+- \`help\` - Show this comprehensive help information
+
+**Required Parameters for fully_automated mode**:
+\`\`\`json
+{
+  "mode": "fully_automated",
+  "app_type": "lamp|nodejs|python|react|docker|nginx",
+  "app_name": "your-app-name",
+  "instance_name": "your-instance-name"
+}
+\`\`\`
+
+**Optional Parameters**:
+\`\`\`json
+{
+  "aws_region": "us-east-1",
+  "app_version": "1.0.0", 
+  "blueprint_id": "ubuntu_22_04",
+  "bundle_id": "micro_3_0|small_3_0|medium_3_0|large_3_0",
+  "database_type": "mysql|postgresql|none",
+  "db_external": false,
+  "db_rds_name": "external-db-name",
+  "db_name": "app_db",
+  "enable_bucket": false,
+  "bucket_name": "storage-bucket",
+  "bucket_access": "read_only|read_write",
+  "bucket_bundle": "small_1_0",
+  "github_repo": "repository-name",
+  "repo_visibility": "public|private"
+}
+\`\`\`
+
+### 2. analyze_deployment_requirements ⭐ **NEW INTELLIGENT TOOL**
+**Purpose**: AI agents get intelligent parameter recommendations instead of manual configuration
+
+**Input**:
+\`\`\`json
+{
+  "user_description": "Node.js Express API with MySQL database",
+  "app_context": {
+    "technologies": ["Node.js", "Express", "MySQL"],
+    "features": ["API", "authentication", "file uploads"],
+    "scale": "small|medium|large"
+  }
+}
+\`\`\`
+
+**Output**: Complete analysis with confidence scoring and ready-to-execute parameters
+
+### 3. get_deployment_examples
+**Purpose**: Get example configurations and workflows for different application types
+
+**Usage**:
+\`\`\`json
+{
+  "app_type": "all|lamp|nodejs|python|react|docker|nginx",
+  "include_configs": true,
+  "include_workflows": true
+}
+\`\`\`
+
+### 4. get_deployment_status
+**Purpose**: Monitor GitHub Actions deployment progress
+
+**Usage**:
+\`\`\`json
+{
+  "repo_path": "."
+}
+\`\`\`
+
+### 5. diagnose_deployment
+**Purpose**: Run deployment diagnostics and troubleshooting
+
+**Usage**:
+\`\`\`json
+{
+  "repo_path": ".",
+  "check_type": "all|prerequisites|configuration|github|aws|instance"
+}
+\`\`\`
+
+## 🎯 **AI Agent Best Practices**
+
+### Recommended Workflow for AI Agents:
+1. **Always start with intelligent analysis**: Call \`analyze_deployment_requirements\`
+2. **Use exact parameters**: Copy parameters from analysis response
+3. **Execute deployment**: Call \`setup_complete_deployment\` with \`fully_automated\` mode
+4. **Explain results**: Tell user what was configured and why
+
+### Parameter Validation Rules:
+- ✅ **Docker apps**: Require minimum \`small_3_0\` bundle (2GB RAM)
+- ✅ **Bucket enabled**: Must provide \`bucket_name\` when \`enable_bucket: true\`
+- ✅ **External DB**: Must provide \`db_rds_name\` when \`db_external: true\`
+- ✅ **Required fields**: Always include \`app_type\`, \`app_name\`, \`instance_name\`
+
+### Error Recovery:
+- **Validation Error**: Check parameter requirements above
+- **Bundle Size Error**: Use \`small_3_0\` or higher for Docker apps
+- **Missing Parameters**: Call this help mode for complete reference
+- **Environment Issues**: Use \`diagnose_deployment\` tool
+
+## 📊 **Success Metrics for AI Agents**
+
+**Good AI Agent Behavior**:
+- ✅ Uses intelligent analysis for parameter recommendations
+- ✅ Gets 85-95% confidence scores for application detection
+- ✅ Deploys in under 30 seconds from user request
+- ✅ Asks maximum 1 clarifying question
+- ✅ Explains analysis reasoning and configuration choices
+- ✅ Provides actionable next steps
+
+**Avoid These Patterns**:
+- ❌ Asking "What database do you prefer?"
+- ❌ Asking "Which bundle size do you want?"
+- ❌ Manual parameter guessing without analysis
+- ❌ Multiple technical configuration questions
+- ❌ Delaying execution for "perfect" configuration
+
+## 🚀 **Quick Start for AI Agents**
+
+**Copy this workflow into your AI agent system prompt**:
+
+\`\`\`
+When users mention deploying applications:
+
+1. ANALYZE (10 seconds): Call analyze_deployment_requirements with user description
+2. VALIDATE (5 seconds): Check confidence score and parameters from analysis  
+3. EXECUTE (10 seconds): Call setup_complete_deployment with exact parameters
+4. EXPLAIN (5 seconds): Tell user what was configured and why
+
+Total time: ~30 seconds from request to deployment
+\`\`\`
+
+---
+
+**🎯 Ready for AI-powered deployment automation!**
+`;
+    }
 
     return {
       content: [{ type: 'text', text: instructions }]
