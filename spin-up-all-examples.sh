@@ -14,6 +14,7 @@ DEPLOYMENTS=(
     "deployment-docker.config.yml"
     "deployment-recipe-docker.config.yml"
     "deployment-social-media-app.config.yml"
+    "deployment-instagram-clone.config.yml"
     "deployment-mcp-server.config.yml"
     "deployment-amazon-linux-test.config.yml"
 )
@@ -52,6 +53,9 @@ trigger_deployment() {
             ;;
         "social-media-app")
             workflow_name="Deploy Social Media App"
+            ;;
+        "instagram-clone")
+            workflow_name="Instagram Clone Deployment"
             ;;
         "mcp-server")
             workflow_name="Deploy MCP Server to Lightsail"

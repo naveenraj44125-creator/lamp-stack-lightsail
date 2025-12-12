@@ -1,0 +1,228 @@
+# Instagram Clone Deployment Configuration
+
+aws:
+  region: us-east-1
+
+lightsail:
+  instance_name: instagram-clone-instance-1
+  static_ip: ""
+  
+  # Instance size configuration
+  bundle_id: "small_3_0"  # 2GB RAM, 1 vCPU - good for React apps
+  
+  # Operating system blueprint configuration
+  blueprint_id: "ubuntu_22_04"
+
+  # Lightsail bucket configuration for image uploads
+  bucket:
+    enabled: true
+    name: "instagram-clone-bucket"
+    access_level: "read_write"
+    bundle_id: "small_1_0"
+
+application:
+  name: instagram-clone
+  version: "1.0.0"
+  type: react  # React application type
+  
+  package_files:
+    - "example-instagram-clone/package.json"
+    - "example-instagram-clone/package-lock.json"
+    - "example-instagram-clone/src/"
+    - "example-instagram-clone/public/"
+    - "example-instagram-clone/.gitignore"
+  
+  package_fallback: true
+  
+  environment_variables:
+    # React Environment
+    NODE_ENV: production
+    GENERATE_SOURCEMAP: "false"
+    # API Configuration
+    REACT_APP_API_URL: "https://api.instagram-clone.com"
+    REACT_APP_BUCKET_URL: "https://instagram-clone-bucket.s3.amazonaws.com"
+    # AWS Configuration
+    AWS_REGION: us-east-1
+    BUCKET_NAME: instagram-clone-bucket
+
+dependencies:
+  # Web Server
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+      # Serve React build files and handle client-side routing
+      spa_mode: true
+      try_files: "$uri $uri/ /index.html"
+
+  apache:
+    enabled: false
+
+  # Database Dependencies (not needed for this React-only app)
+  mysql:
+    enabled: false
+  
+  postgresql:
+    enabled: false
+  
+  # Programming Language
+  nodejs:
+    enabled: true
+    version: "18"
+    config:
+      npm_packages:
+        - "serve"  # For serving React build
+      package_manager: "npm"
+
+  php:
+    enabled: false
+
+  python:
+    enabled: false
+
+  # Additional Services
+  redis:
+    enabled: false
+
+  memcached:
+    enabled: false
+
+  docker:
+    enabled: false
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+      deny_all_other: true
+
+  ssl_certificates:
+    enabled: false
+
+  monitoring:
+    enabled: false
+
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+
+  use_docker: false
+
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: false  # React apps don't need server-side env files
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+      react:
+        enabled: true
+        build_command: "npm run build"
+        build_directory: "build"
+        install_dependencies: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+        - "/login"
+        - "/register"
+
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      language_specific_tests: true
+      react_build_test: true
+      test_port: 3000
+
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/"
+    expected_content: "Instagram Clone"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+
+  performance:
+    response_time_check: true
+    http_headers_check: true
+
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+    # React-specific security headers
+    content_security_policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;"
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false
