@@ -1,16 +1,16 @@
-# SSH Syntax Error Fix - Implementation Summary
+# SSH and Bash Syntax Error Fix - Implementation Summary
 
-## Issue Resolved
-Fixed the "bash: -c: line 98: syntax error: unexpected end of file" error in GitHub Actions deployments caused by improper handling of complex multi-line commands with heredocs and shell metacharacters in SSH execution.
+## Issues Resolved
+1. **SSH Syntax Error**: Fixed "bash: -c: line 98: syntax error: unexpected end of file" in GitHub Actions deployments
+2. **Bash Syntax Error**: Fixed "el'''" should be "elif" in deploy-post-steps-generic.py
 
-## Root Cause
-The `_build_ssh_command` method in `workflows/lightsail_common.py` was passing complex commands directly to SSH without proper escaping, causing shell parsing failures when commands contained:
-- Heredoc syntax (`<< 'EOF'`)
-- Multi-line scripts
-- Special shell characters
-- Quotes and metacharacters
+## Root Causes
+1. **SSH Issue**: The `_build_ssh_command` method in `workflows/lightsail_common.py` was passing complex commands directly to SSH without proper escaping
+2. **Bash Issue**: String concatenation error in `workflows/deploy-post-steps-generic.py` where `el'''` should have been `elif`
 
-## Solution Implemented
+## Solutions Implemented
+
+### 1. SSH Command Fix
 Replaced direct command passing with **base64 encoding approach** in the `_build_ssh_command` method:
 
 ### Before (Problematic):
@@ -30,6 +30,27 @@ safe_command = f"echo '{encoded_command}' | base64 -d | bash"
 f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', safe_command
 ```
 
+### 2. Bash Syntax Fix
+Fixed string concatenation error in directory search logic:
+
+#### Before (Broken):
+```python
+dir_checks += f'''
+if [ -d "./{dir_name}" ]; then
+    EXTRACTED_DIR="./{dir_name}"
+    echo "✅ Found configured directory: {dir_name}"
+el'''
+```
+
+#### After (Fixed):
+```python
+dir_checks += f'''
+if [ -d "./{dir_name}" ]; then
+    EXTRACTED_DIR="./{dir_name}"
+    echo "✅ Found configured directory: {dir_name}"
+elif'''
+```
+
 ## How It Works
 1. **Encoding**: Complex commands are base64-encoded before SSH transmission
 2. **Safe Transport**: SSH receives a simple, safe command that decodes and executes
@@ -38,10 +59,13 @@ f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', safe_command
 
 ## Files Modified
 - `workflows/lightsail_common.py` - Updated `_build_ssh_command` method (lines 398-425)
+- `workflows/deploy-post-steps-generic.py` - Fixed bash syntax error in directory search logic (line 319)
 
 ## Testing
-- Created `test-ssh-command-fix.py` to verify encoding/decoding works correctly
+- Created `test-ssh-command-fix.py` to verify SSH encoding/decoding works correctly
+- Created `test-bash-syntax-fix.py` to verify bash syntax generation is valid
 - Tested with complex commands containing heredocs and special characters
+- Tested directory search logic with single and multiple directories
 - All tests pass successfully
 
 ## Impact
@@ -64,4 +88,4 @@ This fix resolves SSH syntax errors for **all applications** using the reusable 
 2. Monitor GitHub Actions logs for successful command execution
 3. Verify no regression in existing deployments
 
-The SSH syntax error that was blocking deployments should now be resolved across all application types.
+Both the SSH syntax error and bash syntax error that were blocking deployments should now be resolved across all application types.

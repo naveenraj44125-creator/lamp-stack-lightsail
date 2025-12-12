@@ -316,8 +316,8 @@ done
 if [ -d "./{dir_name}" ]; then
     EXTRACTED_DIR="./{dir_name}"
     echo "✅ Found configured directory: {dir_name}"
-el'''
-            dir_checks += '''se
+elif'''
+            dir_checks += ''' [ -z "$EXTRACTED_DIR" ]; then
     EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
 fi'''
         else:
