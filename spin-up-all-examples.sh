@@ -25,12 +25,44 @@ trigger_deployment() {
     echo "🔄 Triggering deployment: $app_name"
     echo "   Config: $config_file"
     
+    # Map config files to their specific workflow names
+    local workflow_name=""
+    case "$app_name" in
+        "lamp-stack")
+            workflow_name="Deploy LAMP Stack Example"
+            ;;
+        "nodejs")
+            workflow_name="Node.js Application Deployment"
+            ;;
+        "python")
+            workflow_name="Python Flask API Deployment"
+            ;;
+        "react")
+            workflow_name="React Dashboard Deployment"
+            ;;
+        "nginx")
+            workflow_name="Nginx Static Site Deployment"
+            ;;
+        "docker")
+            workflow_name="Deploy Basic Docker LAMP"
+            ;;
+        "recipe-docker")
+            workflow_name="Deploy Recipe Manager Docker App"
+            ;;
+        "mcp-server")
+            workflow_name="Deploy MCP Server to Lightsail"
+            ;;
+        "amazon-linux-test")
+            workflow_name="Test Amazon Linux Support"
+            ;;
+        *)
+            echo "   ⚠️  Unknown deployment type: $app_name"
+            return 1
+            ;;
+    esac
+    
     # Trigger GitHub Actions workflow
-    gh workflow run "Deploy Generic Application" \
-        --field config_file="$config_file" \
-        --field instance_name="example-$app_name-$(date +%s)" \
-        --field aws_region="us-east-1" \
-        --field skip_tests="false"
+    gh workflow run "$workflow_name"
     
     if [ $? -eq 0 ]; then
         echo "   ✅ Successfully triggered $app_name deployment"
