@@ -234,6 +234,39 @@ class LightsailDeploymentServer {
           }
         },
         {
+          name: 'get_project_structure_guide',
+          description: 'Get project structure recommendations based on application type and GitHub Actions configuration. Helps AI agents understand how to organize code for successful deployment with specific file placement, directory structure, and configuration requirements.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              app_type: {
+                type: 'string',
+                enum: ['lamp', 'nodejs', 'python', 'react', 'docker', 'nginx'],
+                description: 'Application type to get structure guide for'
+              },
+              include_examples: {
+                type: 'boolean',
+                default: true,
+                description: 'Include example file contents and templates'
+              },
+              include_github_actions: {
+                type: 'boolean',
+                default: true,
+                description: 'Include GitHub Actions workflow structure requirements'
+              },
+              deployment_features: {
+                type: 'array',
+                items: {
+                  type: 'string',
+                  enum: ['database', 'bucket', 'ssl', 'docker', 'monitoring']
+                },
+                description: 'Additional deployment features that affect project structure'
+              }
+            },
+            required: ['app_type']
+          }
+        },
+        {
           name: 'diagnose_deployment',
           description: 'Run deployment diagnostics',
           inputSchema: {
@@ -258,13 +291,15 @@ class LightsailDeploymentServer {
             return await this.analyzeDeploymentRequirements(args);
           case 'get_deployment_examples':
             return await this.getDeploymentExamples(args);
+          case 'get_project_structure_guide':
+            return await this.getProjectStructureGuide(args);
           case 'get_deployment_status':
             return await this.getDeploymentStatus(args);
           case 'diagnose_deployment':
             return await this.diagnoseDeployment(args);
           default:
             return {
-              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, analyze_deployment_requirements, get_deployment_examples, get_deployment_status, diagnose_deployment` }],
+              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: setup_complete_deployment, analyze_deployment_requirements, get_deployment_examples, get_project_structure_guide, get_deployment_status, diagnose_deployment` }],
             };
         }
       } catch (error) {
@@ -274,6 +309,774 @@ class LightsailDeploymentServer {
         };
       }
     });
+  }
+
+  async getProjectStructureGuide(args) {
+    const { 
+      app_type, 
+      include_examples = true, 
+      include_github_actions = true, 
+      deployment_features = [] 
+    } = args;
+
+    if (!app_type) {
+      return {
+        content: [{ type: 'text', text: '❌ Error: app_type is required. Choose from: lamp, nodejs, python, react, docker, nginx' }],
+        isError: true,
+      };
+    }
+
+    const hasDatabase = deployment_features.includes('database');
+    const hasBucket = deployment_features.includes('bucket');
+    const hasDocker = deployment_features.includes('docker') || app_type === 'docker';
+    const hasSSL = deployment_features.includes('ssl');
+    const hasMonitoring = deployment_features.includes('monitoring');
+
+    let guide = `# 📁 Project Structure Guide: ${app_type.toUpperCase()}
+
+## 🎯 Overview
+This guide shows the recommended project structure for **${app_type}** applications to ensure successful deployment with GitHub Actions and AWS Lightsail.
+
+## 🔗 Reference Example Application
+**Live Example**: [example-${app_type}-app](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
+
+Use this as a complete working reference for your ${app_type} application structure and implementation.
+
+## 📂 Required Directory Structure
+
+\`\`\`
+your-repository/
+├── .github/
+│   └── workflows/
+│       └── deploy-${app_type}.yml          # GitHub Actions workflow
+├── deployment-${app_type}.config.yml       # Deployment configuration
+`;
+
+    // Add app-specific structure
+    switch (app_type) {
+      case 'lamp':
+        guide += `├── example-lamp-app/                       # Application directory
+│   ├── index.php                           # Main PHP file
+│   ├── config/
+│   │   └── database.php                    # Database configuration
+│   ├── api/
+│   │   └── endpoints.php                   # API endpoints
+│   └── assets/
+│       ├── css/
+│       ├── js/
+│       └── images/
+`;
+        if (hasBucket) {
+          guide += `│   ├── bucket-manager.php                  # S3/Bucket integration
+│   └── uploads/                            # Local upload directory
+`;
+        }
+        break;
+
+      case 'nodejs':
+        guide += `├── example-nodejs-app/                     # Application directory
+│   ├── app.js                              # Main application file
+│   ├── package.json                        # Dependencies and scripts
+│   ├── package-lock.json                   # Dependency lock file
+│   ├── routes/
+│   │   ├── index.js                        # Route definitions
+│   │   └── api.js                          # API routes
+│   ├── models/                             # Database models (if using DB)
+│   ├── middleware/                         # Express middleware
+│   ├── public/                             # Static assets
+│   │   ├── css/
+│   │   ├── js/
+│   │   └── images/
+│   └── views/                              # Template files (if using)
+`;
+        if (hasBucket) {
+          guide += `│   ├── services/
+│   │   └── storage.js                      # S3/Bucket service
+│   └── uploads/                            # Local upload directory
+`;
+        }
+        break;
+
+      case 'python':
+        guide += `├── example-python-app/                     # Application directory
+│   ├── app.py                              # Main Flask/Django application
+│   ├── requirements.txt                    # Python dependencies
+│   ├── wsgi.py                             # WSGI entry point
+│   ├── config.py                           # Application configuration
+│   ├── routes/
+│   │   └── __init__.py                     # Route blueprints
+│   ├── models/                             # Database models (if using DB)
+│   │   └── __init__.py
+│   ├── templates/                          # Jinja2 templates
+│   ├── static/                             # Static assets
+│   │   ├── css/
+│   │   ├── js/
+│   │   └── images/
+│   └── migrations/                         # Database migrations (if using DB)
+`;
+        if (hasBucket) {
+          guide += `│   ├── services/
+│   │   └── storage.py                      # S3/Bucket service
+│   └── uploads/                            # Local upload directory
+`;
+        }
+        break;
+
+      case 'react':
+        guide += `├── example-react-app/                      # Application directory
+│   ├── public/
+│   │   ├── index.html                      # Main HTML template
+│   │   ├── favicon.ico
+│   │   └── manifest.json
+│   ├── src/
+│   │   ├── index.js                        # React entry point
+│   │   ├── App.js                          # Main App component
+│   │   ├── components/                     # React components
+│   │   │   ├── Header.js
+│   │   │   └── Footer.js
+│   │   ├── pages/                          # Page components
+│   │   ├── services/                       # API services
+│   │   ├── utils/                          # Utility functions
+│   │   └── styles/                         # CSS/SCSS files
+│   ├── package.json                        # Dependencies and build scripts
+│   ├── package-lock.json                   # Dependency lock file
+│   └── .gitignore                          # Git ignore rules
+`;
+        break;
+
+      case 'docker':
+        guide += `├── example-docker-app/                     # Application directory
+│   ├── Dockerfile                          # Docker image definition
+│   ├── docker-compose.yml                  # Multi-container setup
+│   ├── .dockerignore                       # Docker ignore rules
+│   ├── src/                                # Application source code
+│   │   ├── index.php                       # Main application file
+│   │   └── config/                         # Configuration files
+│   ├── nginx/                              # Nginx configuration (if needed)
+│   │   └── default.conf
+│   └── scripts/                            # Deployment scripts
+│       └── entrypoint.sh                   # Container entry point
+`;
+        if (hasDatabase) {
+          guide += `│   ├── database/
+│   │   ├── init.sql                        # Database initialization
+│   │   └── migrations/                     # Database migrations
+`;
+        }
+        break;
+
+      case 'nginx':
+        guide += `├── example-nginx-app/                      # Application directory
+│   ├── index.html                          # Main HTML file
+│   ├── css/
+│   │   └── style.css                       # Stylesheets
+│   ├── js/
+│   │   └── main.js                         # JavaScript files
+│   ├── images/                             # Image assets
+│   ├── docs/                               # Documentation (if applicable)
+│   └── assets/                             # Other static assets
+`;
+        break;
+    }
+
+    // Add common files
+    guide += `├── README.md                               # Project documentation
+└── .gitignore                              # Git ignore rules
+\`\`\`
+
+## 🔧 Required Configuration Files
+
+### 1. Deployment Configuration (\`deployment-${app_type}.config.yml\`)
+This file defines your infrastructure and deployment settings:
+
+\`\`\`yaml
+# ${app_type.toUpperCase()} Application Deployment Configuration
+aws:
+  region: us-east-1
+
+lightsail:
+  instance_name: ${app_type}-demo-app
+  bundle_id: "${app_type === 'docker' ? 'medium_3_0' : app_type === 'nginx' || app_type === 'react' ? 'micro_3_0' : 'small_3_0'}"
+  blueprint_id: "ubuntu_22_04"
+
+application:
+  name: ${app_type}-demo-app
+  version: "1.0.0"
+  type: web
+  
+  package_files:`;
+
+    // Add app-specific package files
+    switch (app_type) {
+      case 'lamp':
+        guide += `
+    - "example-lamp-app/index.php"
+    - "example-lamp-app/config/**"
+    - "example-lamp-app/api/**"
+    - "example-lamp-app/assets/**"`;
+        break;
+      case 'nodejs':
+        guide += `
+    - "example-nodejs-app/app.js"
+    - "example-nodejs-app/package.json"
+    - "example-nodejs-app/package-lock.json"
+    - "example-nodejs-app/routes/**"
+    - "example-nodejs-app/public/**"`;
+        break;
+      case 'python':
+        guide += `
+    - "example-python-app/app.py"
+    - "example-python-app/requirements.txt"
+    - "example-python-app/wsgi.py"
+    - "example-python-app/routes/**"
+    - "example-python-app/templates/**"
+    - "example-python-app/static/**"`;
+        break;
+      case 'react':
+        guide += `
+    - "example-react-app/build/**"  # Built files after npm run build
+    - "example-react-app/package.json"`;
+        break;
+      case 'docker':
+        guide += `
+    - "example-docker-app/Dockerfile"
+    - "example-docker-app/docker-compose.yml"
+    - "example-docker-app/src/**"
+    - "example-docker-app/nginx/**"`;
+        break;
+      case 'nginx':
+        guide += `
+    - "example-nginx-app/index.html"
+    - "example-nginx-app/css/**"
+    - "example-nginx-app/js/**"
+    - "example-nginx-app/images/**"`;
+        break;
+    }
+
+    guide += `
+  
+  package_fallback: true
+
+dependencies:`;
+
+    // Add app-specific dependencies
+    switch (app_type) {
+      case 'lamp':
+        guide += `
+  apache:
+    enabled: true
+  php:
+    enabled: true
+    version: "8.1"
+  mysql:
+    enabled: ${hasDatabase}`;
+        break;
+      case 'nodejs':
+        guide += `
+  nginx:
+    enabled: true
+    config:
+      proxy_pass: "http://localhost:3000"
+  nodejs:
+    enabled: true
+    version: "18"
+    config:
+      npm_packages: ["pm2"]
+  postgresql:
+    enabled: ${hasDatabase}`;
+        break;
+      case 'python':
+        guide += `
+  nginx:
+    enabled: true
+    config:
+      proxy_pass: "http://localhost:5000"
+  python:
+    enabled: true
+    version: "3.9"
+    config:
+      pip_packages: ["gunicorn"]
+  postgresql:
+    enabled: ${hasDatabase}`;
+        break;
+      case 'react':
+        guide += `
+  nginx:
+    enabled: true
+    config:
+      document_root: "/var/www/html"`;
+        break;
+      case 'docker':
+        guide += `
+  docker:
+    enabled: true
+    config:
+      install_compose: true`;
+        break;
+      case 'nginx':
+        guide += `
+  nginx:
+    enabled: true
+    config:
+      document_root: "/var/www/html"`;
+        break;
+    }
+
+    guide += `
+\`\`\`
+
+`;
+
+    if (include_github_actions) {
+      guide += `### 2. GitHub Actions Workflow (\`.github/workflows/deploy-${app_type}.yml\`)
+
+\`\`\`yaml
+name: ${app_type.charAt(0).toUpperCase() + app_type.slice(1)} Application Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'example-${app_type}-app/**'
+      - 'deployment-${app_type}.config.yml'
+      - '.github/workflows/deploy-${app_type}.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy ${app_type.charAt(0).toUpperCase() + app_type.slice(1)} Application
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config_file: 'deployment-${app_type}.config.yml'
+      skip_tests: false
+\`\`\`
+
+`;
+    }
+
+    if (include_examples) {
+      guide += `## 📝 Example File Contents
+
+`;
+
+      switch (app_type) {
+        case 'lamp':
+          guide += `### \`example-lamp-app/index.php\`
+\`\`\`php
+<?php
+// Simple PHP application
+echo "<h1>Welcome to LAMP Stack Application</h1>";
+echo "<p>Server Time: " . date('Y-m-d H:i:s') . "</p>";
+
+// Database connection example (if database enabled)
+${hasDatabase ? `
+try {
+    $pdo = new PDO('mysql:host=localhost;dbname=app_db', 'app_user', 'app_password');
+    echo "<p>Database: Connected ✅</p>";
+} catch(PDOException $e) {
+    echo "<p>Database: Connection failed ❌</p>";
+}
+` : '// Database not configured'}
+
+// Health check endpoint
+if ($_GET['health'] ?? false) {
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'healthy', 'timestamp' => time()]);
+    exit;
+}
+?>
+\`\`\`
+`;
+          break;
+
+        case 'nodejs':
+          guide += `### \`example-nodejs-app/app.js\`
+\`\`\`javascript
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.use(express.json());
+app.use(express.static('public'));
+
+// Routes
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to Node.js Application',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: Date.now() });
+});
+
+app.get('/api/info', (req, res) => {
+  res.json({
+    name: process.env.APP_NAME || 'Node.js App',
+    version: '1.0.0',
+    node_version: process.version
+  });
+});
+
+app.listen(port, () => {
+  console.log(\`Server running on port \${port}\`);
+});
+\`\`\`
+
+### \`example-nodejs-app/package.json\`
+\`\`\`json
+{
+  "name": "nodejs-demo-app",
+  "version": "1.0.0",
+  "description": "Node.js application for Lightsail deployment",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "echo \\"No tests specified\\" && exit 0"
+  },
+  "dependencies": {
+    "express": "^4.18.0"${hasDatabase ? ',\n    "pg": "^8.8.0"' : ''}${hasBucket ? ',\n    "aws-sdk": "^2.1200.0"' : ''}
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
+}
+\`\`\`
+`;
+          break;
+
+        case 'python':
+          guide += `### \`example-python-app/app.py\`
+\`\`\`python
+from flask import Flask, jsonify
+import os
+from datetime import datetime
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return jsonify({
+        'message': 'Welcome to Python Flask Application',
+        'timestamp': datetime.now().isoformat(),
+        'environment': os.getenv('FLASK_ENV', 'production')
+    })
+
+@app.route('/api/health')
+def health():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().timestamp()})
+
+@app.route('/api/info')
+def info():
+    return jsonify({
+        'name': os.getenv('APP_NAME', 'Python Flask App'),
+        'version': '1.0.0',
+        'python_version': os.sys.version
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+\`\`\`
+
+### \`example-python-app/requirements.txt\`
+\`\`\`
+Flask==2.3.0
+gunicorn==21.2.0${hasDatabase ? '\npsycopg2-binary==2.9.7' : ''}${hasBucket ? '\nboto3==1.28.0' : ''}
+\`\`\`
+
+### \`example-python-app/wsgi.py\`
+\`\`\`python
+from app import app
+
+if __name__ == "__main__":
+    app.run()
+\`\`\`
+`;
+          break;
+
+        case 'react':
+          guide += `### \`example-react-app/src/App.js\`
+\`\`\`jsx
+import React from 'react';
+import './App.css';
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Welcome to React Application</h1>
+        <p>Deployed on AWS Lightsail</p>
+        <p>Build Time: {process.env.REACT_APP_BUILD_TIME || 'Unknown'}</p>
+      </header>
+    </div>
+  );
+}
+
+export default App;
+\`\`\`
+
+### \`example-react-app/package.json\`
+\`\`\`json
+{
+  "name": "react-demo-app",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --watchAll=false",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+  }
+}
+\`\`\`
+`;
+          break;
+
+        case 'docker':
+          guide += `### \`example-docker-app/Dockerfile\`
+\`\`\`dockerfile
+FROM php:8.1-apache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    git \\
+    curl \\
+    libpng-dev \\
+    libonig-dev \\
+    libxml2-dev \\
+    zip \\
+    unzip
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+# Copy application files
+COPY src/ /var/www/html/
+
+# Set permissions
+RUN chown -R www-data:www-data /var/www/html \\
+    && chmod -R 755 /var/www/html
+
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
+
+EXPOSE 80
+\`\`\`
+
+### \`example-docker-app/docker-compose.yml\`
+\`\`\`yaml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "80:80"
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      - APP_ENV=production${hasDatabase ? `
+  
+  database:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: app_db
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: app_password
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:` : ''}
+\`\`\`
+`;
+          break;
+
+        case 'nginx':
+          guide += `### \`example-nginx-app/index.html\`
+\`\`\`html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Website</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Welcome to Static Website</h1>
+        <p>Deployed on AWS Lightsail with Nginx</p>
+    </header>
+    
+    <main>
+        <section>
+            <h2>Features</h2>
+            <ul>
+                <li>Fast static content delivery</li>
+                <li>Responsive design</li>
+                <li>SEO optimized</li>
+            </ul>
+        </section>
+    </main>
+    
+    <script src="js/main.js"></script>
+</body>
+</html>
+\`\`\`
+`;
+          break;
+      }
+    }
+
+    guide += `## ✅ Deployment Checklist
+
+### Before Deployment:
+- [ ] All required files are in the correct directory structure
+- [ ] \`deployment-${app_type}.config.yml\` is configured for your needs
+- [ ] GitHub Actions workflow is in \`.github/workflows/deploy-${app_type}.yml\`
+- [ ] Application files are in \`example-${app_type}-app/\` directory
+- [ ] Dependencies are properly defined (package.json, requirements.txt, etc.)
+${hasDatabase ? '- [ ] Database configuration is set up in deployment config' : ''}
+${hasBucket ? '- [ ] Bucket integration is configured for file storage' : ''}
+${hasDocker ? '- [ ] Docker and docker-compose files are properly configured' : ''}
+
+### After Deployment:
+- [ ] GitHub Actions workflow runs successfully
+- [ ] Application is accessible via the provided URL
+- [ ] Health check endpoint responds correctly
+- [ ] All features work as expected
+${hasDatabase ? '- [ ] Database connection is working' : ''}
+${hasBucket ? '- [ ] File upload/storage functionality works' : ''}
+
+## 🚀 Quick Start Commands
+
+### Option 1: Download Complete Example Application
+\`\`\`bash
+# Download the complete working example
+git clone https://github.com/naveenraj44125-creator/lamp-stack-lightsail.git temp-repo
+cp -r temp-repo/example-${app_type}-app ./
+cp temp-repo/deployment-${app_type}.config.yml ./
+mkdir -p .github/workflows
+cp temp-repo/.github/workflows/deploy-${app_type}.yml .github/workflows/
+rm -rf temp-repo
+
+# Customize and deploy
+git add .
+git commit -m "Add ${app_type} application from example"
+git push origin main
+\`\`\`
+
+### Option 2: Manual Setup with Custom Code
+\`\`\`bash
+# 1. Create the directory structure
+mkdir -p .github/workflows
+mkdir -p example-${app_type}-app
+
+# 2. Download deployment configuration
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/deployment-${app_type}.config.yml
+
+# 3. Download GitHub Actions workflow
+curl -o .github/workflows/deploy-${app_type}.yml https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/.github/workflows/deploy-${app_type}.yml
+
+# 4. Add your application code to example-${app_type}-app/
+# (Use the structure shown above)
+
+# 5. Customize and commit
+git add .
+git commit -m "Add ${app_type} application deployment setup"
+git push origin main
+\`\`\`
+
+## 📚 Additional Resources
+
+### Example Application Files
+- **Complete Example**: [example-${app_type}-app/](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/tree/main/example-${app_type}-app)
+- **Deployment Config**: [deployment-${app_type}.config.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/deployment-${app_type}.config.yml)
+- **GitHub Workflow**: [deploy-${app_type}.yml](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/blob/main/.github/workflows/deploy-${app_type}.yml)
+
+### Direct File Downloads
+\`\`\`bash
+# Download individual example files
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-${app_type}-app/README.md`;
+
+    // Add app-specific download examples
+    switch (app_type) {
+      case 'lamp':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/index.php
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-lamp-app/bucket-manager.php`;
+        break;
+      case 'nodejs':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/app.js
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nodejs-app/package.json`;
+        break;
+      case 'python':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/app.py
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-python-app/requirements.txt`;
+        break;
+      case 'react':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/package.json
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-react-app/src/App.js`;
+        break;
+      case 'docker':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/Dockerfile
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-docker-app/docker-compose.yml`;
+        break;
+      case 'nginx':
+        guide += `
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/example-nginx-app/index.html`;
+        break;
+    }
+
+    guide += `
+\`\`\`
+
+## 🔍 Common Issues and Solutions
+
+### Issue: Deployment fails with "Package files not found"
+**Solution**: Ensure all files listed in \`package_files\` exist in the repository
+
+### Issue: Application doesn't start after deployment
+**Solution**: Check the main application file path and ensure it's executable
+
+### Issue: Database connection fails
+**Solution**: Verify database configuration in deployment config and application code
+
+${app_type === 'react' ? `### Issue: React build fails
+**Solution**: Ensure \`package.json\` has correct build script and all dependencies are listed` : ''}
+
+${app_type === 'docker' ? `### Issue: Docker container fails to start
+**Solution**: Check Dockerfile syntax and ensure all required files are copied correctly` : ''}
+
+---
+
+**🎯 This structure ensures your ${app_type} application deploys successfully with GitHub Actions and AWS Lightsail!**`;
+
+    return {
+      content: [{ type: 'text', text: guide }]
+    };
   }
 
   async getDeploymentStatus(args) {
@@ -962,7 +1765,22 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 }
 \`\`\`
 
-### 4. get_deployment_status
+### 4. get_project_structure_guide ⭐ **NEW PROJECT STRUCTURE TOOL**
+**Purpose**: Get comprehensive project structure recommendations based on application type and GitHub Actions configuration
+
+**Usage**:
+\`\`\`json
+{
+  "app_type": "lamp|nodejs|python|react|docker|nginx",
+  "include_examples": true,
+  "include_github_actions": true,
+  "deployment_features": ["database", "bucket", "ssl", "docker", "monitoring"]
+}
+\`\`\`
+
+**Returns**: Complete project structure guide with directory layout, required files, example code, deployment configuration, GitHub Actions setup, and direct links to working example applications
+
+### 5. get_deployment_status
 **Purpose**: Monitor GitHub Actions deployment progress
 
 **Usage**:
@@ -972,7 +1790,7 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 }
 \`\`\`
 
-### 5. diagnose_deployment
+### 6. diagnose_deployment
 **Purpose**: Run deployment diagnostics and troubleshooting
 
 **Usage**:
@@ -987,9 +1805,10 @@ ${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ?
 
 ### Recommended Workflow for AI Agents:
 1. **Always start with intelligent analysis**: Call \`analyze_deployment_requirements\`
-2. **Use exact parameters**: Copy parameters from analysis response
-3. **Execute deployment**: Call \`setup_complete_deployment\` with \`fully_automated\` mode
-4. **Explain results**: Tell user what was configured and why
+2. **Get project structure guidance**: Call \`get_project_structure_guide\` to help users organize their code
+3. **Use exact parameters**: Copy parameters from analysis response
+4. **Execute deployment**: Call \`setup_complete_deployment\` with \`fully_automated\` mode
+5. **Explain results**: Tell user what was configured and why
 
 ### Parameter Validation Rules:
 - ✅ **Docker apps**: Require minimum \`small_3_0\` bundle (2GB RAM)

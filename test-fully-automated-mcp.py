@@ -11,8 +11,8 @@ import time
 def test_mcp_server():
     """Test the enhanced MCP server functionality"""
     
-    # MCP server endpoint (assuming it's running locally)
-    base_url = "http://localhost:3000"
+    # MCP server endpoint (using the deployed server)
+    base_url = "http://3.81.56.119:3000"
     
     print("🧪 Testing Enhanced MCP Server - Fully Automated AI Agent Mode")
     print("=" * 70)
