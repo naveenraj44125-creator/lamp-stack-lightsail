@@ -12,6 +12,23 @@ AUTO_MODE=${AUTO_MODE:-false}
 AWS_REGION=${AWS_REGION:-us-east-1}
 APP_VERSION=${APP_VERSION:-1.0.0}
 
+# Fully automated mode environment variables
+APP_TYPE=${APP_TYPE:-}
+APP_NAME=${APP_NAME:-}
+INSTANCE_NAME=${INSTANCE_NAME:-}
+BLUEPRINT_ID=${BLUEPRINT_ID:-ubuntu_22_04}
+BUNDLE_ID=${BUNDLE_ID:-micro_3_0}
+DATABASE_TYPE=${DATABASE_TYPE:-none}
+DB_EXTERNAL=${DB_EXTERNAL:-false}
+DB_RDS_NAME=${DB_RDS_NAME:-}
+DB_NAME=${DB_NAME:-app_db}
+ENABLE_BUCKET=${ENABLE_BUCKET:-false}
+BUCKET_NAME=${BUCKET_NAME:-}
+BUCKET_ACCESS=${BUCKET_ACCESS:-read_write}
+BUCKET_BUNDLE=${BUCKET_BUNDLE:-small_1_0}
+GITHUB_REPO=${GITHUB_REPO:-}
+REPO_VISIBILITY=${REPO_VISIBILITY:-private}
+
 # Function to convert string to lowercase (compatible with older bash versions)
 to_lowercase() {
     echo "$1" | tr '[:upper:]' '[:lower:]'
@@ -1828,72 +1845,173 @@ main() {
     echo -e "${GREEN}✓ AWS Account ID: $AWS_ACCOUNT_ID${NC}"
     
     # Get GitHub repository info
-    GITHUB_REPO=$(git remote get-url origin | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
-    if [ -z "$GITHUB_REPO" ]; then
-        echo -e "${RED}❌ Failed to determine GitHub repository${NC}"
-        exit 1
+    if [[ "$FULLY_AUTOMATED" == "true" && -n "$GITHUB_REPO" ]]; then
+        echo -e "${GREEN}✓ Using GITHUB_REPO: $GITHUB_REPO${NC}"
+    else
+        # Try to get from git remote or use environment variable as fallback
+        if [[ -z "$GITHUB_REPO" ]]; then
+            GITHUB_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
+        fi
+        
+        if [ -z "$GITHUB_REPO" ]; then
+            if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+                # Use app name as repository name for fully automated mode
+                GITHUB_REPO="$APP_NAME"
+                echo -e "${GREEN}✓ Using repository name: $GITHUB_REPO${NC}"
+            else
+                echo -e "${RED}❌ Failed to determine GitHub repository${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✓ GitHub Repository: $GITHUB_REPO${NC}"
+        fi
     fi
-    
-    echo -e "${GREEN}✓ GitHub Repository: $GITHUB_REPO${NC}"
     echo ""
     
+    # Check if we're in fully automated mode (all required env vars set)
+    FULLY_AUTOMATED=false
+    if [[ -n "$APP_TYPE" && -n "$APP_NAME" && -n "$INSTANCE_NAME" ]]; then
+        FULLY_AUTOMATED=true
+        echo -e "${GREEN}✓ Running in fully automated mode${NC}"
+        echo -e "${BLUE}Configuration from environment variables:${NC}"
+        echo "  App Type: $APP_TYPE"
+        echo "  App Name: $APP_NAME"
+        echo "  Instance: $INSTANCE_NAME"
+        echo "  Region: $AWS_REGION"
+        echo "  OS: $BLUEPRINT_ID"
+        echo "  Bundle: $BUNDLE_ID"
+        echo "  Database: $DATABASE_TYPE"
+        echo "  Bucket: $ENABLE_BUCKET"
+        echo ""
+    fi
+    
     # Application type selection
-    APP_TYPES=("lamp" "nodejs" "python" "react" "docker" "nginx")
-    APP_TYPE=$(select_option "Choose application type:" "1" "${APP_TYPES[@]}")
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Validate app type
+        if [[ ! "$APP_TYPE" =~ ^(lamp|nodejs|python|react|docker|nginx)$ ]]; then
+            echo -e "${RED}❌ Invalid APP_TYPE: $APP_TYPE. Must be one of: lamp, nodejs, python, react, docker, nginx${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ Using APP_TYPE: $APP_TYPE${NC}"
+    else
+        APP_TYPES=("lamp" "nodejs" "python" "react" "docker" "nginx")
+        APP_TYPE=$(select_option "Choose application type:" "1" "${APP_TYPES[@]}")
+    fi
     
     # Application name
-    APP_NAME=$(get_input "Enter application name" "$(to_uppercase "${APP_TYPE:0:1}")${APP_TYPE:1} Application")
+    if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+        APP_NAME=$(get_input "Enter application name" "$(to_uppercase "${APP_TYPE:0:1}")${APP_TYPE:1} Application")
+    fi
     
     # Instance configuration
-    INSTANCE_NAME=$(get_input "Enter Lightsail instance name" "${APP_TYPE}-app-$(date +%s)")
+    if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+        INSTANCE_NAME=$(get_input "Enter Lightsail instance name" "${APP_TYPE}-app-$(date +%s)")
+    fi
     
     # AWS Region
-    AWS_REGION=$(get_input "Enter AWS region" "$AWS_REGION")
+    if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+        AWS_REGION=$(get_input "Enter AWS region" "$AWS_REGION")
+    fi
     
     # Instance size
-    if [[ "$APP_TYPE" == "docker" ]]; then
-        BUNDLES=("small_3_0" "medium_3_0" "large_3_0")
-        BUNDLE_ID=$(select_option "Choose bundle (Docker needs minimum 2GB):" "2" "${BUNDLES[@]}")
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Validate bundle for Docker
+        if [[ "$APP_TYPE" == "docker" && "$BUNDLE_ID" =~ ^(nano_3_0|micro_3_0)$ ]]; then
+            echo -e "${RED}❌ Docker applications require minimum small_3_0 bundle (2GB RAM). Current: $BUNDLE_ID${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ Using BUNDLE_ID: $BUNDLE_ID${NC}"
     else
-        BUNDLES=("nano_3_0" "micro_3_0" "small_3_0" "medium_3_0")
-        BUNDLE_ID=$(select_option "Choose bundle:" "2" "${BUNDLES[@]}")
+        if [[ "$APP_TYPE" == "docker" ]]; then
+            BUNDLES=("small_3_0" "medium_3_0" "large_3_0")
+            BUNDLE_ID=$(select_option "Choose bundle (Docker needs minimum 2GB):" "2" "${BUNDLES[@]}")
+        else
+            BUNDLES=("nano_3_0" "micro_3_0" "small_3_0" "medium_3_0")
+            BUNDLE_ID=$(select_option "Choose bundle:" "2" "${BUNDLES[@]}")
+        fi
     fi
     
     # Operating system
-    BLUEPRINTS=("ubuntu_22_04" "ubuntu_20_04" "amazon_linux_2023")
-    BLUEPRINT_ID=$(select_option "Choose OS:" "1" "${BLUEPRINTS[@]}")
-    
-    # Database configuration (for applicable types)
-    DB_TYPE="none"
-    DB_EXTERNAL="false"
-    DB_RDS_NAME=""
-    DB_NAME="app_db"
-    
-    # Database configuration (available for all application types)
-    DB_TYPES=("mysql" "postgresql" "none")
-    DB_TYPE=$(select_option "Choose database type:" "3" "${DB_TYPES[@]}")
-    
-    if [[ "$DB_TYPE" != "none" ]]; then
-        DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
-        if [[ "$DB_EXTERNAL" == "true" ]]; then
-            DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Validate blueprint
+        if [[ ! "$BLUEPRINT_ID" =~ ^(ubuntu_22_04|ubuntu_20_04|amazon_linux_2023)$ ]]; then
+            echo -e "${RED}❌ Invalid BLUEPRINT_ID: $BLUEPRINT_ID. Must be one of: ubuntu_22_04, ubuntu_20_04, amazon_linux_2023${NC}"
+            exit 1
         fi
-        DB_NAME=$(get_input "Enter database name" "app_db")
+        echo -e "${GREEN}✓ Using BLUEPRINT_ID: $BLUEPRINT_ID${NC}"
+    else
+        BLUEPRINTS=("ubuntu_22_04" "ubuntu_20_04" "amazon_linux_2023")
+        BLUEPRINT_ID=$(select_option "Choose OS:" "1" "${BLUEPRINTS[@]}")
+    fi
+    
+    # Database configuration
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Use environment variables
+        DB_TYPE="$DATABASE_TYPE"
+        # Validate database type
+        if [[ ! "$DB_TYPE" =~ ^(mysql|postgresql|none)$ ]]; then
+            echo -e "${RED}❌ Invalid DATABASE_TYPE: $DB_TYPE. Must be one of: mysql, postgresql, none${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ Using DATABASE_TYPE: $DB_TYPE${NC}"
+        
+        if [[ "$DB_TYPE" != "none" ]]; then
+            if [[ "$DB_EXTERNAL" == "true" && -z "$DB_RDS_NAME" ]]; then
+                DB_RDS_NAME="${APP_TYPE}-${DB_TYPE}-db"
+            fi
+        fi
+    else
+        # Interactive mode
+        DB_TYPE="none"
+        DB_EXTERNAL="false"
+        DB_RDS_NAME=""
+        DB_NAME="app_db"
+        
+        # Database configuration (available for all application types)
+        DB_TYPES=("mysql" "postgresql" "none")
+        DB_TYPE=$(select_option "Choose database type:" "3" "${DB_TYPES[@]}")
+        
+        if [[ "$DB_TYPE" != "none" ]]; then
+            DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
+            if [[ "$DB_EXTERNAL" == "true" ]]; then
+                DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
+            fi
+            DB_NAME=$(get_input "Enter database name" "app_db")
+        fi
     fi
     
     # Bucket configuration
-    ENABLE_BUCKET=$(get_yes_no "Enable Lightsail bucket?" "false")
-    BUCKET_NAME=""
-    BUCKET_ACCESS="read_write"
-    BUCKET_BUNDLE="small_1_0"
-    
-    if [[ "$ENABLE_BUCKET" == "true" ]]; then
-        BUCKET_NAME=$(get_input "Enter bucket name" "${APP_TYPE}-bucket-$(date +%s)")
-        BUCKET_ACCESSES=("read_only" "read_write")
-        BUCKET_ACCESS=$(select_option "Choose bucket access level:" "2" "${BUCKET_ACCESSES[@]}")
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Use environment variables
+        if [[ "$ENABLE_BUCKET" == "true" && -z "$BUCKET_NAME" ]]; then
+            BUCKET_NAME="${APP_TYPE}-bucket-$(date +%s)"
+        fi
+        # Validate bucket access
+        if [[ "$ENABLE_BUCKET" == "true" && ! "$BUCKET_ACCESS" =~ ^(read_only|read_write)$ ]]; then
+            echo -e "${RED}❌ Invalid BUCKET_ACCESS: $BUCKET_ACCESS. Must be one of: read_only, read_write${NC}"
+            exit 1
+        fi
+        # Validate bucket bundle
+        if [[ "$ENABLE_BUCKET" == "true" && ! "$BUCKET_BUNDLE" =~ ^(small_1_0|medium_1_0|large_1_0)$ ]]; then
+            echo -e "${RED}❌ Invalid BUCKET_BUNDLE: $BUCKET_BUNDLE. Must be one of: small_1_0, medium_1_0, large_1_0${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ Using ENABLE_BUCKET: $ENABLE_BUCKET${NC}"
+    else
+        # Interactive mode
+        ENABLE_BUCKET=$(get_yes_no "Enable Lightsail bucket?" "false")
+        BUCKET_NAME=""
+        BUCKET_ACCESS="read_write"
+        BUCKET_BUNDLE="small_1_0"
         
-        BUCKET_BUNDLES=("small_1_0" "medium_1_0" "large_1_0")
-        BUCKET_BUNDLE=$(select_option "Choose bucket size:" "1" "${BUCKET_BUNDLES[@]}")
+        if [[ "$ENABLE_BUCKET" == "true" ]]; then
+            BUCKET_NAME=$(get_input "Enter bucket name" "${APP_TYPE}-bucket-$(date +%s)")
+            BUCKET_ACCESSES=("read_only" "read_write")
+            BUCKET_ACCESS=$(select_option "Choose bucket access level:" "2" "${BUCKET_ACCESSES[@]}")
+            
+            BUCKET_BUNDLES=("small_1_0" "medium_1_0" "large_1_0")
+            BUCKET_BUNDLE=$(select_option "Choose bucket size:" "1" "${BUCKET_BUNDLES[@]}")
+        fi
     fi
     
     echo ""

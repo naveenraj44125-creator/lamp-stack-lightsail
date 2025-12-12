@@ -62,25 +62,101 @@ class LightsailDeploymentServer {
       tools: [
         {
           name: 'setup_complete_deployment',
-          description: 'Get the enhanced setup script for creating complete Lightsail deployment automation. This returns instructions and commands to run the setup script locally on your machine, not on the MCP server. Supports 6 application types (LAMP, Node.js, Python, React, Docker, Nginx) with database configuration (MySQL, PostgreSQL, none), bucket integration, GitHub OIDC setup, and comprehensive deployment automation.',
+          description: 'Get the enhanced setup script for creating complete Lightsail deployment automation. This returns instructions and commands to run the setup script locally on your machine, not on the MCP server. Supports 6 application types (LAMP, Node.js, Python, React, Docker, Nginx) with database configuration (MySQL, PostgreSQL, none), bucket integration, GitHub OIDC setup, and comprehensive deployment automation. In automated mode, AI agents can specify all deployment requirements without interactive prompts.',
           inputSchema: {
             type: 'object',
             properties: {
               mode: { 
                 type: 'string', 
-                enum: ['interactive', 'auto', 'help'],
+                enum: ['interactive', 'auto', 'help', 'fully_automated'],
                 default: 'interactive',
-                description: 'Script execution mode: interactive (prompts for input), auto (uses defaults), help (show usage)'
+                description: 'Script execution mode: interactive (prompts for input), auto (uses defaults with some prompts), fully_automated (AI agent provides all parameters), help (show usage)'
               },
               aws_region: { 
                 type: 'string', 
                 default: 'us-east-1',
-                description: 'AWS region for deployment (used in auto mode)'
+                description: 'AWS region for deployment'
               },
               app_version: {
                 type: 'string',
                 default: '1.0.0',
-                description: 'Application version (used in auto mode)'
+                description: 'Application version'
+              },
+              app_type: {
+                type: 'string',
+                enum: ['lamp', 'nodejs', 'python', 'react', 'docker', 'nginx'],
+                description: 'Application type (required for fully_automated mode)'
+              },
+              app_name: {
+                type: 'string',
+                description: 'Application name (defaults to {app_type}-app if not provided)'
+              },
+              instance_name: {
+                type: 'string',
+                description: 'Lightsail instance name (defaults to {app_type}-app-{timestamp} if not provided)'
+              },
+              blueprint_id: {
+                type: 'string',
+                enum: ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2023'],
+                default: 'ubuntu_22_04',
+                description: 'Operating system blueprint'
+              },
+              bundle_id: {
+                type: 'string',
+                enum: ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0'],
+                default: 'micro_3_0',
+                description: 'Instance size bundle (Docker apps need minimum small_3_0)'
+              },
+              database_type: {
+                type: 'string',
+                enum: ['mysql', 'postgresql', 'none'],
+                default: 'none',
+                description: 'Database type (available for all application types)'
+              },
+              db_external: {
+                type: 'boolean',
+                default: false,
+                description: 'Use external RDS database instead of local database'
+              },
+              db_rds_name: {
+                type: 'string',
+                description: 'RDS instance name (required if db_external is true)'
+              },
+              db_name: {
+                type: 'string',
+                default: 'app_db',
+                description: 'Database name'
+              },
+              enable_bucket: {
+                type: 'boolean',
+                default: false,
+                description: 'Enable Lightsail bucket for S3-compatible storage'
+              },
+              bucket_name: {
+                type: 'string',
+                description: 'Bucket name (required if enable_bucket is true)'
+              },
+              bucket_access: {
+                type: 'string',
+                enum: ['read_only', 'read_write'],
+                default: 'read_write',
+                description: 'Bucket access level'
+              },
+              bucket_bundle: {
+                type: 'string',
+                enum: ['small_1_0', 'medium_1_0', 'large_1_0'],
+                default: 'small_1_0',
+                description: 'Bucket size bundle'
+              },
+              github_repo: {
+                type: 'string',
+                description: 'GitHub repository name (defaults to {app_name} if not provided)'
+              },
+              repo_visibility: {
+                type: 'string',
+                enum: ['public', 'private'],
+                default: 'private',
+                description: 'GitHub repository visibility'
               },
             },
           },
@@ -182,9 +258,60 @@ class LightsailDeploymentServer {
   }
 
   async setupCompleteDeployment(args) {
-    const { mode = 'interactive', aws_region = 'us-east-1', app_version = '1.0.0' } = args;
+    const { 
+      mode = 'interactive', 
+      aws_region = 'us-east-1', 
+      app_version = '1.0.0',
+      app_type,
+      app_name,
+      instance_name,
+      blueprint_id = 'ubuntu_22_04',
+      bundle_id = 'micro_3_0',
+      database_type = 'none',
+      db_external = false,
+      db_rds_name,
+      db_name = 'app_db',
+      enable_bucket = false,
+      bucket_name,
+      bucket_access = 'read_write',
+      bucket_bundle = 'small_1_0',
+      github_repo,
+      repo_visibility = 'private'
+    } = args;
     
     const scriptUrl = 'https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh';
+    
+    // Validate required parameters for fully_automated mode
+    if (mode === 'fully_automated') {
+      if (!app_type) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: app_type is required for fully_automated mode. Choose from: lamp, nodejs, python, react, docker, nginx' }],
+          isError: true,
+        };
+      }
+      
+      if (enable_bucket && !bucket_name) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: bucket_name is required when enable_bucket is true' }],
+          isError: true,
+        };
+      }
+      
+      if (db_external && !db_rds_name) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: db_rds_name is required when db_external is true' }],
+          isError: true,
+        };
+      }
+      
+      // Validate bundle size for Docker applications
+      if (app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id)) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: Docker applications require minimum small_3_0 bundle (2GB RAM). Current bundle: ' + bundle_id }],
+          isError: true,
+        };
+      }
+    }
     
     let instructions = `# 🚀 Complete Lightsail Deployment Setup
 
@@ -215,20 +342,75 @@ chmod +x setup-complete-deployment.sh
       instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
     } else if (mode === 'help') {
       instructions += ` --help`;
+    } else if (mode === 'fully_automated') {
+      // Generate environment variables for fully automated execution
+      const timestamp = Date.now();
+      const finalAppName = app_name || `${app_type}-app`;
+      const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
+      const finalGithubRepo = github_repo || finalAppName;
+      const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
+      const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
+      
+      instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
+      
+      // Add environment variables for fully automated mode
+      instructions = instructions.replace('# Run the script\n./setup-complete-deployment.sh', 
+        `# Set environment variables for fully automated deployment
+export AUTO_MODE=true
+export AWS_REGION="${aws_region}"
+export APP_VERSION="${app_version}"
+export APP_TYPE="${app_type}"
+export APP_NAME="${finalAppName}"
+export INSTANCE_NAME="${finalInstanceName}"
+export BLUEPRINT_ID="${blueprint_id}"
+export BUNDLE_ID="${bundle_id}"
+export DATABASE_TYPE="${database_type}"
+export DB_EXTERNAL="${db_external}"
+export DB_RDS_NAME="${finalDbRdsName}"
+export DB_NAME="${db_name}"
+export ENABLE_BUCKET="${enable_bucket}"
+export BUCKET_NAME="${finalBucketName}"
+export BUCKET_ACCESS="${bucket_access}"
+export BUCKET_BUNDLE="${bucket_bundle}"
+export GITHUB_REPO="${finalGithubRepo}"
+export REPO_VISIBILITY="${repo_visibility}"
+
+# Run the script in fully automated mode
+./setup-complete-deployment.sh`);
     }
 
     instructions += `
 \`\`\`
 
 ### Method 2: Direct Execution (No Download)
-\`\`\`bash
-# Run directly from GitHub
-bash <(curl -s ${scriptUrl})`;
+\`\`\`bash`;
 
-    if (mode === 'auto') {
-      instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
-    } else if (mode === 'help') {
-      instructions += ` --help`;
+    if (mode === 'fully_automated') {
+      // For direct execution, we need to set environment variables inline
+      const timestamp = Date.now();
+      const finalAppName = app_name || `${app_type}-app`;
+      const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
+      const finalGithubRepo = github_repo || finalAppName;
+      const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
+      const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
+      
+      instructions += `# Run directly from GitHub with environment variables
+AUTO_MODE=true AWS_REGION="${aws_region}" APP_VERSION="${app_version}" \\
+APP_TYPE="${app_type}" APP_NAME="${finalAppName}" INSTANCE_NAME="${finalInstanceName}" \\
+BLUEPRINT_ID="${blueprint_id}" BUNDLE_ID="${bundle_id}" DATABASE_TYPE="${database_type}" \\
+DB_EXTERNAL="${db_external}" DB_RDS_NAME="${finalDbRdsName}" DB_NAME="${db_name}" \\
+ENABLE_BUCKET="${enable_bucket}" BUCKET_NAME="${finalBucketName}" BUCKET_ACCESS="${bucket_access}" \\
+BUCKET_BUNDLE="${bucket_bundle}" GITHUB_REPO="${finalGithubRepo}" REPO_VISIBILITY="${repo_visibility}" \\
+bash <(curl -s ${scriptUrl}) --auto --aws-region ${aws_region} --app-version ${app_version}`;
+    } else {
+      instructions += `# Run directly from GitHub
+bash <(curl -s ${scriptUrl})`;
+      
+      if (mode === 'auto') {
+        instructions += ` --auto --aws-region ${aws_region} --app-version ${app_version}`;
+      } else if (mode === 'help') {
+        instructions += ` --help`;
+      }
     }
 
     instructions += `
@@ -250,10 +432,53 @@ bash <(curl -s ${scriptUrl})`;
 - Ideal for CI/CD pipelines and batch deployments
 - Add \`--auto\` flag
 
+### Fully Automated Mode (AI Agent Mode)
+- **Zero prompts** - AI agents provide all parameters via environment variables
+- Complete deployment automation without human intervention
+- Validates all parameters before execution
+- Perfect for AI-driven deployment workflows
+- All configuration specified via environment variables
+
 ### Help Mode  
 - Shows comprehensive usage information and examples
 - Lists all supported application types and features
 - Add \`--help\` flag
+
+${mode === 'fully_automated' ? `
+## 🤖 AI Agent Configuration Summary
+
+**Deployment Configuration:**
+- **Application Type**: ${app_type}
+- **Application Name**: ${app_name || `${app_type}-app`}
+- **Instance Name**: ${instance_name || `${app_type}-app-${Date.now()}`}
+- **AWS Region**: ${aws_region}
+- **Operating System**: ${blueprint_id}
+- **Instance Size**: ${bundle_id}
+- **App Version**: ${app_version}
+
+**Database Configuration:**
+- **Database Type**: ${database_type}
+- **External RDS**: ${db_external ? 'Yes' : 'No'}
+${db_external ? `- **RDS Instance**: ${db_rds_name || `${app_type}-${database_type}-db`}` : ''}
+- **Database Name**: ${db_name}
+
+**Storage Configuration:**
+- **Bucket Enabled**: ${enable_bucket ? 'Yes' : 'No'}
+${enable_bucket ? `- **Bucket Name**: ${bucket_name || `${app_type}-bucket-${Date.now()}`}
+- **Bucket Access**: ${bucket_access}
+- **Bucket Size**: ${bucket_bundle}` : ''}
+
+**GitHub Configuration:**
+- **Repository**: ${github_repo || app_name || `${app_type}-app`}
+- **Visibility**: ${repo_visibility}
+
+**Validation Results:**
+✅ All required parameters provided
+✅ Configuration validated successfully
+${app_type === 'docker' && ['nano_3_0', 'micro_3_0'].includes(bundle_id) ? 
+  '⚠️  Warning: Docker applications work better with small_3_0+ bundles' : 
+  '✅ Bundle size appropriate for application type'}
+` : ''}`
 
 ## 🛠️ What the Script Creates
 
