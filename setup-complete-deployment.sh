@@ -113,7 +113,7 @@ create_iam_role_if_needed() {
     local github_repo="$2"
     local aws_account_id="$3"
     
-    echo -e "${BLUE}Creating IAM role: $role_name${NC}"
+    echo -e "${BLUE}Creating IAM role: $role_name${NC}" >&2
     
     # Create trust policy
     cat > trust-policy.json << EOF
@@ -131,7 +131,11 @@ create_iam_role_if_needed() {
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                 },
                 "StringLike": {
-                    "token.actions.githubusercontent.com:sub": "repo:${github_repo}:*"
+                    "token.actions.githubusercontent.com:sub": [
+                        "repo:${github_repo}:ref:refs/heads/main",
+                        "repo:${github_repo}:ref:refs/heads/master",
+                        "repo:${github_repo}:pull_request"
+                    ]
                 }
             }
         }
@@ -141,17 +145,36 @@ EOF
 
     # Create role
     if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json &> /dev/null; then
-        echo -e "${GREEN}✓ IAM role created${NC}"
+        echo -e "${GREEN}✓ IAM role created${NC}" >&2
     else
-        echo -e "${YELLOW}⚠️  IAM role might already exist${NC}"
+        echo -e "${YELLOW}⚠️  IAM role might already exist${NC}" >&2
     fi
     
     # Attach policies
-    aws iam attach-role-policy --role-name "$role_name" --policy-arn "arn:aws:iam::aws:policy/AmazonLightsailFullAccess" &> /dev/null
-    aws iam attach-role-policy --role-name "$role_name" --policy-arn "arn:aws:iam::aws:policy/AmazonS3FullAccess" &> /dev/null
+    echo -e "${BLUE}Attaching IAM policies...${NC}" >&2
+    aws iam attach-role-policy --role-name "$role_name" --policy-arn "arn:aws:iam::aws:policy/ReadOnlyAccess" &> /dev/null
     
-    # Set AWS_ROLE_ARN
-    AWS_ROLE_ARN="arn:aws:iam::${aws_account_id}:role/${role_name}"
+    # Create custom Lightsail policy
+    local lightsail_policy_name="${role_name}-LightsailAccess"
+    local policy_arn="arn:aws:iam::${aws_account_id}:policy/${lightsail_policy_name}"
+    
+    if ! aws iam get-policy --policy-arn "$policy_arn" &> /dev/null; then
+        local lightsail_policy='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lightsail:*","Resource":"*"}]}'
+        aws iam create-policy \
+            --policy-name "$lightsail_policy_name" \
+            --policy-document "$lightsail_policy" \
+            --description "Full access to AWS Lightsail for GitHub Actions deployment" &> /dev/null
+        echo -e "${GREEN}✓ Custom Lightsail policy created${NC}" >&2
+    else
+        echo -e "${YELLOW}⚠️  Custom Lightsail policy already exists${NC}" >&2
+    fi
+    
+    aws iam attach-role-policy --role-name "$role_name" --policy-arn "$policy_arn" &> /dev/null
+    echo -e "${GREEN}✓ IAM policies attached${NC}" >&2
+    
+    # Set AWS_ROLE_ARN and echo it for capture by caller
+    local role_arn="arn:aws:iam::${aws_account_id}:role/${role_name}"
+    echo "$role_arn"
     
     # Clean up
     rm -f trust-policy.json
@@ -2116,7 +2139,9 @@ main() {
     
     # Create IAM role
     ROLE_NAME="GitHubActions-${APP_NAME}-deployment"
-    create_iam_role_if_needed "$ROLE_NAME" "$GITHUB_REPO" "$AWS_ACCOUNT_ID"
+    AWS_ROLE_ARN=$(create_iam_role_if_needed "$ROLE_NAME" "$GITHUB_REPO" "$AWS_ACCOUNT_ID")
+    
+    echo -e "${GREEN}✓ IAM Role ARN: $AWS_ROLE_ARN${NC}"
     
     echo ""
     echo -e "${BLUE}Setting up GitHub repository secrets...${NC}"

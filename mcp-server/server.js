@@ -1647,8 +1647,8 @@ If no custom role ARN is provided, the script will create/use a role with this n
 
 ### IAM Role Requirements
 The IAM role (custom or default) must have these policies attached:
-- \`AmazonLightsailFullAccess\`
-- \`AmazonS3FullAccess\` (if using bucket storage)
+- \`ReadOnlyAccess\` (AWS managed policy for general read access)
+- Custom Lightsail policy with \`lightsail:*\` permissions (auto-created by setup script)
 
 ### Trust Policy Requirements
 The role must trust GitHub Actions OIDC provider:
