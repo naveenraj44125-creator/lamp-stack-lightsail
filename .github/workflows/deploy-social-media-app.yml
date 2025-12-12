@@ -32,13 +32,11 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: 'example-social-media-app/package-lock.json'
 
     - name: Install dependencies
       run: |
         cd example-social-media-app
-        npm ci
+        npm install
 
     - name: Test application startup
       run: |
