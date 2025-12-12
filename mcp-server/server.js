@@ -34,7 +34,7 @@ class LightsailDeploymentServer {
     this.server = new Server(
       {
         name: 'lightsail-deployment-mcp',
-        version: '1.1.2',
+        version: '1.1.3', // Updated to force deployment with OIDC fix
       },
       {
         capabilities: {
