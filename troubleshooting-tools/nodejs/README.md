@@ -1,11 +1,48 @@
 # Node.js Application Debug Guide
 
 ## Overview
-This guide explains how to use the debug and fix scripts for Node.js applications deployed on AWS Lightsail.
+This guide explains how to use the debug and fix scripts for Node.js applications deployed on AWS Lightsail, including React + Node.js applications like the Instagram clone.
 
 ## Scripts
 
-### debug-nodejs.py
+### 🆕 React + Node.js Specific Scripts
+
+#### quick-check.py - Instant Status Check
+**Use when**: You need immediate status of your React + Node.js deployment
+```bash
+python3 quick-check.py
+```
+- ⚡ Fast 30-second check
+- ✅ Shows what's working/broken  
+- 🎯 Provides specific next steps
+- 🌐 Tests external connectivity
+- Perfect for Instagram clone and similar React apps
+
+#### debug-react-nodejs.py - Comprehensive React + Node.js Diagnostics
+**Use when**: You need detailed analysis of React + Node.js issues
+```bash
+python3 debug-react-nodejs.py
+```
+- 🔍 Deep system analysis for React apps
+- 📋 Checks React build, Node.js server, PM2, Nginx proxy
+- 🌐 Tests all API endpoints
+- 📊 Provides troubleshooting recommendations
+- Specifically designed for React apps served by Node.js
+
+#### fix-react-nodejs.py - Automated React + Node.js Fix
+**Use when**: You want to automatically resolve React + Node.js issues
+```bash
+python3 fix-react-nodejs.py
+```
+- 🔧 Automated problem resolution
+- 🏗️ Rebuilds React application (`npm run build`)
+- 🖥️ Restarts Node.js server with PM2
+- 🌐 Reconfigures Nginx proxy for Node.js
+- Perfect for fixing Instagram clone deployment issues
+
+### General Node.js Scripts
+
+#### debug-nodejs.py
 Comprehensive diagnostic tool that checks:
 - Node.js and npm installation and versions
 - Application directory structure
