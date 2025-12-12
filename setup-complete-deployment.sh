@@ -1550,25 +1550,31 @@ select_option() {
         return
     fi
     
-    # Display menu to stderr so it doesn't interfere with command substitution
-    echo "" >&2
-    echo "$prompt" >&2
+    # Use /dev/tty for direct terminal interaction
+    exec 3</dev/tty
+    
+    # Display menu to terminal
+    echo "" > /dev/tty
+    echo "$prompt" > /dev/tty
     for i in "${!options[@]}"; do
-        echo "  $((i+1)). ${options[i]}" >&2
+        echo "  $((i+1)). ${options[i]}" > /dev/tty
     done
-    echo "" >&2
+    echo "" > /dev/tty
     
     while true; do
-        read -p "Select option [1-${#options[@]}] [$default]: " choice
+        echo -n "Select option [1-${#options[@]}] [$default]: " > /dev/tty
+        read -u 3 choice
         choice="${choice:-$default}"
         
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
             echo "${options[$((choice-1))]}"
             break
         else
-            echo "Invalid choice. Please select 1-${#options[@]}." >&2
+            echo "Invalid choice. Please select 1-${#options[@]}." > /dev/tty
         fi
     done
+    
+    exec 3<&-
 }
 
 # Function to setup GitHub OIDC if needed
@@ -1776,7 +1782,6 @@ main() {
     AWS_REGION=$(get_input "Enter AWS region" "$AWS_REGION")
     
     # Instance size
-    echo -e "${BLUE}Select instance size:${NC}"
     if [[ "$APP_TYPE" == "docker" ]]; then
         BUNDLES=("small_3_0" "medium_3_0" "large_3_0")
         BUNDLE_ID=$(select_option "Choose bundle (Docker needs minimum 2GB):" "2" "${BUNDLES[@]}")
@@ -1786,7 +1791,6 @@ main() {
     fi
     
     # Operating system
-    echo -e "${BLUE}Select operating system:${NC}"
     BLUEPRINTS=("ubuntu_22_04" "ubuntu_20_04" "amazon_linux_2023")
     BLUEPRINT_ID=$(select_option "Choose OS:" "1" "${BLUEPRINTS[@]}")
     
@@ -1797,7 +1801,6 @@ main() {
     DB_NAME="app_db"
     
     if [[ "$APP_TYPE" == "lamp" || "$APP_TYPE" == "docker" ]]; then
-        echo -e "${BLUE}Database configuration:${NC}"
         DB_TYPES=("mysql" "postgresql" "none")
         DB_TYPE=$(select_option "Choose database type:" "1" "${DB_TYPES[@]}")
         
