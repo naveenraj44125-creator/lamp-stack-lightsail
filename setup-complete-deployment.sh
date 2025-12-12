@@ -1550,12 +1550,13 @@ select_option() {
         return
     fi
     
-    echo ""
-    echo "$prompt"
+    # Display menu to stderr so it doesn't interfere with command substitution
+    echo "" >&2
+    echo "$prompt" >&2
     for i in "${!options[@]}"; do
-        echo "  $((i+1)). ${options[i]}"
+        echo "  $((i+1)). ${options[i]}" >&2
     done
-    echo ""
+    echo "" >&2
     
     while true; do
         read -p "Select option [1-${#options[@]}] [$default]: " choice
@@ -1565,7 +1566,7 @@ select_option() {
             echo "${options[$((choice-1))]}"
             break
         else
-            echo "Invalid choice. Please select 1-${#options[@]}."
+            echo "Invalid choice. Please select 1-${#options[@]}." >&2
         fi
     done
 }
@@ -1762,7 +1763,6 @@ main() {
     echo ""
     
     # Application type selection
-    echo -e "${BLUE}Select application type:${NC}"
     APP_TYPES=("lamp" "nodejs" "python" "react" "docker" "nginx")
     APP_TYPE=$(select_option "Choose application type:" "1" "${APP_TYPES[@]}")
     
