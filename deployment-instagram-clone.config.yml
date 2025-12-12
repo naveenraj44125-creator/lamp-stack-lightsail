@@ -152,18 +152,21 @@ deployment:
         set_permissions: true
         restart_services: true
         optimize_performance: true
-      react:
+      custom_commands:
         enabled: true
-        build_command: "cd /var/www/html && npm install && npm run build"
-        build_directory: "build"
-        install_dependencies: true
-        working_directory: "/var/www/html"
-      nodejs:
-        enabled: true
-        start_command: "cd /var/www/html && npm start"
-        process_manager: "pm2"
-        auto_restart: true
-        working_directory: "/var/www/html"
+        commands:
+          - name: "Install Node.js dependencies"
+            command: "cd /opt/nodejs-app && npm ci"
+            timeout: 300
+          - name: "Build React application"
+            command: "cd /opt/nodejs-app && npm run build"
+            timeout: 600
+          - name: "Verify React build"
+            command: "cd /opt/nodejs-app && ls -la build/ && test -f build/index.html"
+            timeout: 30
+          - name: "Start Node.js server with PM2"
+            command: "cd /opt/nodejs-app && pm2 delete instagram-clone 2>/dev/null || true && pm2 start server.js --name instagram-clone && pm2 save"
+            timeout: 60
     
     verification:
       enabled: true
