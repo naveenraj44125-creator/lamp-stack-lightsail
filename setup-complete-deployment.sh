@@ -238,24 +238,41 @@ application:
     APP_ENV: production
 EOF
 
-    # Add type-specific environment variables
-    case $app_type in
-        "lamp")
-            cat >> "deployment-${app_type}.config.yml" << EOF
-    DB_HOST: localhost
+    # Add database environment variables (available for all application types)
+    if [[ "$db_type" != "none" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    # Database Configuration
+    DB_TYPE: ${db_type}
+    DB_HOST: $([ "$db_external" = "true" ] && echo "RDS_ENDPOINT" || echo "localhost")
     DB_NAME: ${db_name:-app_db}
     DB_USER: app_user
     DB_PASSWORD: CHANGE_ME_secure_password_123
 EOF
+        if [[ "$db_external" == "true" ]]; then
+            cat >> "deployment-${app_type}.config.yml" << EOF
+    DB_RDS_NAME: ${db_rds_name:-${app_type}-${db_type}-db}
+EOF
+        fi
+    fi
+
+    # Add type-specific environment variables
+    case $app_type in
+        "lamp")
+            cat >> "deployment-${app_type}.config.yml" << EOF
+    # LAMP Stack specific
+    APACHE_DOCUMENT_ROOT: /var/www/html
+EOF
             ;;
         "nodejs")
             cat >> "deployment-${app_type}.config.yml" << EOF
+    # Node.js specific
     NODE_ENV: production
     PORT: "3000"
 EOF
             ;;
         "python")
             cat >> "deployment-${app_type}.config.yml" << EOF
+    # Python/Flask specific
     FLASK_ENV: production
     FLASK_APP: app.py
     PORT: "5000"
@@ -263,14 +280,22 @@ EOF
             ;;
         "react")
             cat >> "deployment-${app_type}.config.yml" << EOF
+    # React specific
     REACT_APP_ENV: production
     BUILD_PATH: build
 EOF
             ;;
         "docker")
             cat >> "deployment-${app_type}.config.yml" << EOF
+    # Docker specific
     COMPOSE_PROJECT_NAME: $(to_lowercase "${app_name}")
     DOCKER_BUILDKIT: "1"
+EOF
+            ;;
+        "nginx")
+            cat >> "deployment-${app_type}.config.yml" << EOF
+    # Nginx specific
+    NGINX_DOCUMENT_ROOT: /var/www/html
 EOF
             ;;
     esac
@@ -289,9 +314,60 @@ EOF
 dependencies:
 EOF
 
+    # Database configuration (available for all application types)
+    cat >> "deployment-${app_type}.config.yml" << EOF
+  # Database Dependencies
+  mysql:
+    enabled: $([ "$db_type" = "mysql" ] && [ "$db_external" = "false" ] && echo "true" || echo "false")
+    external: $([ "$db_external" = "true" ] && echo "true" || echo "false")
+    config:
+      version: "8.0"
+      root_password: "CHANGE_ME_root_password_123"
+      create_database: "${db_name:-app_db}"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+EOF
+
+    if [[ "$db_external" == "true" && "$db_type" == "mysql" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    rds:
+      database_name: "${db_rds_name:-${app_type}-mysql-db}"
+      region: "${aws_region}"
+      master_database: "${db_name:-app_db}"
+      environment:
+        DB_CONNECTION_TIMEOUT: "30"
+        DB_CHARSET: "utf8mb4"
+EOF
+    fi
+
+    cat >> "deployment-${app_type}.config.yml" << EOF
+  
+  postgresql:
+    enabled: $([ "$db_type" = "postgresql" ] && [ "$db_external" = "false" ] && echo "true" || echo "false")
+    external: $([ "$db_external" = "true" ] && echo "true" || echo "false")
+    config:
+      version: "13"
+      postgres_password: "CHANGE_ME_postgres_password_123"
+      create_database: "${db_name:-app_db}"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+EOF
+
+    if [[ "$db_external" == "true" && "$db_type" == "postgresql" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    rds:
+      database_name: "${db_rds_name:-${app_type}-postgres-db}"
+      region: "${aws_region}"
+      master_database: "${db_name:-app_db}"
+      environment:
+        DB_CONNECTION_TIMEOUT: "30"
+EOF
+    fi
+
     case $app_type in
         "lamp")
             cat >> "deployment-${app_type}.config.yml" << EOF
+  
   php:
     enabled: true
     config:
@@ -309,19 +385,11 @@ EOF
     config:
       enable_rewrite: true
       document_root: "/var/www/html"
-      
-  mysql:
-    enabled: $([ "$db_type" = "mysql" ] && [ "$db_external" = "false" ] && echo "true" || echo "false")
-    config:
-      version: "8.0"
-      root_password: "CHANGE_ME_root_password_123"
-      create_database: "${db_name:-app_db}"
-      create_user: "app_user"
-      user_password: "CHANGE_ME_secure_password_123"
 EOF
             ;;
         "nodejs")
             cat >> "deployment-${app_type}.config.yml" << EOF
+  
   nodejs:
     enabled: true
     config:
@@ -338,6 +406,7 @@ EOF
             ;;
         "python")
             cat >> "deployment-${app_type}.config.yml" << EOF
+  
   python:
     enabled: true
     config:
@@ -1800,17 +1869,16 @@ main() {
     DB_RDS_NAME=""
     DB_NAME="app_db"
     
-    if [[ "$APP_TYPE" == "lamp" || "$APP_TYPE" == "docker" ]]; then
-        DB_TYPES=("mysql" "postgresql" "none")
-        DB_TYPE=$(select_option "Choose database type:" "1" "${DB_TYPES[@]}")
-        
-        if [[ "$DB_TYPE" != "none" ]]; then
-            DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
-            if [[ "$DB_EXTERNAL" == "true" ]]; then
-                DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
-            fi
-            DB_NAME=$(get_input "Enter database name" "app_db")
+    # Database configuration (available for all application types)
+    DB_TYPES=("mysql" "postgresql" "none")
+    DB_TYPE=$(select_option "Choose database type:" "3" "${DB_TYPES[@]}")
+    
+    if [[ "$DB_TYPE" != "none" ]]; then
+        DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
+        if [[ "$DB_EXTERNAL" == "true" ]]; then
+            DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
         fi
+        DB_NAME=$(get_input "Enter database name" "app_db")
     fi
     
     # Bucket configuration
