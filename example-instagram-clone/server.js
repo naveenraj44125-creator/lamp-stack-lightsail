@@ -21,23 +21,32 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from React build
 const buildPath = path.join(__dirname, 'build');
 const altBuildPath = path.join(process.cwd(), 'build');
+const deploymentBuildPath = '/opt/nodejs-app/build';
 
 let activeBuildPath = buildPath;
 let buildExists = false;
 
-if (fs.existsSync(buildPath)) {
-    activeBuildPath = buildPath;
-    buildExists = true;
-    app.use(express.static(buildPath));
-    console.log('✅ Serving React build from:', buildPath);
-} else if (fs.existsSync(altBuildPath)) {
-    activeBuildPath = altBuildPath;
-    buildExists = true;
-    app.use(express.static(altBuildPath));
-    console.log('✅ Serving React build from:', altBuildPath);
-} else {
-    console.log('⚠️  React build not found at:', buildPath);
-    console.log('⚠️  Also checked:', altBuildPath);
+// Check multiple possible build locations
+const possiblePaths = [buildPath, altBuildPath, deploymentBuildPath];
+
+for (const checkPath of possiblePaths) {
+    if (fs.existsSync(checkPath) && fs.existsSync(path.join(checkPath, 'index.html'))) {
+        activeBuildPath = checkPath;
+        buildExists = true;
+        app.use(express.static(checkPath));
+        console.log('✅ Serving React build from:', checkPath);
+        break;
+    }
+}
+
+if (!buildExists) {
+    console.log('⚠️  React build not found in any of these locations:');
+    possiblePaths.forEach(p => {
+        console.log(`   - ${p} (exists: ${fs.existsSync(p)})`);
+        if (fs.existsSync(p)) {
+            console.log(`     Contents: ${fs.readdirSync(p).join(', ')}`);
+        }
+    });
     console.log('📝 Run "npm run build" to generate the build');
     console.log('📂 Current working directory:', process.cwd());
     console.log('📂 Script directory:', __dirname);
