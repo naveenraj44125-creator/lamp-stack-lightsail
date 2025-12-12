@@ -1,18 +1,19 @@
 # Lightsail Deployment MCP Server
 
-Model Context Protocol (MCP) server for automated AWS Lightsail deployment with GitHub Actions. This server provides AI assistants with tools to set up, configure, and manage Lightsail deployments.
+Model Context Protocol (MCP) server for automated AWS Lightsail deployment with GitHub Actions. This server provides AI assistants with tools to set up, configure, and manage comprehensive Lightsail deployments with enhanced automation capabilities.
 
 ## Features
 
-- **Setup New Repository**: Create GitHub repos with complete deployment automation
-- **Integrate Existing Repos**: Add Lightsail deployment to existing projects
+- **Complete Deployment Setup**: Enhanced setup script for comprehensive deployment automation
+- **6 Application Types**: LAMP, Node.js, Python, React, Docker, and Nginx applications
+- **Universal Database Support**: MySQL, PostgreSQL, or none - available for ALL application types
+- **GitHub OIDC Integration**: Secure AWS authentication without storing credentials
+- **Lightsail Bucket Storage**: Optional S3-compatible storage integration
 - **Multi-OS Support**: Deploy to Ubuntu, Amazon Linux, or CentOS instances
-- **Flexible Instance Sizes**: Choose from Nano (512MB) to 2XLarge (32GB) instances
-- **Generate Configs**: Create deployment configuration files with OS-specific settings
-- **OIDC Setup**: Configure GitHub Actions authentication with AWS
-- **Deployment Status**: Monitor workflow runs and deployment health
-- **Example Apps**: List available application templates
-- **Diagnostics**: Troubleshoot deployment issues with automated checks
+- **Flexible Instance Sizes**: Choose from Nano (512MB) to 2XLarge (8GB) instances
+- **Client-Side Execution**: All operations run on your local machine, not the MCP server
+- **Deployment Examples**: Ready-to-use configurations and workflows
+- **Comprehensive Diagnostics**: Troubleshoot deployment issues with automated checks
 
 ## Installation
 
@@ -115,146 +116,91 @@ For local development:
 
 ## Available Tools
 
-**7 tools available for complete deployment automation and troubleshooting:**
+**4 tools available for complete deployment automation and troubleshooting:**
 
-### 1. setup_new_repository
+### 1. setup_complete_deployment
 
-Create a new GitHub repository with complete Lightsail deployment automation. **Now supports multiple operating systems and instance sizes!**
+Get the enhanced setup script for creating complete Lightsail deployment automation. **This tool provides instructions to run the setup script on your local machine, not on the MCP server.**
+
+**Features:**
+- **6 Application Types**: LAMP, Node.js, Python, React, Docker, Nginx
+- **Universal Database Support**: MySQL, PostgreSQL, or none (available for ALL app types)
+- **GitHub OIDC Integration**: Secure AWS authentication without storing credentials
+- **Lightsail Bucket Storage**: Optional S3-compatible storage integration
+- **Multi-OS Support**: Ubuntu, Amazon Linux, CentOS
+- **Instance Sizing**: Nano (512MB) to 2XLarge (8GB RAM)
 
 **Parameters:**
-- `repo_name` (required): Name of the new repository
-- `app_type` (required): Application type (lamp, nginx, nodejs, python, react, docker)
-- `instance_name` (required): Lightsail instance name
-- `aws_region`: AWS region (default: us-east-1)
-- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
-  - `ubuntu_22_04`: Ubuntu 22.04 LTS (Recommended)
-  - `ubuntu_20_04`: Ubuntu 20.04 LTS
-  - `amazon_linux_2023`: Amazon Linux 2023
-  - `amazon_linux_2`: Amazon Linux 2
-  - `centos_7_2009_01`: CentOS 7
-- `bundle_id`: Instance size bundle (default: small_3_0)
-  - `nano_3_0`: Nano (512MB RAM, $3.50/month)
-  - `micro_3_0`: Micro (1GB RAM, $5/month)
-  - `small_3_0`: Small (2GB RAM, $10/month) - Recommended
-  - `medium_3_0`: Medium (4GB RAM, $20/month)
-  - `large_3_0`: Large (8GB RAM, $40/month)
-  - `xlarge_3_0`: XLarge (16GB RAM, $80/month)
-  - `2xlarge_3_0`: 2XLarge (32GB RAM, $160/month)
-- `enable_bucket`: Enable S3 bucket integration (default: false)
-- `bucket_name`: S3 bucket name (if enable_bucket is true)
-- `database_type`: Database type (none, mysql, postgresql)
-- `use_rds`: Use AWS RDS for database (default: false)
+- `mode`: Script execution mode (interactive, auto, help) - default: interactive
+- `aws_region`: AWS region for deployment - default: us-east-1
+- `app_version`: Application version - default: 1.0.0
 
 **Examples:**
 ```
-Create a new repository called "my-app" with Node.js deployment to Lightsail instance "my-nodejs-app" in us-west-2
+Get the setup script for interactive deployment configuration
 ```
 
 ```
-Create a new Python app on Amazon Linux 2023 with a Medium instance size
+Get setup instructions for automatic mode in us-west-2 region
 ```
 
 ```
-Set up a LAMP stack on Ubuntu 22.04 with XLarge instance for high traffic
+Show help and usage information for the setup script
 ```
 
-### 2. integrate_existing_repository
+### 2. get_deployment_examples
 
-Add Lightsail deployment automation to an existing GitHub repository. **Supports multiple operating systems and instance sizes!**
+Get example deployment configurations and GitHub Actions workflows for different application types. Returns ready-to-use configuration files and deployment examples.
 
 **Parameters:**
-- `repo_path` (required): Path to existing repository
-- `app_type` (required): Application type
-- `instance_name` (required): Lightsail instance name
-- `aws_region`: AWS region (default: us-east-1)
-- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
-- `bundle_id`: Instance size bundle (default: small_3_0)
-- `enable_bucket`: Enable S3 bucket (default: false)
+- `app_type`: Application type (lamp, nginx, nodejs, python, react, docker, all) - default: all
+- `include_configs`: Include deployment configuration files - default: true
+- `include_workflows`: Include GitHub Actions workflow examples - default: true
 
 **Examples:**
 ```
-Add Lightsail deployment to my existing repo at /path/to/repo for a LAMP stack app
+Get all deployment examples and configurations
 ```
 
 ```
-Integrate Lightsail deployment with Amazon Linux 2023 and Small instance size
+Get only Node.js deployment examples with workflows
 ```
 
-### 3. generate_deployment_config
+```
+Show me LAMP stack configuration files
+```
 
-Generate a deployment configuration file for Lightsail with OS and instance size selection.
+### 3. get_deployment_status
+
+Check deployment status and GitHub Actions workflow runs. Monitor active deployments and view recent workflow execution results.
 
 **Parameters:**
-- `app_type` (required): Application type
-- `instance_name` (required): Instance name
-- `blueprint_id`: Operating system blueprint (default: ubuntu_22_04)
-- `bundle_id`: Instance size bundle (default: small_3_0)
-- `dependencies`: Additional dependencies (redis, git, etc.)
-- `enable_bucket`: Enable S3 bucket (default: false)
-- `bucket_config`: Bucket configuration object
-
-**Examples:**
-```
-Generate a deployment config for a Python app with Redis
-```
-
-```
-Create a config for Docker deployment on Amazon Linux 2023 with Large instance
-```
-
-### 4. setup_oidc_authentication
-
-Set up GitHub Actions OIDC authentication with AWS.
-
-**Parameters:**
-- `repo_owner` (required): GitHub repository owner
-- `repo_name` (required): GitHub repository name
-- `role_name` (required): IAM role name to create
-- `trust_branch`: Branch to trust for deployments (default: main)
+- `repo_path` (required): Repository path to check
 
 **Example:**
 ```
-Set up OIDC for my-org/my-repo with role name "github-actions-lightsail"
+Check deployment status for my repository at /path/to/repo
 ```
 
-### 5. get_deployment_status
+### 4. diagnose_deployment
 
-Check the status of Lightsail deployments.
-
-**Parameters:**
-- `repo_path` (required): Path to repository
-
-**Example:**
-```
-Check deployment status for my repository
-```
-
-### 6. list_available_examples
-
-List all available example applications and their features.
-
-**Example:**
-```
-What example applications are available?
-```
-
-### 7. diagnose_deployment
-
-Run diagnostics to troubleshoot deployment issues. Checks prerequisites, configuration, and common problems.
+Run comprehensive deployment diagnostics and troubleshooting. Check prerequisites, repository status, configuration files, and provide next steps.
 
 **Parameters:**
 - `repo_path`: Path to repository (optional, defaults to current directory)
-- `check_type`: Type of diagnostic check (all, prerequisites, configuration, github, aws, instance)
+- `check_type`: Type of diagnostic check (all, prerequisites, configuration, github, aws, instance) - default: all
 
-**Example:**
+**Examples:**
 ```
-Diagnose my deployment setup
+Diagnose my deployment setup and check all prerequisites
 ```
-
-or
 
 ```
-Check my AWS configuration for deployment issues
+Check only AWS configuration for deployment issues
+```
+
+```
+Run full diagnostics on my repository at /path/to/repo
 ```
 
 ## Usage Examples
