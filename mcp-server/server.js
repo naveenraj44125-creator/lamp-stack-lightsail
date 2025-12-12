@@ -152,6 +152,10 @@ class LightsailDeploymentServer {
                 default: 'small_1_0',
                 description: 'Bucket size bundle'
               },
+              github_username: {
+                type: 'string',
+                description: 'GitHub username for the repository (required for OIDC setup)'
+              },
               github_repo: {
                 type: 'string',
                 description: 'GitHub repository name (defaults to {app_name} if not provided)'
@@ -1412,6 +1416,7 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
       bucket_name,
       bucket_access = 'read_write',
       bucket_bundle = 'small_1_0',
+      github_username,
       github_repo,
       repo_visibility = 'private'
     } = args;
@@ -1423,6 +1428,13 @@ ${analysis.validation_notes.map(note => `- ${note}`).join('\n')}
       if (!app_type) {
         return {
           content: [{ type: 'text', text: '❌ Error: app_type is required for fully_automated mode. Choose from: lamp, nodejs, python, react, docker, nginx' }],
+          isError: true,
+        };
+      }
+      
+      if (!github_username) {
+        return {
+          content: [{ type: 'text', text: '❌ Error: github_username is required for fully_automated mode for OIDC setup' }],
           isError: true,
         };
       }
@@ -1482,7 +1494,8 @@ chmod +x setup-complete-deployment.sh
       const timestamp = Date.now();
       const finalAppName = app_name || `${app_type}-app`;
       const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
-      const finalGithubRepo = github_repo || finalAppName;
+      const repoName = github_repo || finalAppName;
+      const finalGithubRepo = github_username ? `${github_username}/${repoName}` : repoName;
       const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
       const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
       
@@ -1534,7 +1547,8 @@ ${envVars.join('\n')}
       const timestamp = Date.now();
       const finalAppName = app_name || `${app_type}-app`;
       const finalInstanceName = instance_name || `${app_type}-app-${timestamp}`;
-      const finalGithubRepo = github_repo || finalAppName;
+      const repoName = github_repo || finalAppName;
+      const finalGithubRepo = github_username ? `${github_username}/${repoName}` : repoName;
       const finalBucketName = enable_bucket ? (bucket_name || `${app_type}-bucket-${timestamp}`) : '';
       const finalDbRdsName = db_external ? (db_rds_name || `${app_type}-${database_type}-db`) : '';
       
@@ -1789,7 +1803,9 @@ ${enable_bucket ? `- **Bucket Name**: ${bucket_name || `${app_type}-bucket-${Dat
 - **Bucket Size**: ${bucket_bundle}` : ''}
 
 **GitHub Configuration:**
-- **Repository**: ${github_repo || app_name || `${app_type}-app`}
+- **Username**: ${github_username || 'Not provided'}
+- **Repository Name**: ${github_repo || app_name || `${app_type}-app`}
+- **Full Repository**: ${finalGithubRepo}
 - **Visibility**: ${repo_visibility}
 
 **IAM Role Configuration:**
