@@ -17,6 +17,11 @@ to_lowercase() {
     echo "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+# Function to convert string to uppercase (compatible with older bash versions)
+to_uppercase() {
+    echo "$1" | tr '[:lower:]' '[:upper:]'
+}
+
 # Function to check prerequisites
 check_prerequisites() {
     echo -e "${BLUE}Checking prerequisites...${NC}"
@@ -1545,10 +1550,12 @@ select_option() {
         return
     fi
     
+    echo ""
     echo "$prompt"
     for i in "${!options[@]}"; do
         echo "  $((i+1)). ${options[i]}"
     done
+    echo ""
     
     while true; do
         read -p "Select option [1-${#options[@]}] [$default]: " choice
@@ -1760,7 +1767,7 @@ main() {
     APP_TYPE=$(select_option "Choose application type:" "1" "${APP_TYPES[@]}")
     
     # Application name
-    APP_NAME=$(get_input "Enter application name" "${APP_TYPE^} Application")
+    APP_NAME=$(get_input "Enter application name" "$(to_uppercase "${APP_TYPE:0:1}")${APP_TYPE:1} Application")
     
     # Instance configuration
     INSTANCE_NAME=$(get_input "Enter Lightsail instance name" "${APP_TYPE}-app-$(date +%s)")
