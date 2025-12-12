@@ -1847,6 +1847,25 @@ main() {
     # Get GitHub repository info
     if [[ "$FULLY_AUTOMATED" == "true" && -n "$GITHUB_REPO" ]]; then
         echo -e "${GREEN}✓ Using GITHUB_REPO: $GITHUB_REPO${NC}"
+        
+        # WORKAROUND: Fix GITHUB_REPO if it's missing username (for MCP server v1.1.0 compatibility)
+        if [[ "$GITHUB_REPO" != *"/"* ]]; then
+            echo -e "${YELLOW}⚠️  GITHUB_REPO missing username, applying workaround...${NC}"
+            
+            # Try to get username from git remote
+            GIT_REMOTE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
+            
+            if [[ -n "$GIT_REMOTE_REPO" && "$GIT_REMOTE_REPO" == *"/"* ]]; then
+                # Extract username from git remote
+                GITHUB_USERNAME=$(echo "$GIT_REMOTE_REPO" | cut -d'/' -f1)
+                GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
+                echo -e "${GREEN}✓ Fixed GITHUB_REPO using git remote: $GITHUB_REPO${NC}"
+            else
+                echo -e "${RED}❌ Could not determine GitHub username from git remote${NC}"
+                echo -e "${RED}❌ OIDC setup will fail without username/repository format${NC}"
+                echo -e "${YELLOW}💡 Please update MCP server to version 1.1.4+ or provide github_username parameter${NC}"
+            fi
+        fi
     else
         # Try to get from git remote or use environment variable as fallback
         if [[ -z "$GITHUB_REPO" ]]; then
