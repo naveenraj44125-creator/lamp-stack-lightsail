@@ -13,6 +13,7 @@ DEPLOYMENTS=(
     "deployment-nginx.config.yml"
     "deployment-docker.config.yml"
     "deployment-recipe-docker.config.yml"
+    "deployment-social-media-app.config.yml"
     "deployment-mcp-server.config.yml"
     "deployment-amazon-linux-test.config.yml"
 )
@@ -48,6 +49,9 @@ trigger_deployment() {
             ;;
         "recipe-docker")
             workflow_name="Deploy Recipe Manager Docker App"
+            ;;
+        "social-media-app")
+            workflow_name="Deploy Social Media App"
             ;;
         "mcp-server")
             workflow_name="Deploy MCP Server to Lightsail"

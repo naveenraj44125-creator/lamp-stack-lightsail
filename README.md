@@ -438,6 +438,11 @@ lamp-stack-lightsail/
 │   ├── example-nodejs-app/
 │   ├── example-python-app/
 │   ├── example-react-app/
+│   ├── example-social-media-app/        # Employee Social Network
+│   │   ├── server.js                   # Root entry point (deployment fix)
+│   │   ├── backend/server.js           # Main Express server
+│   │   ├── frontend/                   # React-like interface
+│   │   └── database/                   # SQLite database
 │   ├── 🐳 example-docker-app/           # Basic Docker LAMP stack
 │   └── 🐳 example-recipe-docker-app/    # Recipe Manager with S3
 │

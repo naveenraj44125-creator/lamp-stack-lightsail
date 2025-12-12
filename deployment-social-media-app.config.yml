@@ -1,0 +1,249 @@
+# social-media-app-deployment Deployment Configuration
+
+aws:
+  region: us-east-1
+
+lightsail:
+  instance_name: social-media-app-instance-1
+  static_ip: ""
+  
+  # Instance size configuration (optional)
+  # If not specified, defaults are: small_3_0 (2GB) for traditional apps, medium_3_0 (4GB) for Docker apps
+  bundle_id: "small_3_0"
+  
+  # Operating system blueprint configuration (optional)
+  # If not specified, defaults to ubuntu_22_04
+  blueprint_id: "ubuntu_22_04"
+
+  # Lightsail bucket configuration
+  bucket:
+    enabled: true
+    name: "social-media-app-bucket"
+    access_level: "read_write"
+    bundle_id: "small_1_0"
+
+application:
+  name: social-media-app
+  version: "1.0.0"
+  type: nodejs
+  
+  package_files:
+    - "example-social-media-app/server.js"
+    - "example-social-media-app/package.json"
+    - "example-social-media-app/package-lock.json"
+    - "example-social-media-app/backend/"
+    - "example-social-media-app/frontend/"
+    - "example-social-media-app/database/"
+  
+  package_fallback: true
+  
+  environment_variables:
+    APP_ENV: production
+    # Database Configuration
+    DB_TYPE: postgresql
+    DB_HOST: RDS_ENDPOINT
+    DB_NAME: nodejs_app_db
+    DB_USER: app_user
+    DB_PASSWORD: CHANGE_ME_secure_password_123
+    DB_RDS_NAME: social-media-app-rds
+    # Node.js specific
+    NODE_ENV: production
+    PORT: "3000"
+    BUCKET_NAME: social-media-app-bucket
+    AWS_REGION: us-east-1
+
+dependencies:
+  # Web Server
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      document_root: "/var/www/html"
+      enable_ssl: false
+      proxy_pass: "http://localhost:3000"  # Proxy to Node.js app
+
+  apache:
+    enabled: false
+
+  # Database Dependencies
+  mysql:
+    enabled: false
+    external: true
+    config:
+      version: "8.0"
+      root_password: "CHANGE_ME_root_password_123"
+      create_database: "nodejs_app_db"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+  
+  postgresql:
+    enabled: false
+    external: true
+    config:
+      version: "13"
+      postgres_password: "CHANGE_ME_postgres_password_123"
+      create_database: "nodejs_app_db"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+    rds:
+      database_name: "social-media-app-rds"
+      region: "us-east-1"
+      master_database: "nodejs_app_db"
+      environment:
+        DB_CONNECTION_TIMEOUT: "30"
+  
+  # Programming Language
+  nodejs:
+    enabled: true
+    version: "18"
+    config:
+      npm_packages:
+        - "pm2"  # Process manager for Node.js
+      package_manager: "npm"
+
+  php:
+    enabled: false
+
+  python:
+    enabled: false
+
+  # Additional Services
+  redis:
+    enabled: false
+
+  memcached:
+    enabled: false
+
+  docker:
+    enabled: false  # Set to true to install Docker (for containerized deployments)
+    config:
+      install_compose: true  # Install Docker Compose alongside Docker
+  
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"    # SSH
+        - "80"    # HTTP
+        - "443"   # HTTPS
+        - "3000"  # Node.js
+      deny_all_other: true
+
+  ssl_certificates:
+    enabled: false
+
+  monitoring:
+    enabled: false
+
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 300
+    health_check: 180
+
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+
+  use_docker: false  # Use Docker deployment instead of traditional deployment
+                     # Requires: docker.enabled: true and docker-compose.yml in your app
+
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+        optimize_performance: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      performance_test: true
+      security_check: true
+      endpoints_to_test:
+        - "/"
+        - "/api/health"
+
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  
+  jobs:
+    test:
+      enabled: true
+      language_specific_tests: true
+      local_server_test: true
+      test_port: 3000
+
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+
+# Monitoring and Logging
+monitoring:
+  health_check:
+    endpoint: "/api/health"
+    expected_content: "healthy"
+    max_attempts: 10
+    wait_between_attempts: 10
+    initial_wait: 30
+
+  performance:
+    response_time_check: true
+    http_headers_check: true
+
+  logging:
+    level: INFO
+    include_timestamps: true
+    include_deployment_metadata: true
+
+# Security Configuration
+security:
+  file_permissions:
+    web_files: "644"
+    directories: "755"
+    config_files: "600"
+
+  web_server:
+    hide_version: true
+    disable_server_tokens: true
+    enable_security_headers: true
+
+# Backup Configuration
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: "/var/backups/deployments"
+  include_database: false

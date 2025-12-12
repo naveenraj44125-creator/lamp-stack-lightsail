@@ -1,0 +1,61 @@
+name: Deploy Social Media App
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'example-social-media-app/**'
+      - 'deployment-social-media-app.config.yml'
+      - '.github/workflows/deploy-social-media-app.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'example-social-media-app/**'
+      - 'deployment-social-media-app.config.yml'
+      - '.github/workflows/deploy-social-media-app.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test Social Media App
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'example-social-media-app/package-lock.json'
+
+    - name: Install dependencies
+      run: |
+        cd example-social-media-app
+        npm ci
+
+    - name: Test application startup
+      run: |
+        cd example-social-media-app
+        timeout 30s npm start &
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:3000/api/health || exit 1
+        
+        # Test root endpoint
+        curl -f http://localhost:3000/ || exit 1
+        
+        echo "✅ Social Media App tests passed!"
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/deploy-generic-reusable.yml
+    with:
+      config-file: 'deployment-social-media-app.config.yml'
+      app-name: 'social-media-app'
+      artifact-retention-days: 1
+    secrets: inherit
