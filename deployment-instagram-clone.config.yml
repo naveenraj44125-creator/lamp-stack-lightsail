@@ -23,9 +23,10 @@ lightsail:
 application:
   name: instagram-clone
   version: "1.0.0"
-  type: react  # React application type
+  type: nodejs  # Node.js application with React frontend
   
   package_files:
+    - "example-instagram-clone/server.js"
     - "example-instagram-clone/package.json"
     - "example-instagram-clone/package-lock.json"
     - "example-instagram-clone/src/"
@@ -53,9 +54,11 @@ dependencies:
     config:
       document_root: "/var/www/html"
       enable_ssl: false
-      # Serve React build files and handle client-side routing
-      spa_mode: true
-      try_files: "$uri $uri/ /index.html"
+      # Proxy to Node.js server running on port 3000
+      proxy_pass: "http://localhost:3000"
+      proxy_set_header_host: true
+      proxy_set_header_x_real_ip: true
+      proxy_set_header_x_forwarded_for: true
 
   apache:
     enabled: false
@@ -74,6 +77,7 @@ dependencies:
     config:
       npm_packages:
         - "serve"  # For serving React build
+        - "pm2"    # Process manager for Node.js
       package_manager: "npm"
 
   php:
@@ -153,6 +157,11 @@ deployment:
         build_command: "npm run build"
         build_directory: "build"
         install_dependencies: true
+      nodejs:
+        enabled: true
+        start_command: "npm start"
+        process_manager: "pm2"
+        auto_restart: true
     
     verification:
       enabled: true
