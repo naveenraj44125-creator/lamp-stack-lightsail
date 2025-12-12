@@ -249,6 +249,20 @@ Here are all available example applications:
 - S3 bucket integration (optional)
 - Perfect for: Complex apps, microservices
 
+## 7. Social Media App
+- User authentication (JWT)
+- Real-time messaging (Socket.IO)
+- Post creation and management
+- Image/video uploads
+- Perfect for: Social platforms, community apps
+
+## 8. Instagram Clone
+- Photo/video sharing with filters
+- User profiles and following
+- Stories with 24h expiration
+- Advanced search and discovery
+- Perfect for: Photo sharing, social media
+
 All examples include:
 - Automatic deployment on push
 - Health checks
@@ -389,6 +403,120 @@ You'll need:
 - Default output format (json)
 
 After configuring, I can help you set up OIDC authentication.
+```
+
+## Example 9: Deploy Social Media App with Full Stack
+
+**User:** "Create a social media app with user authentication, posts, and real-time features"
+
+**AI Response:**
+```
+I'll set up a complete social media application with all modern features.
+
+[Uses setup_new_repository tool with:
+- repo_name: "social-media-app"
+- app_type: "nodejs"
+- instance_name: "social-media-prod"
+- aws_region: "us-east-1"
+- enable_bucket: true
+- bucket_name: "social-media-uploads"
+- database_type: "postgresql"
+- use_rds: true]
+
+✅ Social Media App Repository Setup Complete!
+
+Features Included:
+✅ User authentication (JWT)
+✅ Post creation and management
+✅ Real-time messaging (Socket.IO)
+✅ Image/video uploads (S3)
+✅ PostgreSQL database (RDS)
+✅ RESTful API endpoints
+✅ Responsive web interface
+
+Configuration Generated:
+- Instance: social-media-prod
+- Region: us-east-1
+- Type: nodejs (Express.js)
+- Bucket: Enabled (social-media-uploads)
+- Database: postgresql (RDS)
+- Real-time: Socket.IO enabled
+
+API Endpoints:
+- POST /api/auth/register
+- POST /api/auth/login
+- GET /api/posts
+- POST /api/posts
+- POST /api/upload
+- WebSocket: /socket.io
+
+Next Steps:
+1. Create repository: gh repo create social-media-app --public
+2. Copy files from generated template
+3. Set up OIDC authentication
+4. Configure database credentials
+5. Deploy and test features
+```
+
+## Example 10: Instagram Clone with Advanced Features
+
+**User:** "Deploy an Instagram clone with photo sharing, stories, and user profiles"
+
+**AI Response:**
+```
+I'll create a full Instagram clone with modern social media features.
+
+[Uses setup_new_repository tool with:
+- repo_name: "instagram-clone"
+- app_type: "nodejs"
+- instance_name: "instagram-clone-prod"
+- aws_region: "us-west-2"
+- enable_bucket: true
+- bucket_name: "instagram-clone-media"
+- database_type: "postgresql"
+- use_rds: true]
+
+✅ Instagram Clone Repository Setup Complete!
+
+Features Included:
+✅ Photo/video sharing with filters
+✅ User profiles and following system
+✅ Stories with 24h expiration
+✅ Real-time notifications
+✅ Image processing and optimization
+✅ Responsive mobile-first design
+✅ Advanced search and discovery
+
+Configuration Generated:
+- Instance: instagram-clone-prod
+- Region: us-west-2
+- Type: nodejs (Express.js + React)
+- Bucket: Enabled (instagram-clone-media)
+- Database: postgresql (RDS)
+- CDN: CloudFront integration
+
+Key Components:
+- Backend API: Express.js with JWT auth
+- Frontend: React with responsive design
+- Image Processing: Sharp.js for optimization
+- Real-time: Socket.IO for notifications
+- Storage: S3 for media files
+- Database: PostgreSQL for user data
+
+API Features:
+- User authentication and profiles
+- Photo/video upload and processing
+- Feed generation and pagination
+- Stories creation and viewing
+- Follow/unfollow functionality
+- Search and discovery
+
+Next Steps:
+1. Create repository: gh repo create instagram-clone --public
+2. Copy generated files
+3. Set up AWS services (RDS, S3, CloudFront)
+4. Configure OIDC authentication
+5. Deploy and customize features
 ```
 
 ## Tips for Using the MCP Server

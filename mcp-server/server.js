@@ -2023,11 +2023,15 @@ Total time: ~30 seconds from request to deployment
 
 ## Available Application Types
 - **LAMP**: PHP with Apache, MySQL/PostgreSQL support
-- **Node.js**: Express applications with PM2, database support  
+- **Node.js**: Express applications with PM2, database support (includes Social Media App and Instagram Clone examples)
 - **Python**: Flask/Django applications with Gunicorn, database support
 - **React**: Frontend applications with build optimization
 - **Docker**: Containerized applications with docker-compose
 - **Nginx**: Static sites and reverse proxy configurations
+
+### 🌟 Featured Application Examples
+- **Social Media App**: Complete social platform with authentication, posts, real-time messaging (Node.js)
+- **Instagram Clone**: Photo sharing with filters, stories, user profiles (Node.js)
 
 `;
 

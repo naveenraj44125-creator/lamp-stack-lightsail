@@ -688,6 +688,20 @@ Replace ACCOUNT_ID with your AWS account ID.`;
 - S3 bucket integration (optional)
 - Perfect for: Complex apps, microservices
 
+## 7. Social Media App
+- User authentication (JWT)
+- Real-time messaging (Socket.IO)
+- Post creation and management
+- Image/video uploads
+- Perfect for: Social platforms, community apps
+
+## 8. Instagram Clone
+- Photo/video sharing with filters
+- User profiles and following
+- Stories with 24h expiration
+- Advanced search and discovery
+- Perfect for: Photo sharing, social media
+
 **All examples include:**
 - Automatic deployment on push
 - Health checks
