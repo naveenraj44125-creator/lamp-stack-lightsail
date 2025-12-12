@@ -2077,7 +2077,7 @@ main() {
     setup_github_oidc "$GITHUB_REPO" "$AWS_ACCOUNT_ID"
     
     # Create IAM role
-    ROLE_NAME="GitHubActions-${APP_TYPE}-deployment"
+    ROLE_NAME="GitHubActions-${APP_NAME}-deployment"
     create_iam_role_if_needed "$ROLE_NAME" "$GITHUB_REPO" "$AWS_ACCOUNT_ID"
     
     echo ""

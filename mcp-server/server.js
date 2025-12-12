@@ -79,7 +79,7 @@ class LightsailDeploymentServer {
               },
               aws_role_arn: {
                 type: 'string',
-                description: 'Custom AWS IAM role ARN for GitHub Actions OIDC authentication. If not provided, will use default role naming convention: GitHubActions-{app_type}-deployment. Format: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME'
+                description: 'Custom AWS IAM role ARN for GitHub Actions OIDC authentication. If not provided, will use default role naming convention: GitHubActions-{app_name}-deployment. Format: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME'
               },
               app_version: {
                 type: 'string',
@@ -1625,11 +1625,11 @@ You can now specify a custom IAM role ARN for GitHub Actions OIDC authentication
 
 ### Default IAM Role Naming
 If no custom role ARN is provided, the script will create/use a role with this naming convention:
-- **Pattern**: \`GitHubActions-{app_type}-deployment\`
+- **Pattern**: \`GitHubActions-{app_name}-deployment\`
 - **Examples**: 
-  - \`GitHubActions-nodejs-deployment\`
-  - \`GitHubActions-lamp-deployment\`
-  - \`GitHubActions-docker-deployment\`
+  - \`GitHubActions-my-nodejs-app-deployment\`
+  - \`GitHubActions-my-lamp-app-deployment\`
+  - \`GitHubActions-my-docker-app-deployment\`
 
 ### IAM Role Requirements
 The IAM role (custom or default) must have these policies attached:
@@ -1794,7 +1794,7 @@ ${enable_bucket ? `- **Bucket Name**: ${bucket_name || `${app_type}-bucket-${Dat
 
 **IAM Role Configuration:**
 - **Custom Role ARN**: ${aws_role_arn ? 'Yes' : 'No'}
-${aws_role_arn ? `- **Role ARN**: ${aws_role_arn}` : `- **Default Role**: GitHubActions-${app_type}-deployment`}
+${aws_role_arn ? `- **Role ARN**: ${aws_role_arn}` : `- **Default Role**: GitHubActions-${app_name || `${app_type}-app`}-deployment`}
 
 **Validation Results:**
 ✅ All required parameters provided
