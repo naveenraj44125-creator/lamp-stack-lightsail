@@ -396,7 +396,13 @@ class LightsailBase:
             return False
 
     def _build_ssh_command(self, key_path, cert_path, ssh_details, command):
-        """Build SSH command with proper options"""
+        """Build SSH command with proper options and safe command encoding"""
+        import base64
+        
+        # Encode the command to avoid shell parsing issues
+        encoded_command = base64.b64encode(command.encode('utf-8')).decode('ascii')
+        safe_command = f"echo '{encoded_command}' | base64 -d | bash"
+        
         # Enhanced SSH configuration for GitHub Actions compatibility
         if "GITHUB_ACTIONS" in os.environ:
             return [
@@ -407,7 +413,7 @@ class LightsailBase:
                 '-o', 'IdentitiesOnly=yes', '-o', 'TCPKeepAlive=yes',
                 '-o', 'ExitOnForwardFailure=yes', '-o', 'BatchMode=yes',
                 '-o', 'PreferredAuthentications=publickey', '-o', 'LogLevel=VERBOSE',
-                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', safe_command
             ]
         else:
             return [
@@ -416,7 +422,7 @@ class LightsailBase:
                 '-o', 'ConnectTimeout=30', '-o', 'ServerAliveInterval=10',
                 '-o', 'ServerAliveCountMax=3', '-o', 'IdentitiesOnly=yes',
                 '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR',
-                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', command
+                f'{ssh_details["username"]}@{ssh_details["ipAddress"]}', safe_command
             ]
 
     def _display_output(self, output, max_lines):
