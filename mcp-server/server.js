@@ -34,7 +34,7 @@ class LightsailDeploymentServer {
     this.server = new Server(
       {
         name: 'lightsail-deployment-mcp',
-        version: '1.1.1',
+        version: '1.1.2',
       },
       {
         capabilities: {
