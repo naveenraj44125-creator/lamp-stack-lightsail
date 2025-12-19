@@ -637,11 +637,12 @@ EOF
         - "/"
 EOF
 
-    # Add type-specific endpoints
+    # Add type-specific endpoints and port configuration
     case $app_type in
         "nodejs")
             cat >> "deployment-${app_type}.config.yml" << EOF
         - "/api/health"
+      port: 3000  # Node.js applications run on port 3000
 EOF
             ;;
         "python")
@@ -711,6 +712,7 @@ EOF
         "nodejs")
             cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "Node.js"
+    port: 3000  # Node.js applications run on port 3000
 EOF
             ;;
         "python")
