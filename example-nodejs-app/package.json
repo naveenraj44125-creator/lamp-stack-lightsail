@@ -1,18 +1,16 @@
 {
-  "name": "nodejs-demo-app",
+  "name": "final blog test fixed",
   "version": "1.0.0",
-  "description": "Node.js Express demo application for AWS Lightsail deployment",
+  "description": "Final Blog Test Fixed Node.js application deployed via GitHub Actions",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": ["nodejs", "express", "aws", "lightsail"],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

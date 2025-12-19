@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Blog</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">📝 Modern Blog</h1>
+                <div class="header-actions">
+                    <button id="newPostBtn" class="btn btn-primary">
+                        <span class="btn-icon">+</span>
+                        New Post
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="search-section">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search posts..." class="search-input">
+                <button id="searchBtn" class="search-btn">🔍</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Posts Container -->
+            <div id="postsContainer" class="posts-container">
+                <div class="loading" id="loadingSpinner">
+                    <div class="spinner"></div>
+                    <p>Loading posts...</p>
+                </div>
+            </div>
+
+            <!-- Load More Button -->
+            <div class="load-more-container">
+                <button id="loadMoreBtn" class="btn btn-secondary" style="display: none;">
+                    Load More Posts
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Post Modal -->
+    <div id="postModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Create New Post</h2>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <form id="postForm" class="modal-body">
+                <div class="form-group">
+                    <label for="postTitle">Title *</label>
+                    <input type="text" id="postTitle" required maxlength="200">
+                </div>
+                
+                <div class="form-group">
+                    <label for="postAuthor">Author</label>
+                    <input type="text" id="postAuthor" maxlength="100" placeholder="Your name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="postTags">Tags (comma-separated)</label>
+                    <input type="text" id="postTags" placeholder="technology, tutorial, news">
+                </div>
+                
+                <div class="form-group">
+                    <label for="postContent">Content *</label>
+                    <textarea id="postContent" required rows="10" placeholder="Write your blog post content here..."></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">
+                        <span class="btn-text">Save Post</span>
+                        <span class="btn-loading" style="display: none;">Saving...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

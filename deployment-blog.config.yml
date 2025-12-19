@@ -1,76 +1,47 @@
-# Final Blog Test Fixed Deployment Configuration
+# Modern Blog Application Deployment Configuration
 
 aws:
   region: us-east-1
 
 lightsail:
-  instance_name: final-blog-test-fixed-1766108491
+  instance_name: modern-blog-app-v1
   static_ip: ""
   
-  # Instance size configuration (optional)
-  # If not specified, defaults are: small_3_0 (2GB) for traditional apps, medium_3_0 (4GB) for Docker apps
-  bundle_id: "micro_3_0"
+  # Instance size configuration
+  bundle_id: "small_3_0"  # 2GB RAM, 2 vCPU, 60GB SSD
   
-  # Operating system blueprint configuration (optional)
-  # If not specified, defaults to ubuntu_22_04
-  blueprint_id: "ubuntu_22_04"
+  # Operating system blueprint
+  blueprint_id: "ubuntu_22_04"  # Ubuntu 22.04 LTS
 
 application:
-  name: final blog test fixed
+  name: modern-blog
   version: "1.0.0"
   type: nodejs
   
   package_files:
-    - "example-nodejs-app/"
+    - "example-blog-app/"
   
   package_fallback: true
   
   environment_variables:
-    APP_ENV: production
-    # Database Configuration
-    DB_TYPE: mysql
-    DB_HOST: localhost
-    DB_NAME: app_db
-    DB_USER: app_user
-    DB_PASSWORD: CHANGE_ME_secure_password_123
-    # Node.js specific
     NODE_ENV: production
     PORT: "3000"
+    DATA_DIR: "/opt/blog-app/data"
 
 dependencies:
-  # Database Dependencies
-  mysql:
-    enabled: true
-    external: false
-    config:
-      version: "8.0"
-      root_password: "CHANGE_ME_root_password_123"
-      create_database: "app_db"
-      create_user: "app_user"
-      user_password: "CHANGE_ME_secure_password_123"
-  
-  postgresql:
-    enabled: false
-    external: false
-    config:
-      version: "13"
-      postgres_password: "CHANGE_ME_postgres_password_123"
-      create_database: "app_db"
-      create_user: "app_user"
-      user_password: "CHANGE_ME_secure_password_123"
-  
   nodejs:
     enabled: true
     config:
       version: "18"
-      package_manager: "npm"
-      
-  pm2:
+      install_pm2: true
+      pm2_startup: true
+  
+  nginx:
     enabled: true
     config:
-      app_name: "final blog test fixed"
-      instances: 1
-      exec_mode: "cluster"
+      server_name: "_"
+      proxy_pass: "http://localhost:3000"
+      client_max_body_size: "10M"
   
   git:
     enabled: true
@@ -84,10 +55,13 @@ dependencies:
         - "22"    # SSH
         - "80"    # HTTP
         - "443"   # HTTPS
-        - "3000"  # Node.js
       deny_all_other: true
 
 deployment:
+  use_docker: false
+  web_root: "/opt/blog-app"
+  backup_existing: true
+  restart_services: true
   
   timeouts:
     ssh_connection: 120
@@ -129,6 +103,7 @@ deployment:
       endpoints_to_test:
         - "/"
         - "/api/health"
+        - "/api/posts"
 
 github_actions:
   triggers:
@@ -143,7 +118,7 @@ github_actions:
   jobs:
     test:
       enabled: true
-      language_specific_tests: true
+      nodejs_test: true
     
     deployment:
       deploy_on_push: true
@@ -153,11 +128,15 @@ github_actions:
 
 monitoring:
   health_check:
-    endpoint: "/"
-    expected_content: "Node.js"
+    endpoint: "/api/health"
+    expected_content: "healthy"
     max_attempts: 15
     wait_between_attempts: 20
-    initial_wait: 60
+    initial_wait: 30
+  
+  nodejs_health:
+    check_process: true
+    pm2_status: true
 
 security:
   file_permissions:
@@ -168,4 +147,11 @@ security:
 backup:
   enabled: true
   retention_days: 7
-  backup_location: "/var/backups/final blog test fixed-deployments"
+  backup_location: "/var/backups/blog-deployments"
+  include_data: true
+
+# DEPLOYMENT INSTRUCTIONS:
+# 1. Ensure AWS credentials are configured in GitHub Secrets
+# 2. Push to main branch to trigger automatic deployment
+# 3. Access your blog at http://YOUR_INSTANCE_IP/
+# 4. The blog will automatically create sample posts on first run

@@ -1,13 +1,27 @@
-name: Node.js Application Deployment
+name: Final Blog Test Fixed Deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
     paths:
       - 'example-nodejs-app/**'
       - 'deployment-nodejs.config.yml'
       - '.github/workflows/deploy-nodejs.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'example-nodejs-app/**'
+      - 'deployment-nodejs.config.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
 
 permissions:
   id-token: write   # Required for OIDC authentication
@@ -15,11 +29,12 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy Node.js Application
+    name: Deploy Final Blog Test Fixed
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: 'deployment-nodejs.config.yml'
-      skip_tests: false
+      aws_region: 'us-east-1'
+    secrets: inherit
   
   summary:
     name: Deployment Summary
@@ -29,7 +44,7 @@ jobs:
     steps:
       - name: Show Deployment Results
         run: |
-          echo "## 🚀 Node.js Application Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Final Blog Test Fixed Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ needs.deploy.outputs.deployment_status }}" >> $GITHUB_STEP_SUMMARY
