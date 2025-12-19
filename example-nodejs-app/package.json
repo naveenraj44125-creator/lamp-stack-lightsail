@@ -1,7 +1,7 @@
 {
-  "name": "blog app fixed port",
+  "name": "simple blog app",
   "version": "1.0.0",
-  "description": "Blog App Fixed Port Node.js application deployed via GitHub Actions",
+  "description": "Simple Blog App Node.js application deployed via GitHub Actions",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
