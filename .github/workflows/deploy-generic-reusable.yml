@@ -194,6 +194,9 @@ jobs:
       run: |
         echo "🧪 Testing Python application..."
         
+        # Install PyYAML for config parsing
+        pip install PyYAML
+        
         # Find Python application directory from config
         PYTHON_DIR=$(python3 << 'EOF'
         import yaml
