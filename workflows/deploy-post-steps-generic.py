@@ -142,6 +142,13 @@ echo "Service check completed"
             success = self._configure_application()
             if not success:
                 print("⚠️  Application configuration had some issues")
+
+            print("\n" + "="*60)
+            print("🔧 RUNNING CUSTOM SCRIPTS")
+            print("="*60)
+            if not self._run_pm2_post_setup_script():
+                print("❌ PM2 post-setup script failed")
+                return False
         
         # Only run traditional configuration steps if not using Docker
         if not use_docker_deployment:
@@ -542,6 +549,50 @@ echo "✅ Deployment environment variables set"
 '''
         
         success, output = self.client.run_command(script, timeout=30)
+
+    def _run_pm2_post_setup_script(self) -> bool:
+        """Run PM2 post-setup script if specified"""
+        post_script = self.config.get_pm2_post_setup_script()
+        if not post_script:
+            return True
+        
+        print(f"🔧 Running PM2 post-setup script: {post_script}")
+        
+        # Get target directory where application is deployed
+        target_dir = self._get_target_directory()
+        
+        script = f'''
+set -e
+echo "Running PM2 post-setup script: {post_script}"
+
+# Change to application directory
+cd {target_dir}
+
+# Check if script exists
+if [ ! -f "{post_script}" ]; then
+    echo "❌ PM2 post-setup script not found: {post_script}"
+    exit 1
+fi
+
+# Make script executable
+chmod +x {post_script}
+
+# Run the script
+echo "🚀 Executing {post_script}..."
+./{post_script}
+
+echo "✅ PM2 post-setup script completed successfully"
+'''
+        
+        success, output = self.client.run_command(script, timeout=600)
+        print(output)
+        
+        if not success:
+            print(f"❌ PM2 post-setup script failed: {post_script}")
+            return False
+        
+        print(f"✅ PM2 post-setup script completed: {post_script}")
+        return True
 
     def _verify_deployment(self) -> bool:
         """Verify that the deployment was successful"""

@@ -178,6 +178,18 @@ class DeploymentConfig:
         
         return False
     
+    def should_skip_nodejs_configurator(self):
+        """Check if Node.js configurator should be skipped"""
+        return self.get('dependencies.nodejs.config.skip_configurator', False)
+
+    def get_pm2_post_setup_script(self):
+        """Get custom PM2 post-setup script path"""
+        return self.get('dependencies.pm2.config.post_setup_script', None)
+
+    def should_create_generic_files(self):
+        """Check if generic application files should be created"""
+        return not self.get('application.skip_generic_files', False)
+
     def print_config_summary(self):
         """Print a summary of key configuration values"""
         print("📋 Configuration Summary:")

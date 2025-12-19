@@ -41,7 +41,14 @@ class ConfiguratorFactory:
             configurators.append(PythonConfigurator(client, config))
         
         if 'nodejs' in installed_dependencies:
-            configurators.append(NodeJSConfigurator(client, config))
+            # Check if Node.js configurator should be skipped
+            if not config.should_skip_nodejs_configurator():
+                configurators.append(NodeJSConfigurator(client, config))
+            else:
+                print("ℹ️  Skipping Node.js configurator as requested in configuration")
+                # Still install Node.js and dependencies, but skip service creation
+                from .nodejs_configurator import NodeJSMinimalConfigurator
+                configurators.append(NodeJSMinimalConfigurator(client, config))
         
         # Database configurator (handles MySQL, PostgreSQL, RDS)
         mysql_enabled = config.get('dependencies.mysql.enabled', False)

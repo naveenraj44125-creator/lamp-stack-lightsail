@@ -120,3 +120,44 @@ echo "✅ Node.js application configured successfully on {os_type}"
         success, output = self.client.run_command(script, timeout=420)
         print(output)
         return success
+
+
+class NodeJSMinimalConfigurator(BaseConfigurator):
+    """Minimal Node.js configurator that skips service creation"""
+    
+    def configure(self) -> bool:
+        """Install Node.js dependencies without creating systemd service"""
+        print("🔧 Configuring Node.js (minimal mode - no service creation)...")
+        
+        # Get OS information from config if available
+        os_type = getattr(self.config, 'os_type', 'ubuntu')
+        os_info = getattr(self.config, 'os_info', {'user': 'ubuntu'})
+        default_user = os_info.get('user', 'ubuntu')
+        
+        script = f'''
+set -e
+echo "Configuring Node.js dependencies only (custom application mode)..."
+
+# Install dependencies if package.json exists
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    echo "📦 Installing Node.js dependencies..."
+    cd /opt/nodejs-app && sudo -u {default_user} npm install --production 2>&1 | tee /tmp/npm-install.log
+    echo "✅ Dependencies installed"
+else
+    echo "ℹ️  No package.json found, skipping dependency installation"
+fi
+
+# Create log directory
+sudo mkdir -p /var/log/nodejs-app
+sudo chown {default_user}:{default_user} /var/log/nodejs-app
+
+# Set proper permissions
+sudo chown -R {default_user}:{default_user} /opt/nodejs-app
+
+echo "✅ Node.js minimal configuration completed"
+echo "ℹ️  Skipping systemd service creation - application will handle its own startup"
+'''
+        
+        success, output = self.client.run_command(script, timeout=420)
+        print(output)
+        return success
