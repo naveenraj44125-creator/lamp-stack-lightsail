@@ -126,6 +126,7 @@ deployment:
       enabled: true
       health_check: true
       external_connectivity: true
+      port: 3000  # FIX: Test Node.js app on port 3000, not port 80
       endpoints_to_test:
         - "/"
         - "/api/health"
@@ -155,6 +156,7 @@ monitoring:
   health_check:
     endpoint: "/"
     expected_content: "Node.js"
+    port: 3000  # FIX: Monitor Node.js app on port 3000, not port 80
     max_attempts: 15
     wait_between_attempts: 20
     initial_wait: 60
