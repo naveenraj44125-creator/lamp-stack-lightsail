@@ -1423,7 +1423,8 @@ echo "✅ PostgreSQL application access configured"
             'redis': self.os_packages.get('redis', {}).get('service', 'redis-server'),
             'memcached': 'memcached',
             'docker': 'docker',
-            'nodejs': 'nodejs-app'
+            'nodejs': 'nodejs-app',
+            'python': 'python-app'
         }
         
         success = True

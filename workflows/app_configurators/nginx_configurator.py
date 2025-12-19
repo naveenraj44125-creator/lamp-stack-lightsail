@@ -41,17 +41,30 @@ class NginxConfigurator(BaseConfigurator):
         """Configure Nginx as reverse proxy for Node.js"""
         print("🔧 Configuring Nginx as reverse proxy for Node.js...")
         
-        script = '''
+        # Get OS-specific nginx configuration directory
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        
+        # Determine nginx config directory based on OS
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            nginx_conf_dir = '/etc/nginx/conf.d'
+            nginx_conf_file = f'{nginx_conf_dir}/app.conf'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/conf.d/default.conf /usr/share/nginx/html/index.html'
+        else:  # Ubuntu/Debian
+            nginx_conf_dir = '/etc/nginx/sites-available'
+            nginx_conf_file = '/etc/nginx/sites-enabled/app'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/sites-enabled/default'
+        
+        script = f'''
 set -e
 echo "Configuring Nginx as reverse proxy for Node.js application..."
 
 # Create server block configuration for Node.js proxy
 cat > /tmp/app << 'EOF'
-server {
+server {{
     listen 80;
     server_name _;
     
-    location / {
+    location / {{
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -61,20 +74,32 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
-    }
+    }}
     
     # Security headers
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options DENY;
     add_header X-XSS-Protection "1; mode=block";
-}
+}}
 EOF
 
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
+# Install the configuration based on OS type
+sudo mkdir -p {nginx_conf_dir}
+'''
+        
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            script += f'''
+sudo mv /tmp/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        else:  # Ubuntu/Debian
+            script += f'''
+sudo mv /tmp/app {nginx_conf_dir}/app
+sudo ln -sf {nginx_conf_dir}/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        
+        script += '''
 echo "✅ Nginx configured as reverse proxy for Node.js"
 '''
         
@@ -86,17 +111,30 @@ echo "✅ Nginx configured as reverse proxy for Node.js"
         """Configure Nginx as reverse proxy for Python"""
         print("🔧 Configuring Nginx as reverse proxy for Python...")
         
-        script = '''
+        # Get OS-specific nginx configuration directory
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        
+        # Determine nginx config directory based on OS
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            nginx_conf_dir = '/etc/nginx/conf.d'
+            nginx_conf_file = f'{nginx_conf_dir}/app.conf'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/conf.d/default.conf /usr/share/nginx/html/index.html'
+        else:  # Ubuntu/Debian
+            nginx_conf_dir = '/etc/nginx/sites-available'
+            nginx_conf_file = '/etc/nginx/sites-enabled/app'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/sites-enabled/default'
+        
+        script = f'''
 set -e
 echo "Configuring Nginx as reverse proxy for Python application..."
 
 # Create server block configuration for Python proxy
 cat > /tmp/app << 'EOF'
-server {
+server {{
     listen 80;
     server_name _;
     
-    location / {
+    location / {{
         proxy_pass http://localhost:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -108,26 +146,38 @@ server {
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
-    }
+    }}
     
     # Health check endpoint
-    location /health {
-        proxy_pass http://localhost:5000/health;
+    location /api/health {{
+        proxy_pass http://localhost:5000/api/health;
         access_log off;
-    }
+    }}
     
     # Security headers
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options DENY;
     add_header X-XSS-Protection "1; mode=block";
-}
+}}
 EOF
 
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
+# Install the configuration based on OS type
+sudo mkdir -p {nginx_conf_dir}
+'''
+        
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            script += f'''
+sudo mv /tmp/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        else:  # Ubuntu/Debian
+            script += f'''
+sudo mv /tmp/app {nginx_conf_dir}/app
+sudo ln -sf {nginx_conf_dir}/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        
+        script += '''
 echo "✅ Nginx configured as reverse proxy for Python"
 '''
         
@@ -138,6 +188,19 @@ echo "✅ Nginx configured as reverse proxy for Python"
     def _configure_static_or_php(self, document_root: str) -> bool:
         """Configure Nginx for static or PHP applications"""
         print("🔧 Configuring Nginx for static/PHP application...")
+        
+        # Get OS-specific nginx configuration directory
+        os_type = getattr(self.client, 'os_type', 'ubuntu')
+        
+        # Determine nginx config directory based on OS
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            nginx_conf_dir = '/etc/nginx/conf.d'
+            nginx_conf_file = f'{nginx_conf_dir}/app.conf'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/conf.d/default.conf /usr/share/nginx/html/index.html'
+        else:  # Ubuntu/Debian
+            nginx_conf_dir = '/etc/nginx/sites-available'
+            nginx_conf_file = '/etc/nginx/sites-enabled/app'
+            remove_default_cmd = 'sudo rm -f /etc/nginx/sites-enabled/default'
         
         script = f'''
 set -e
@@ -202,11 +265,23 @@ server {{
 EOF
 fi
 
-# Install the configuration
-sudo mv /tmp/app /etc/nginx/sites-available/app
-sudo ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app
-sudo rm -f /etc/nginx/sites-enabled/default
-
+# Install the configuration based on OS type
+sudo mkdir -p {nginx_conf_dir}
+'''
+        
+        if os_type in ['amazon_linux', 'amazon_linux_2023', 'centos', 'rhel']:
+            script += f'''
+sudo mv /tmp/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        else:  # Ubuntu/Debian
+            script += f'''
+sudo mv /tmp/app {nginx_conf_dir}/app
+sudo ln -sf {nginx_conf_dir}/app {nginx_conf_file}
+{remove_default_cmd}
+'''
+        
+        script += '''
 echo "✅ Nginx configured for application"
 '''
         
