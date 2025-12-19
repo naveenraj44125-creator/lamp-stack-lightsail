@@ -724,7 +724,12 @@ jobs:
             echo "✅ Got HTTP 200 response!"
             
             # Check if response contains expected content (case-insensitive)
-            if grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker\|healthy\|ok" /tmp/response.html; then
+            # First check if it's the nginx default page (which means the app isn't working)
+            if grep -qi "Welcome to nginx" /tmp/response.html; then
+              echo "❌ Got nginx default page - application is not properly configured!"
+              echo "This means nginx is running but not proxying to the application."
+              cat /tmp/response.html | head -10
+            elif grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker\|healthy\|ok\|Flask\|Python" /tmp/response.html; then
               echo "✅ Application is accessible and responding with content!"
               cat /tmp/response.html | head -20
               echo "status=success" >> $GITHUB_OUTPUT

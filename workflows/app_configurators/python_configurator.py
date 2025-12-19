@@ -30,7 +30,7 @@ class PythonConfigurator(BaseConfigurator):
         print("🔧 Configuring Python API application...")
         
         # Get the document root from nginx config or use default
-        document_root = self.config.get('dependencies.nginx.config.document_root', '/opt/app')
+        document_root = self.config.get('dependencies.nginx.config.document_root', '/opt/python-app')
         
         script = f'''
 set -e
@@ -87,11 +87,11 @@ Environment=PATH=/usr/bin:/usr/local/bin
 Environment=FLASK_APP=app.py
 Environment=FLASK_ENV=production
 Environment=PORT=5000
-ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 60 app:app
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 60 --access-logfile /var/log/python-app/access.log --error-logfile /var/log/python-app/error.log app:app
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/python-app/output.log
-StandardError=append:/var/log/python-app/error.log
+StandardError=append:/var/log/python-app/stderr.log
 
 [Install]
 WantedBy=multi-user.target
@@ -110,41 +110,64 @@ echo "🚀 Starting Python application service..."
 sudo systemctl start python-app.service
 
 # Wait and check if service started successfully
-sleep 5
+sleep 10
 
 if systemctl is-active --quiet python-app.service; then
     echo "✅ Python app service started successfully"
     sudo systemctl status python-app.service --no-pager
     
     # Check if app is listening on port 5000
-    sleep 2
+    sleep 5
     if sudo ss -tlnp 2>/dev/null | grep -q ":5000" || sudo netstat -tlnp 2>/dev/null | grep -q ":5000"; then
         echo "✅ Application is listening on port 5000"
+        
+        # Test local connection with more detailed output
+        echo "🧪 Testing local Flask application..."
+        if curl -s -f http://localhost:5000/ > /tmp/flask-test.html; then
+            echo "✅ Local connection to Flask app successful"
+            echo "📄 Flask app response preview:"
+            head -5 /tmp/flask-test.html
+        else
+            echo "❌ Local connection to Flask app failed"
+            echo "🔍 Checking what's running on port 5000..."
+            sudo ss -tlnp | grep :5000 || echo "Nothing listening on port 5000"
+        fi
+        
+        # Test health endpoint
+        if curl -s -f http://localhost:5000/api/health > /tmp/health-test.json; then
+            echo "✅ Health endpoint responding"
+            cat /tmp/health-test.json
+        else
+            echo "⚠️  Health endpoint not responding"
+        fi
     else
-        echo "⚠️  Application may not be listening on port 5000"
-        sudo ss -tlnp 2>/dev/null | grep python || sudo netstat -tlnp 2>/dev/null | grep python || echo "No python process found listening"
-    fi
-    
-    # Test local connection
-    if curl -s http://localhost:5000/ > /dev/null; then
-        echo "✅ Local connection to port 5000 successful"
-    else
-        echo "⚠️  Local connection to port 5000 failed"
+        echo "❌ Application is NOT listening on port 5000"
+        echo "🔍 Checking what ports are open:"
+        sudo ss -tlnp | grep python || echo "No python processes listening"
+        sudo ss -tlnp | head -10
     fi
 else
     echo "❌ Python app service failed to start"
     sudo systemctl status python-app.service --no-pager || true
-    echo "=== Service Logs ==="
+    echo ""
+    echo "=== Service Logs (last 50 lines) ==="
     sudo journalctl -u python-app.service -n 50 --no-pager || true
+    echo ""
     echo "=== Application Error Log ==="
     sudo cat /var/log/python-app/error.log 2>/dev/null || echo "No error log found"
+    echo ""
+    echo "=== Application Output Log ==="
+    sudo cat /var/log/python-app/output.log 2>/dev/null || echo "No output log found"
+    echo ""
+    echo "=== Application Stderr Log ==="
+    sudo cat /var/log/python-app/stderr.log 2>/dev/null || echo "No stderr log found"
     exit 1
 fi
 
-echo "✅ Python app service configured"
+echo "✅ Python app service configured successfully"
 '''
         
-        success, output = self.client.run_command(script, timeout=120)
+        success, output = self.client.run_command(script, timeout=180)
         print(output)
         return success
     

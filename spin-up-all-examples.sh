@@ -16,7 +16,6 @@ DEPLOYMENTS=(
     "deployment-social-media-app.config.yml"
     "deployment-instagram-clone.config.yml"
     "deployment-mcp-server.config.yml"
-    "deployment-amazon-linux-test.config.yml"
 )
 
 # Function to trigger deployment
@@ -60,9 +59,7 @@ trigger_deployment() {
         "mcp-server")
             workflow_name="Deploy MCP Server to Lightsail"
             ;;
-        "amazon-linux-test")
-            workflow_name="Test Amazon Linux Support"
-            ;;
+
         *)
             echo "   ⚠️  Unknown deployment type: $app_name"
             return 1
