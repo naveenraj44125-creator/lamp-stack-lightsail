@@ -1,4 +1,4 @@
-name: Final Blog Test Fixed Deployment
+name: Blog App Fixed Port Deployment
 
 on:
   push:
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy Final Blog Test Fixed
+    name: Deploy Blog App Fixed Port
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: 'deployment-nodejs.config.yml'
@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Show Deployment Results
         run: |
-          echo "## 🚀 Final Blog Test Fixed Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Blog App Fixed Port Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ needs.deploy.outputs.deployment_status }}" >> $GITHUB_STEP_SUMMARY

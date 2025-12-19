@@ -221,6 +221,7 @@ The following files are now automatically excluded from git:
 ### Issues Fixed
 1. **Missing workflows directory**: Script now downloads all Python modules to `workflows/` and `workflows/app_configurators/`
 2. **Missing aws-region input**: Generated workflows now include `aws_region: 'us-east-1'` parameter
+3. **🔧 NEW**: **Node.js Port Verification Issue**: Fixed verification testing wrong port (80 vs 3000)
 
 ### Script Improvements
 The `setup-complete-deployment.sh` script has been enhanced to handle:
@@ -229,12 +230,36 @@ The `setup-complete-deployment.sh` script has been enhanced to handle:
 - ✅ Sensitive file exclusion
 - ✅ GitHub username resolution
 - ✅ Initial commit creation
-- ✅ **NEW**: Complete workflows directory setup with all Python modules
-- ✅ **NEW**: AWS region parameter in generated workflows
+- ✅ Complete workflows directory setup with all Python modules
+- ✅ AWS region parameter in generated workflows
+
+### Configuration Fix Applied
+**Issue**: Node.js applications run on port 3000 but verification was testing port 80, causing HTTP 000000 errors.
+
+**Solution**: Updated `deployment-nodejs.config.yml` to specify correct ports:
+```yaml
+deployment:
+  steps:
+    verification:
+      port: 3000  # Test Node.js app on port 3000, not port 80
+
+monitoring:
+  health_check:
+    port: 3000  # Monitor Node.js app on port 3000, not port 80
+```
 
 ### Test Results
-- **Repository**: https://github.com/naveenraj44125-creator/final-blog-test
-- **Deployment**: Successfully progressing through all stages
-- **Application URL**: http://final-blog-test-1766107356.lightsail.aws.com/ (available after deployment completes)
+- **Previous Repository**: https://github.com/naveenraj44125-creator/final-blog-test (failed at verification stage)
+- **Fixed Repository**: https://github.com/naveenraj44125-creator/lamp-stack-lightsail (with port fix)
+- **Current Deployment**: Final Blog Test Fixed - testing port 3000 verification
+- **Expected URL**: http://final-blog-test-fixed-1766108491.lightsail.aws.com:3000/
+
+### Root Cause Analysis
+The connectivity issue was caused by a mismatch between:
+1. **Application Configuration**: Node.js app configured to run on port 3000 (`PORT: "3000"`)
+2. **Firewall Configuration**: Both ports 80 and 3000 were correctly opened
+3. **Verification Configuration**: Script defaulted to testing port 80 instead of 3000
+
+The fix ensures that verification tests the correct port where the Node.js application is actually running.
 
 The setup script is now fully functional and can be used to create new application deployments reliably.

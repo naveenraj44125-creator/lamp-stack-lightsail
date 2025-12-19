@@ -1,10 +1,10 @@
-# Final Blog Test Fixed Deployment Configuration
+# Blog App Fixed Port Deployment Configuration
 
 aws:
   region: us-east-1
 
 lightsail:
-  instance_name: final-blog-test-fixed-1766108491
+  instance_name: blog-app-port-fix-1766108787
   static_ip: ""
   
   # Instance size configuration (optional)
@@ -16,7 +16,7 @@ lightsail:
   blueprint_id: "ubuntu_22_04"
 
 application:
-  name: final blog test fixed
+  name: blog app fixed port
   version: "1.0.0"
   type: nodejs
   
@@ -68,7 +68,7 @@ dependencies:
   pm2:
     enabled: true
     config:
-      app_name: "final blog test fixed"
+      app_name: "blog app fixed port"
       instances: 1
       exec_mode: "cluster"
   
@@ -126,7 +126,6 @@ deployment:
       enabled: true
       health_check: true
       external_connectivity: true
-      port: 3000  # FIX: Test Node.js app on port 3000, not port 80
       endpoints_to_test:
         - "/"
         - "/api/health"
@@ -156,7 +155,6 @@ monitoring:
   health_check:
     endpoint: "/"
     expected_content: "Node.js"
-    port: 3000  # FIX: Monitor Node.js app on port 3000, not port 80
     max_attempts: 15
     wait_between_attempts: 20
     initial_wait: 60
@@ -170,4 +168,4 @@ security:
 backup:
   enabled: true
   retention_days: 7
-  backup_location: "/var/backups/final blog test fixed-deployments"
+  backup_location: "/var/backups/blog app fixed port-deployments"
