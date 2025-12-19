@@ -1,0 +1,47 @@
+{
+  "name": "enhanced-lightsail-deployment-mcp",
+  "version": "2.0.0",
+  "description": "Enhanced MCP server for intelligent AWS Lightsail deployment automation with project analysis, cost optimization, and security assessment",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node run-tests.js",
+    "test:components": "node test-components.js",
+    "test:client": "node test-mcp-client.js"
+  },
+  "keywords": [
+    "mcp",
+    "aws",
+    "lightsail",
+    "deployment",
+    "automation",
+    "infrastructure",
+    "devops",
+    "intelligent-analysis",
+    "cost-optimization",
+    "security"
+  ],
+  "author": "Enhanced Lightsail Deployment Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/naveenraj44125-creator/lamp-stack-lightsail.git",
+    "directory": "mcp-server-new"
+  },
+  "bugs": {
+    "url": "https://github.com/naveenraj44125-creator/lamp-stack-lightsail/issues"
+  },
+  "homepage": "https://github.com/naveenraj44125-creator/lamp-stack-lightsail#readme"
+}
