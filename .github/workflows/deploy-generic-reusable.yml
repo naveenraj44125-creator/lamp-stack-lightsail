@@ -732,7 +732,7 @@ jobs:
             
             # Check if response contains expected content (case-insensitive)
             # First check if it's the nginx default page (which means the app isn't working)
-            if grep -qi "Welcome to nginx" /tmp/response.html; then
+            if grep -qi "Welcome to nginx!" /tmp/response.html || grep -qi "<title>Welcome to nginx!</title>" /tmp/response.html; then
               echo "❌ Got nginx default page - application is not properly configured!"
               echo "This means nginx is running but not proxying to the application."
               cat /tmp/response.html | head -10
