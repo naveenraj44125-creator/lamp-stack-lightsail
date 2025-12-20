@@ -6,7 +6,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: python-flask-api-v6
+  instance_name: python-flask-api-v7-20241220
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
