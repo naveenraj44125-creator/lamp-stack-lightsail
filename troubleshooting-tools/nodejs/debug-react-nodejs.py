@@ -41,7 +41,7 @@ def test_endpoints(ip_address):
         print()
 
 def main():
-    instance_name = input("Instance name [instagram-clone-instance-1]: ").strip() or 'instagram-clone-instance-1'
+    instance_name = input("Instance name [react-app-instance-1]: ").strip() or 'react-app-instance-1'
     region = input("AWS region [us-east-1]: ").strip() or 'us-east-1'
     
     print("\n🔍 Debugging React + Node.js Deployment (Instagram Clone)")
@@ -238,7 +238,7 @@ echo "===================="
     if "❌ No Node.js processes found" in output:
         print("🔧 ISSUE: Node.js server not running")
         print("   Solution: Start the server with PM2")
-        print("   Command: cd /opt/nodejs-app && pm2 start server.js --name instagram-clone")
+        print("   Command: cd /opt/nodejs-app && pm2 start server.js --name react-app")
     
     if "❌ No web ports listening" in output:
         print("🔧 ISSUE: No web services listening")

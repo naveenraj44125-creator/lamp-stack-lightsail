@@ -39,8 +39,8 @@ async function testMCPServer() {
     const analysisResult = await client.callTool({
       name: 'analyze_project_intelligently',
       arguments: {
-        project_path: '../example-instagram-clone',
-        user_description: 'Instagram clone with React frontend and Node.js backend',
+        project_path: '../example-react-app',
+        user_description: 'React dashboard application with modern UI components',
         deployment_preferences: {
           budget: 50,
           scale: 'medium'
@@ -57,7 +57,7 @@ async function testMCPServer() {
       name: 'generate_smart_deployment_config',
       arguments: {
         project_analysis: analysisResult.content[0].text,
-        app_name: 'test-instagram-clone',
+        app_name: 'test-react-app',
         aws_region: 'us-east-1',
         deployment_preferences: {
           budget_constraint: 50,
@@ -74,8 +74,8 @@ async function testMCPServer() {
     const setupResult = await client.callTool({
       name: 'setup_intelligent_deployment',
       arguments: {
-        project_path: '../example-instagram-clone',
-        app_name: 'test-instagram-clone',
+        project_path: '../example-react-app',
+        app_name: 'test-react-app',
         deployment_config: configResult.content[0].text,
         create_workflow: true
       }

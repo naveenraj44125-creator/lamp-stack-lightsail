@@ -1283,7 +1283,7 @@ Use AI assistants (Claude, Kiro, etc.) to manage Lightsail deployments through t
 Run the MCP server on your Lightsail instance for remote access:
 
 ```bash
-cd mcp-server
+cd mcp-server-new
 ./deploy-to-lightsail.sh your-instance-ip
 ```
 
@@ -1307,7 +1307,7 @@ Client configuration:
 }
 ```
 
-See [mcp-server/DEPLOY.md](mcp-server/DEPLOY.md) for complete guide.
+See [mcp-server-new/README.md](mcp-server-new/README.md) for complete guide.
 
 ### Option 2: Local with NPX (Zero Install)
 
@@ -1353,10 +1353,9 @@ Then configure:
 
 ### Documentation
 
-- [Complete Guide](mcp-server/README.md) - Full documentation
-- [Quick Start](mcp-server/QUICKSTART.md) - 5-minute setup
-- [Examples](mcp-server/EXAMPLES.md) - Usage examples
-- [Troubleshooting](mcp-server/TROUBLESHOOTING.md) - Problem solving
+- [Complete Guide](mcp-server-new/README.md) - Full documentation
+- [Integration Guide](mcp-server-new/CLINE-INTEGRATION-GUIDE.md) - Cline/Claude setup
+- [Examples](mcp-server-new/EXAMPLES.md) - Usage examples
 
 ---
 

@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from workflows.lightsail_common import LightsailBase
 
 def main():
-    instance_name = input("Instance name [instagram-clone-instance-1]: ").strip() or 'instagram-clone-instance-1'
+    instance_name = input("Instance name [react-app-instance-1]: ").strip() or 'react-app-instance-1'
     region = input("AWS region [us-east-1]: ").strip() or 'us-east-1'
     
     print("\n🔧 Automated React + Node.js Deployment Fix")
@@ -86,7 +86,7 @@ echo "🖥️  Step 4: Starting Node.js server with PM2"
 echo "--------------------------------------------"
 if [ -f "server.js" ]; then
     echo "Starting server.js with PM2..."
-    pm2 start server.js --name "instagram-clone" --watch
+    pm2 start server.js --name "react-app" --watch
     pm2 save
     echo "✅ Server started with PM2"
 else

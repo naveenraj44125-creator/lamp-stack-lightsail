@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from workflows.lightsail_common import LightsailBase
 
 def main():
-    instance_name = input("Instance name [instagram-clone-instance-1]: ").strip() or 'instagram-clone-instance-1'
+    instance_name = input("Instance name [react-app-instance-1]: ").strip() or 'react-app-instance-1'
     region = input("AWS region [us-east-1]: ").strip() or 'us-east-1'
     
     print("\n⚡ Quick React + Node.js Deployment Check")

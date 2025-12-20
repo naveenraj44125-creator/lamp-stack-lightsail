@@ -299,7 +299,7 @@ done
         package_files = self.config.get('application.package_files', [])
         expected_dirs = []
         for pf in package_files:
-            # Extract directory name from patterns like "mcp-server/" or "example-app/"
+            # Extract directory name from patterns like "example-app/" or "src/"
             # Only add if it looks like a directory (ends with / or contains /)
             if '/' in pf:
                 dir_name = pf.rstrip('/').split('/')[0] if pf else None
@@ -371,7 +371,7 @@ if [ -n "$EXTRACTED_DIR" ]; then
         sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
     fi
 else
-    echo "⚠️  No application directory found (example-*-app or mcp-server), copying all files"
+    echo "⚠️  No application directory found (example-*-app), copying all files"
     echo "📋 Current directory contents:"
     ls -la | head -20
     

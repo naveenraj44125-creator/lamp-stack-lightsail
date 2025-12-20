@@ -14,9 +14,9 @@ async function testMCPComponents() {
 
   try {
     // Test 1: Project Analysis
-    console.log('🔍 Test 1: Analyzing Instagram Clone Project...');
+    console.log('🔍 Test 1: Analyzing React App Project...');
     const analyzer = new ProjectAnalyzer();
-    const analysis = await analyzer.analyzeProject('../example-instagram-clone');
+    const analysis = await analyzer.analyzeProject('../example-react-app');
     
     console.log('📊 Analysis Result:');
     console.log(`  - Detected Type: ${analysis.detected_type}`);
@@ -43,7 +43,7 @@ async function testMCPComponents() {
     console.log('\n⚙️ Test 3: Generating Deployment Configuration...');
     const generator = new ConfigurationGenerator();
     const config = generator.generateDeploymentConfig(analysis, optimization, {
-      app_name: 'test-instagram-clone',
+      app_name: 'test-react-app',
       aws_region: 'us-east-1'
     });
 
@@ -57,7 +57,7 @@ async function testMCPComponents() {
     // Test 4: Generate GitHub Workflow
     console.log('\n🔄 Test 4: Generating GitHub Workflow...');
     const workflow = generator.generateWorkflow(analysis, {
-      app_name: 'test-instagram-clone',
+      app_name: 'test-react-app',
       aws_region: 'us-east-1'
     });
 
