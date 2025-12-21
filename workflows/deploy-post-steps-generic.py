@@ -370,7 +370,11 @@ fi
 # Extract application package from home directory
 echo "Extracting application package..."
 cd ~
-tar -xzf {package_file}
+
+# Create a temporary extraction directory
+EXTRACT_TMP=$(mktemp -d)
+cd "$EXTRACT_TMP"
+tar -xzf ~/{package_file}
 
 # Find the extracted directory based on config
 echo "🔍 Looking for extracted directories..."
@@ -396,12 +400,16 @@ if [ -n "$EXTRACTED_DIR" ]; then
         sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
     fi
 else
-    echo "⚠️  No application directory found (example-*-app), copying all files"
+    echo "⚠️  No application directory found (example-*-app), checking for direct files"
     echo "📋 Current directory contents:"
     ls -la | head -20
     
+    # Check if this looks like a React build (has index.html and static directory)
+    if [ -f "index.html" ] && [ -d "static" ]; then
+        echo "✅ React build files detected (index.html + static/), deploying directly..."
+        sudo cp -r * {target_dir}/ || true
     # Check if build directory exists at root level
-    if [ -d "build" ]; then
+    elif [ -d "build" ]; then
         echo "Build directory detected at root, deploying build files..."
         sudo cp -r build/* {target_dir}/ || true
     else
@@ -410,6 +418,10 @@ else
         sudo cp -r * {target_dir}/ || true
     fi
 fi
+
+# Cleanup temp directory
+cd ~
+rm -rf "$EXTRACT_TMP"
 
 # Verify files were copied
 echo ""

@@ -6,7 +6,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: react-dashboard-v11-20251221
+  instance_name: react-dashboard-v12-20251221
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
@@ -27,8 +27,9 @@ application:
   type: web
   
   # Files to include in deployment package
+  # Note: The workflow will build the React app first, then package the build/ directory
   package_files:
-    - "example-react-app/build/"
+    - "example-react-app/"
   
   # Fallback: include all files if specific files don't exist
   package_fallback: true
