@@ -4,7 +4,7 @@ aws:
   region: us-east-1
 
 lightsail:
-  instance_name: simple-blog-v9-20251221
+  instance_name: simple-blog-v10-20251221
   static_ip: ""
   
   # Instance size configuration (optional)

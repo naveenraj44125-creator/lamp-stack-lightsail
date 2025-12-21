@@ -4,7 +4,7 @@ aws:
   region: us-east-1
 
 lightsail:
-  instance_name: social-media-app-v9-20251221
+  instance_name: social-media-app-v10-20251221
   static_ip: ""
   
   # Instance size configuration (optional)
