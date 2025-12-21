@@ -106,8 +106,11 @@ sudo mv /tmp/app.conf /etc/httpd/conf.d/app.conf
 sudo chown -R {web_user}:{web_group} {document_root}
 sudo chmod -R 755 {document_root}
 
-# Create a simple index.html if none exists
-if [ ! -f {document_root}/index.html ] && [ ! -f {document_root}/index.php ]; then
+# Create a simple index.html ONLY if document root is completely empty
+# This prevents overwriting deployed application files (like React builds)
+FILE_COUNT=$(find {document_root} -maxdepth 1 -type f | wc -l)
+if [ "$FILE_COUNT" -eq 0 ]; then
+    echo "📝 Document root is empty, creating default index.html..."
     cat > /tmp/index.html << 'EOF'
 <!DOCTYPE html>
 <html>
@@ -134,6 +137,8 @@ EOF
     sudo chown {web_user}:{web_group} {document_root}/index.html
     sudo chmod 644 {document_root}/index.html
     echo "✅ Created default index.html"
+else
+    echo "ℹ️  Document root already has $FILE_COUNT file(s), skipping default index.html creation"
 fi
 
 # Restart Apache to apply configuration

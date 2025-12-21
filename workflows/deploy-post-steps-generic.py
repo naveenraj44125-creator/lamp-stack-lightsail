@@ -54,8 +54,18 @@ class GenericPostDeployer:
         self._detect_installed_dependencies()
 
     def _detect_installed_dependencies(self):
-        """Detect which dependencies are currently installed on the system"""
+        """Detect which dependencies are currently installed on the system
+        
+        IMPORTANT: Only adds dependencies that are BOTH:
+        1. Enabled in the config file (dependencies.<name>.enabled: true)
+        2. Actually installed/running on the system
+        
+        This prevents issues like Apache configurator running for Nginx-only deployments
+        when Apache happens to be pre-installed on the instance.
+        """
         enabled_deps = self.dependency_manager.get_enabled_dependencies()
+        
+        print(f"📋 Config-enabled dependencies: {enabled_deps}")
         
         # Check which services are actually running/installed
         check_script = '''
@@ -64,14 +74,17 @@ echo "Checking installed services..."
 
 # Check for web servers
 systemctl is-active --quiet apache2 && echo "apache:installed" || true
+systemctl is-active --quiet httpd && echo "apache:installed" || true
 systemctl is-active --quiet nginx && echo "nginx:installed" || true
 
 # Check for databases
 systemctl is-active --quiet mysql && echo "mysql:installed" || true
+systemctl is-active --quiet mariadb && echo "mysql:installed" || true
 systemctl is-active --quiet postgresql && echo "postgresql:installed" || true
 
 # Check for other services
 systemctl is-active --quiet redis-server && echo "redis:installed" || true
+systemctl is-active --quiet redis && echo "redis:installed" || true
 systemctl is-active --quiet memcached && echo "memcached:installed" || true
 systemctl is-active --quiet docker && echo "docker:installed" || true
 
@@ -80,18 +93,24 @@ which php > /dev/null 2>&1 && echo "php:installed" || true
 which python3 > /dev/null 2>&1 && echo "python:installed" || true
 which node > /dev/null 2>&1 && echo "nodejs:installed" || true
 which git > /dev/null 2>&1 && echo "git:installed" || true
-which apache2 > /dev/null 2>&1 && echo "apache:installed" || true
 
 echo "Service check completed"
 '''
         
         success, output = self.client.run_command(check_script, timeout=60)
+        detected_on_system = []
         if success:
             for line in output.split('\n'):
                 if ':installed' in line:
                     dep_name = line.split(':')[0]
-                    if dep_name in enabled_deps:
+                    if dep_name not in detected_on_system:
+                        detected_on_system.append(dep_name)
+                    # CRITICAL: Only add if BOTH enabled in config AND installed on system
+                    if dep_name in enabled_deps and dep_name not in self.dependency_manager.installed_dependencies:
                         self.dependency_manager.installed_dependencies.append(dep_name)
+        
+        print(f"🔍 Detected on system: {detected_on_system}")
+        print(f"✅ Will configure (enabled AND installed): {self.dependency_manager.installed_dependencies}")
 
     def deploy_application(self, package_file, verify=False, cleanup=False, env_vars=None):
         """Deploy application and configure services"""
