@@ -38,6 +38,14 @@ application:
     PORT: "3000"
 
 dependencies:
+  # Web Server - Nginx as reverse proxy for Node.js
+  nginx:
+    enabled: true
+    version: "latest"
+    config:
+      # Nginx will proxy requests to Node.js on port 3000
+      proxy_port: 3000
+  
   # Database Dependencies
   mysql:
     enabled: true

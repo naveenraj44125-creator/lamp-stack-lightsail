@@ -30,10 +30,14 @@ class ApacheConfigurator(BaseConfigurator):
 set -e
 echo "Configuring Apache for application on Ubuntu/Debian..."
 
-# Create virtual host configuration
+# Create virtual host configuration with proper DirectoryIndex
+# IMPORTANT: Prioritize index.php over index.html for PHP applications
 cat > /tmp/app.conf << 'EOF'
 <VirtualHost *:80>
     DocumentRoot {document_root}
+    
+    # CRITICAL: Prioritize PHP files over HTML files
+    DirectoryIndex index.php index.html index.htm
     
     <Directory {document_root}>
         Options Indexes FollowSymLinks
@@ -67,6 +71,16 @@ sudo a2enmod headers
 sudo chown -R {web_user}:{web_group} {document_root}
 sudo chmod -R 755 {document_root}
 
+# IMPORTANT: Remove any default index.html if index.php exists
+# This prevents the default page from being served instead of the PHP app
+if [ -f "{document_root}/index.php" ] && [ -f "{document_root}/index.html" ]; then
+    # Check if index.html is a default placeholder (contains "Application Deployed Successfully")
+    if grep -q "Application Deployed Successfully" {document_root}/index.html 2>/dev/null; then
+        echo "🗑️  Removing default index.html placeholder (index.php exists)..."
+        sudo rm -f {document_root}/index.html
+    fi
+fi
+
 echo "✅ Apache configured for application on Ubuntu/Debian"
 '''
         else:
@@ -75,10 +89,14 @@ echo "✅ Apache configured for application on Ubuntu/Debian"
 set -e
 echo "Configuring Apache for application on Amazon Linux/RHEL/CentOS..."
 
-# Create virtual host configuration
+# Create virtual host configuration with proper DirectoryIndex
+# IMPORTANT: Prioritize index.php over index.html for PHP applications
 cat > /tmp/app.conf << 'EOF'
 <VirtualHost *:80>
     DocumentRoot {document_root}
+    
+    # CRITICAL: Prioritize PHP files over HTML files
+    DirectoryIndex index.php index.html index.htm
     
     <Directory {document_root}>
         Options Indexes FollowSymLinks
@@ -102,12 +120,29 @@ EOF
 # Install the configuration
 sudo mv /tmp/app.conf /etc/httpd/conf.d/app.conf
 
+# Also update the main httpd.conf DirectoryIndex to prioritize PHP
+# This ensures PHP files are served even if our vhost config isn't loaded first
+if grep -q "DirectoryIndex index.html" /etc/httpd/conf/httpd.conf; then
+    echo "📝 Updating main httpd.conf DirectoryIndex to prioritize PHP..."
+    sudo sed -i 's/DirectoryIndex index.html/DirectoryIndex index.php index.html index.htm/' /etc/httpd/conf/httpd.conf
+fi
+
 # Ensure proper permissions
 sudo chown -R {web_user}:{web_group} {document_root}
 sudo chmod -R 755 {document_root}
 
-# Create a simple index.html ONLY if document root is completely empty
-# This prevents overwriting deployed application files (like React builds)
+# IMPORTANT: Remove any default index.html if index.php exists
+# This prevents the default page from being served instead of the PHP app
+if [ -f "{document_root}/index.php" ] && [ -f "{document_root}/index.html" ]; then
+    # Check if index.html is a default placeholder (contains "Application Deployed Successfully")
+    if grep -q "Application Deployed Successfully" {document_root}/index.html 2>/dev/null; then
+        echo "🗑️  Removing default index.html placeholder (index.php exists)..."
+        sudo rm -f {document_root}/index.html
+    fi
+fi
+
+# Only create default index.html if document root is completely empty
+# AND no PHP files will be deployed (check for .php in package files)
 FILE_COUNT=$(find {document_root} -maxdepth 1 -type f | wc -l)
 if [ "$FILE_COUNT" -eq 0 ]; then
     echo "📝 Document root is empty, creating default index.html..."
