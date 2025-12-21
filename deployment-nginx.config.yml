@@ -4,7 +4,7 @@ aws:
 
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: nginx-static-demo-v7-20241220
+  instance_name: nginx-static-demo-v8-20251221
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
