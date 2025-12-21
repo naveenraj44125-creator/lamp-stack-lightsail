@@ -14,7 +14,8 @@ class PythonConfigurator(BaseConfigurator):
         os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
         
         # Get OS-specific information
-        self.user_info = OSDetector.get_user_info(os_type)
+        # Python apps typically use nginx as reverse proxy, so use nginx user
+        self.user_info = OSDetector.get_user_info(os_type, 'nginx')
         self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
         self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
         

@@ -13,8 +13,8 @@ class NginxConfigurator(BaseConfigurator):
         os_type = getattr(self.client, 'os_type', 'ubuntu')
         os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
         
-        # Get OS-specific information
-        self.user_info = OSDetector.get_user_info(os_type)
+        # Get OS-specific information - specify nginx as web server
+        self.user_info = OSDetector.get_user_info(os_type, 'nginx')
         self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
         self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
         

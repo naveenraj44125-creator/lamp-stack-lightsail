@@ -22,8 +22,9 @@ class DockerConfigurator(BaseConfigurator):
         os_type = getattr(self.client, 'os_type', 'ubuntu')
         os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
         
-        # Get OS-specific information
-        self.user_info = OSDetector.get_user_info(os_type)
+        # Get OS-specific information - Docker doesn't need a specific web server user
+        # Use 'docker' as web_server to get default user without web server specifics
+        self.user_info = OSDetector.get_user_info(os_type, 'docker')
         self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
         
         # Check if using pre-built image

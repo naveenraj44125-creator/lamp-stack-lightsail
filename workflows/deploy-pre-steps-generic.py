@@ -26,13 +26,20 @@ class GenericPreDeployer:
         self.config = config
         self.client = LightsailBase(instance_name, region)
         
+        # Determine which web server is being used
+        self.web_server = 'apache'  # default
+        if config.get('dependencies.nginx.enabled', False):
+            self.web_server = 'nginx'
+        elif config.get('dependencies.apache.enabled', False):
+            self.web_server = 'apache'
+        
         # Set OS information on client for configurators to use
         if os_type:
             self.client.os_type = os_type
         if package_manager:
             # Use OSDetector to get proper user info structure
             from os_detector import OSDetector
-            os_info = OSDetector.get_user_info(os_type) if os_type else {}
+            os_info = OSDetector.get_user_info(os_type, self.web_server) if os_type else {}
             os_info['package_manager'] = package_manager
             os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
             self.client.os_info = os_info
@@ -40,7 +47,7 @@ class GenericPreDeployer:
         # Initialize dependency manager with OS information
         from os_detector import OSDetector
         if os_type and package_manager:
-            os_info = OSDetector.get_user_info(os_type)
+            os_info = OSDetector.get_user_info(os_type, self.web_server)
             os_info['package_manager'] = package_manager
             os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
             self.dependency_manager = DependencyManager(self.client, config, os_type, os_info)
@@ -223,10 +230,17 @@ class GenericPreDeployer:
         elif self.config.get('dependencies.apache.enabled', False):
             web_root = self.config.get('dependencies.apache.config.document_root', '/var/www/html')
         
+        # Determine which web server is being used
+        web_server = 'apache'  # default
+        if self.config.get('dependencies.nginx.enabled', False):
+            web_server = 'nginx'
+        elif self.config.get('dependencies.apache.enabled', False):
+            web_server = 'apache'
+        
         # Get OS-specific user information
         from os_detector import OSDetector
         if hasattr(self.client, 'os_type') and self.client.os_type:
-            os_info = OSDetector.get_user_info(self.client.os_type)
+            os_info = OSDetector.get_user_info(self.client.os_type, web_server)
             system_user = os_info['default_user']
             system_group = os_info['default_user']  # Use same as user for group
         else:
@@ -441,10 +455,17 @@ echo "✅ Health check completed"
         
         env_file_content = '\n'.join(env_content)
         
+        # Determine which web server is being used
+        web_server = 'apache'  # default
+        if self.config.get('dependencies.nginx.enabled', False):
+            web_server = 'nginx'
+        elif self.config.get('dependencies.apache.enabled', False):
+            web_server = 'apache'
+        
         # Get OS-specific user information
         from os_detector import OSDetector
         if hasattr(self.client, 'os_type') and self.client.os_type:
-            os_info = OSDetector.get_user_info(self.client.os_type)
+            os_info = OSDetector.get_user_info(self.client.os_type, web_server)
             web_user = os_info['web_user']
             web_group = os_info['web_group']
         else:

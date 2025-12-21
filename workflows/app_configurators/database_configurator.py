@@ -14,7 +14,10 @@ class DatabaseConfigurator(BaseConfigurator):
         os_info = getattr(self.client, 'os_info', {'package_manager': 'apt', 'user': 'ubuntu'})
         
         # Get OS-specific information
-        self.user_info = OSDetector.get_user_info(os_type)
+        # Detect web server from config to use correct user for file ownership
+        nginx_enabled = self.config.get('dependencies.nginx.enabled', False)
+        web_server = 'nginx' if nginx_enabled else 'apache'
+        self.user_info = OSDetector.get_user_info(os_type, web_server)
         self.pkg_commands = OSDetector.get_package_manager_commands(os_info['package_manager'])
         self.svc_commands = OSDetector.get_service_commands(os_info.get('service_manager', 'systemd'))
         

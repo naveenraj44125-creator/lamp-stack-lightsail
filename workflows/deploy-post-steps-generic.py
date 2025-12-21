@@ -28,6 +28,12 @@ class GenericPostDeployer:
         self.config = config
         self.client = LightsailBase(instance_name, region)
         
+        # Determine which web server is being used from config
+        deps_config = self.config.get('dependencies', {})
+        apache_enabled = deps_config.get('apache', {}).get('enabled', False)
+        nginx_enabled = deps_config.get('nginx', {}).get('enabled', False)
+        self.web_server = 'apache' if apache_enabled else ('nginx' if nginx_enabled else 'apache')
+        
         # Set OS information on client for configurators to use
         if os_type:
             self.client.os_type = os_type
@@ -37,7 +43,7 @@ class GenericPostDeployer:
         # Initialize dependency manager with OS information
         from os_detector import OSDetector
         if os_type and package_manager:
-            os_info = OSDetector.get_user_info(os_type)
+            os_info = OSDetector.get_user_info(os_type, self.web_server)
             os_info['package_manager'] = package_manager
             os_info['service_manager'] = 'systemd'  # Most modern systems use systemd
             self.dependency_manager = DependencyManager(self.client, config, os_type, os_info)
@@ -273,7 +279,7 @@ done
         """Determine appropriate file owner based on target directory and dependencies (OS-agnostic)"""
         # Get OS-specific user information
         os_type = getattr(self.client, 'os_type', 'ubuntu')
-        user_info = OSDetector.get_user_info(os_type)
+        user_info = OSDetector.get_user_info(os_type, self.web_server)
         
         default_user = user_info['default_user']
         web_user = user_info['web_user']
@@ -399,7 +405,7 @@ ls -la {target_dir}/ | head -20
         
         # Get OS-specific user information for web user check
         os_type = getattr(self.client, 'os_type', 'ubuntu')
-        user_info = OSDetector.get_user_info(os_type)
+        user_info = OSDetector.get_user_info(os_type, self.web_server)
         web_user = user_info['web_user']
         web_group = user_info['web_group']
         web_owner = f"{web_user}:{web_group}"
@@ -465,7 +471,7 @@ echo "✅ Application files deployed successfully"
         
         # Get OS-specific user information
         os_type = getattr(self.client, 'os_type', 'ubuntu')
-        user_info = OSDetector.get_user_info(os_type)
+        user_info = OSDetector.get_user_info(os_type, self.web_server)
         default_user = user_info['default_user']
         
         script = f'''
@@ -513,7 +519,7 @@ echo "✅ Application-specific configurations completed"
         
         # Get OS-specific user information
         os_type = getattr(self.client, 'os_type', 'ubuntu')
-        user_info = OSDetector.get_user_info(os_type)
+        user_info = OSDetector.get_user_info(os_type, self.web_server)
         web_user = user_info['web_user']
         web_group = user_info['web_group']
         
