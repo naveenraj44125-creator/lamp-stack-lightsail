@@ -35,13 +35,20 @@ class DependencyManager:
         self.os_type = os_type or 'ubuntu'
         self.os_info = os_info or {'package_manager': 'apt', 'service_manager': 'systemd', 'user': 'ubuntu'}
         
+        # Determine which web server is being used (for correct user/group selection)
+        deps_config = self.config.get('dependencies', {})
+        apache_enabled = deps_config.get('apache', {}).get('enabled', False)
+        nginx_enabled = deps_config.get('nginx', {}).get('enabled', False)
+        web_server = 'apache' if apache_enabled else ('nginx' if nginx_enabled else 'apache')
+        
         # Get OS-specific command templates
         self.pkg_commands = OSDetector.get_package_manager_commands(self.os_info['package_manager'])
         self.svc_commands = OSDetector.get_service_commands(self.os_info['service_manager'])
         self.os_packages = OSDetector.get_os_specific_packages(self.os_type, self.os_info['package_manager'])
-        self.user_info = OSDetector.get_user_info(self.os_type)
+        self.user_info = OSDetector.get_user_info(self.os_type, web_server)
         
         print(f"🖥️  Detected OS: {self.os_type} with {self.os_info['package_manager']} package manager")
+        print(f"🌐 Web server: {web_server}, using user: {self.user_info['web_user']}:{self.user_info['web_group']}")
     
     def get_enabled_dependencies(self) -> List[str]:
         """Get list of enabled dependencies from configuration"""
@@ -618,6 +625,8 @@ echo "✅ PostgreSQL installation completed on {self.os_type}"
         php_packages = self.os_packages.get('php', {}).get('packages', ['php', 'php-fpm'])
         php_service = self.os_packages.get('php', {}).get('service', 'php8.1-fpm')
         apache_service = self.os_packages.get('apache', {}).get('service', 'apache2')
+        web_user = self.user_info['web_user']
+        web_group = self.user_info['web_group']
         
         # Build extension list based on OS
         ext_packages = []
@@ -687,33 +696,101 @@ fi
 echo "✅ PHP {version} installation completed on Ubuntu/Debian"
 '''
         else:
-            # For RHEL/CentOS/Amazon Linux
+            # For RHEL/CentOS/Amazon Linux - comprehensive PHP installation
             script = f'''
 set -e
-echo "Installing PHP {version} on RHEL/CentOS/Amazon Linux..."
+echo "Installing PHP on Amazon Linux/RHEL/CentOS..."
 
-# Enable EPEL and Remi repositories for PHP
-if ! rpm -q epel-release >/dev/null 2>&1; then
-    {self.pkg_commands['install']} epel-release
+# Detect Amazon Linux version
+if grep -q "Amazon Linux 2023" /etc/os-release 2>/dev/null; then
+    echo "📦 Detected Amazon Linux 2023 - using dnf with php8.3"
+    
+    # Install PHP 8.3 (default on AL2023) with all common extensions
+    sudo dnf install -y php php-cli php-common php-fpm php-mysqlnd php-pgsql php-curl php-mbstring php-xml php-zip php-gd php-intl php-bcmath {ext_list} || {{
+        echo "⚠️  Some PHP packages may not be available, trying alternative..."
+        sudo dnf install -y php php-cli php-common php-mysqlnd php-pgsql php-curl php-mbstring php-xml php-zip || true
+    }}
+    
+elif grep -q "Amazon Linux 2" /etc/os-release 2>/dev/null; then
+    echo "📦 Detected Amazon Linux 2 - using amazon-linux-extras for PHP"
+    
+    # Enable PHP from amazon-linux-extras
+    sudo amazon-linux-extras enable php8.2 || sudo amazon-linux-extras enable php8.0 || true
+    sudo yum clean metadata
+    sudo yum install -y php php-cli php-common php-fpm php-mysqlnd php-pgsql php-curl php-mbstring php-xml php-zip {ext_list} || true
+    
+else
+    echo "📦 Generic RHEL/CentOS - trying EPEL and Remi repositories"
+    
+    # Enable EPEL repository
+    if ! rpm -q epel-release >/dev/null 2>&1; then
+        {self.pkg_commands['install']} epel-release || true
+    fi
+    
+    # Install PHP and extensions
+    {self.pkg_commands['install']} php php-cli php-common php-fpm php-mysqlnd php-pgsql php-curl php-mbstring php-xml php-zip {ext_list} || true
 fi
 
-# Install PHP and extensions
-{self.pkg_commands['install']} php php-fpm {ext_list}
+# Verify PHP installation
+if command -v php >/dev/null 2>&1; then
+    echo "✅ PHP installed: $(php -v | head -1)"
+else
+    echo "❌ PHP installation failed"
+    exit 1
+fi
 
 # Install Composer if requested
 if [ "{php_config.get('enable_composer', True)}" = "True" ]; then
+    echo "📦 Installing Composer..."
     curl -sS https://getcomposer.org/installer | php
     sudo mv composer.phar /usr/local/bin/composer
     sudo chmod +x /usr/local/bin/composer
     echo "✅ Composer installed"
 fi
 
-# Configure PHP-FPM if Apache is also enabled
-if {self.svc_commands['is_active']} {apache_service}; then
-    {self.svc_commands['restart']} {apache_service}
+# Fix file ownership for web directory
+echo "🔧 Setting correct file ownership ({web_user}:{web_group})..."
+if [ -d "/var/www/html" ]; then
+    sudo chown -R {web_user}:{web_group} /var/www/html/
+    sudo find /var/www/html -type d -exec chmod 755 {{}} \\;
+    sudo find /var/www/html -type f -exec chmod 644 {{}} \\;
+    echo "✅ File ownership and permissions set"
 fi
 
-echo "✅ PHP installation completed on RHEL/CentOS/Amazon Linux"
+# Start and enable Apache if it's installed
+if command -v httpd >/dev/null 2>&1; then
+    echo "🔧 Configuring Apache (httpd) for PHP..."
+    
+    # Enable and start Apache
+    sudo systemctl enable {apache_service}
+    sudo systemctl start {apache_service} || sudo systemctl restart {apache_service}
+    
+    # Verify Apache is running
+    if sudo systemctl is-active --quiet {apache_service}; then
+        echo "✅ Apache ({apache_service}) is running"
+    else
+        echo "⚠️  Apache may not be running, attempting restart..."
+        sudo systemctl restart {apache_service}
+    fi
+fi
+
+# Configure firewall to allow HTTP traffic
+echo "🔧 Configuring firewall..."
+if sudo systemctl is-active --quiet firewalld 2>/dev/null; then
+    echo "Opening HTTP port in firewalld..."
+    sudo firewall-cmd --permanent --add-service=http || true
+    sudo firewall-cmd --permanent --add-service=https || true
+    sudo firewall-cmd --reload || true
+    echo "✅ Firewall configured for HTTP/HTTPS"
+elif command -v ufw >/dev/null 2>&1; then
+    sudo ufw allow 80/tcp || true
+    sudo ufw allow 443/tcp || true
+    echo "✅ UFW configured for HTTP/HTTPS"
+else
+    echo "ℹ️  No firewall detected or firewall is not active"
+fi
+
+echo "✅ PHP installation completed on Amazon Linux/RHEL/CentOS"
 '''
         
         success, output = self.client.run_command(script, timeout=300)

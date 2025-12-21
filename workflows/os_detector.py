@@ -186,12 +186,13 @@ class OSDetector:
             return cls.get_os_specific_packages('ubuntu', 'apt')
 
     @classmethod
-    def get_user_info(cls, os_type: str) -> Dict[str, str]:
+    def get_user_info(cls, os_type: str, web_server: str = 'apache') -> Dict[str, str]:
         """
         Get OS-specific user information
         
         Args:
             os_type: Operating system type
+            web_server: Web server being used ('apache' or 'nginx')
             
         Returns:
             Dictionary with user information
@@ -208,17 +209,17 @@ class OSDetector:
             },
             'amazon_linux': {
                 'default_user': 'ec2-user',
-                'web_user': 'nginx',  # Use nginx user for web apps on Amazon Linux
-                'web_group': 'nginx',
+                'web_user': 'apache',  # Default to apache for LAMP stacks on Amazon Linux
+                'web_group': 'apache',
                 'nginx_user': 'nginx',
                 'nginx_group': 'nginx',
-                'apache_user': 'apache',  # Only available after httpd installation
+                'apache_user': 'apache',
                 'apache_group': 'apache'
             },
             'centos': {
                 'default_user': 'centos',
-                'web_user': 'nginx',  # Use nginx user for web apps on CentOS
-                'web_group': 'nginx',
+                'web_user': 'apache',  # Default to apache for LAMP stacks on CentOS
+                'web_group': 'apache',
                 'nginx_user': 'nginx',
                 'nginx_group': 'nginx',
                 'apache_user': 'apache',
@@ -226,8 +227,8 @@ class OSDetector:
             },
             'rhel': {
                 'default_user': 'ec2-user',
-                'web_user': 'nginx',  # Use nginx user for web apps on RHEL
-                'web_group': 'nginx',
+                'web_user': 'apache',  # Default to apache for LAMP stacks on RHEL
+                'web_group': 'apache',
                 'nginx_user': 'nginx',
                 'nginx_group': 'nginx',
                 'apache_user': 'apache',
@@ -235,7 +236,17 @@ class OSDetector:
             }
         }
         
-        return user_configs.get(os_type, user_configs['ubuntu'])
+        config = user_configs.get(os_type, user_configs['ubuntu'])
+        
+        # Override web_user/web_group based on web server being used
+        if web_server == 'nginx' and os_type in ['amazon_linux', 'centos', 'rhel']:
+            config['web_user'] = config['nginx_user']
+            config['web_group'] = config['nginx_group']
+        elif web_server == 'apache' and os_type in ['amazon_linux', 'centos', 'rhel']:
+            config['web_user'] = config['apache_user']
+            config['web_group'] = config['apache_group']
+        
+        return config
 
 if __name__ == "__main__":
     # Test the OS detector
