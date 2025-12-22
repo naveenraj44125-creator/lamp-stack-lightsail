@@ -7,7 +7,7 @@ aws:
 
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: docker-lamp-demo-v13-20251221
+  instance_name: docker-lamp-demo-v14-20251221
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
