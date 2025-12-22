@@ -1,22 +1,22 @@
-# Simple Blog App Deployment Configuration
+# Reddit Clone Deployment Configuration
 
 aws:
   region: us-east-1
 
 lightsail:
-  instance_name: simple-blog-v15-20251221
+  instance_name: reddit-clone-v4
   static_ip: ""
   
   # Instance size configuration (optional)
   # If not specified, defaults are: small_3_0 (2GB) for traditional apps, medium_3_0 (4GB) for Docker apps
-  bundle_id: "micro_3_0"
+  bundle_id: "small_3_0"
   
   # Operating system blueprint configuration (optional)
   # If not specified, defaults to ubuntu_22_04
   blueprint_id: "ubuntu_22_04"
 
 application:
-  name: simple blog app
+  name: reddit clone
   version: "1.0.0"
   type: nodejs
   
@@ -30,7 +30,7 @@ application:
     # Database Configuration
     DB_TYPE: mysql
     DB_HOST: localhost
-    DB_NAME: app_db
+    DB_NAME: reddit_db
     DB_USER: app_user
     DB_PASSWORD: CHANGE_ME_secure_password_123
     # Node.js specific
@@ -38,14 +38,6 @@ application:
     PORT: "3000"
 
 dependencies:
-  # Web Server - Nginx as reverse proxy for Node.js
-  nginx:
-    enabled: true
-    version: "latest"
-    config:
-      # Nginx will proxy requests to Node.js on port 3000
-      proxy_port: 3000
-  
   # Database Dependencies
   mysql:
     enabled: true
@@ -53,7 +45,7 @@ dependencies:
     config:
       version: "8.0"
       root_password: "CHANGE_ME_root_password_123"
-      create_database: "app_db"
+      create_database: "reddit_db"
       create_user: "app_user"
       user_password: "CHANGE_ME_secure_password_123"
   
@@ -63,7 +55,7 @@ dependencies:
     config:
       version: "13"
       postgres_password: "CHANGE_ME_postgres_password_123"
-      create_database: "app_db"
+      create_database: "reddit_db"
       create_user: "app_user"
       user_password: "CHANGE_ME_secure_password_123"
   
@@ -76,7 +68,7 @@ dependencies:
   pm2:
     enabled: true
     config:
-      app_name: "simple blog app"
+      app_name: "reddit clone"
       instances: 1
       exec_mode: "cluster"
   
@@ -178,4 +170,4 @@ security:
 backup:
   enabled: true
   retention_days: 7
-  backup_location: "/var/backups/simple blog app-deployments"
+  backup_location: "/var/backups/reddit clone-deployments"

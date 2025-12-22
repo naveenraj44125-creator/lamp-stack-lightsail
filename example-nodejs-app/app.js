@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Simple Blog App</title>
+            <title>Reddit Clone</title>
             <style>
                 body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
                 .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@ app.get('/', (req, res) => {
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🚀 Simple Blog App</h1>
+                    <h1>🚀 Reddit Clone</h1>
                     <p>Node.js Application deployed via GitHub Actions</p>
                 </div>
                 
@@ -65,7 +65,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/info', (req, res) => {
     res.json({
         status: 'success',
-        message: 'Simple Blog App Node.js Application',
+        message: 'Reddit Clone Node.js Application',
         version: '1.0.0',
         node_version: process.version,
         environment: process.env.NODE_ENV || 'development',
@@ -74,6 +74,6 @@ app.get('/api/info', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Simple Blog App server running on port ${PORT}`);
+    console.log(`🚀 Reddit Clone server running on port ${PORT}`);
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

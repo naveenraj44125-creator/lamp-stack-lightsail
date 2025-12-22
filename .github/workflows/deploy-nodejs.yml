@@ -1,4 +1,4 @@
-name: Simple Blog App Deployment
+name: Reddit Clone Deployment
 
 on:
   push:
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy Simple Blog App
+    name: Deploy Reddit Clone
     uses: ./.github/workflows/deploy-generic-reusable.yml
     with:
       config_file: 'deployment-nodejs.config.yml'
@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Show Deployment Results
         run: |
-          echo "## 🚀 Simple Blog App Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Reddit Clone Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: ${{ needs.deploy.outputs.deployment_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ needs.deploy.outputs.deployment_status }}" >> $GITHUB_STEP_SUMMARY

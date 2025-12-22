@@ -1,7 +1,7 @@
 {
-  "name": "simple blog app",
+  "name": "reddit clone",
   "version": "1.0.0",
-  "description": "Simple Blog App Node.js application deployed via GitHub Actions",
+  "description": "Reddit Clone Node.js application deployed via GitHub Actions",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
