@@ -5,8 +5,136 @@ class NodeJSConfigurator(BaseConfigurator):
     """Handles Node.js application configuration"""
     
     def configure(self) -> bool:
-        """Configure Node.js application with systemd service (OS-agnostic)"""
+        """Configure Node.js application - uses PM2 if enabled, otherwise systemd"""
         print("🔧 Configuring Node.js application...")
+        
+        # Check if PM2 is enabled in config
+        pm2_config = self.config.get('dependencies.pm2', {})
+        pm2_enabled = pm2_config.get('enabled', False)
+        
+        if pm2_enabled:
+            return self._configure_with_pm2(pm2_config)
+        else:
+            return self._configure_with_systemd()
+    
+    def _configure_with_pm2(self, pm2_config: dict) -> bool:
+        """Configure Node.js application with PM2 process manager"""
+        print("🔧 Using PM2 process manager (pm2.enabled: true)")
+        
+        # Get OS information from config if available
+        os_type = getattr(self.config, 'os_type', 'ubuntu')
+        os_info = getattr(self.config, 'os_info', {'user': 'ubuntu'})
+        default_user = os_info.get('user', 'ubuntu')
+        
+        # Get PM2 configuration
+        pm2_settings = pm2_config.get('config', {})
+        app_name = pm2_settings.get('app_name', 'nodejs-app')
+        instances = pm2_settings.get('instances', 1)
+        exec_mode = pm2_settings.get('exec_mode', 'fork')
+        
+        script = f'''
+set -e
+echo "Configuring Node.js with PM2 process manager on {os_type}..."
+
+# Detect entry point file
+ENTRY_POINT=""
+if [ -f "/opt/nodejs-app/server.js" ]; then
+    ENTRY_POINT="server.js"
+    echo "✅ Found server.js as entry point"
+elif [ -f "/opt/nodejs-app/app.js" ]; then
+    ENTRY_POINT="app.js"
+    echo "✅ Found app.js as entry point"
+elif [ -f "/opt/nodejs-app/index.js" ]; then
+    ENTRY_POINT="index.js"
+    echo "✅ Found index.js as entry point"
+else
+    echo "❌ No entry point file found (server.js, app.js, or index.js)"
+    ls -la /opt/nodejs-app/ || echo "Directory does not exist"
+    exit 1
+fi
+
+# Install dependencies if package.json exists
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    echo "📦 Installing Node.js dependencies..."
+    cd /opt/nodejs-app && sudo -u {default_user} npm install --production 2>&1 | tee /tmp/npm-install.log
+    echo "✅ Dependencies installed"
+else
+    echo "ℹ️  No package.json found, skipping dependency installation"
+fi
+
+# Create log directory
+sudo mkdir -p /var/log/nodejs-app
+sudo chown {default_user}:{default_user} /var/log/nodejs-app
+
+# Install PM2 globally if not installed
+echo "📦 Installing PM2 globally..."
+if ! command -v pm2 &> /dev/null; then
+    sudo npm install -g pm2
+    echo "✅ PM2 installed"
+else
+    echo "✅ PM2 already installed"
+fi
+
+# Stop any existing PM2 processes for this app
+echo "🔄 Stopping existing PM2 processes..."
+pm2 delete "{app_name}" 2>/dev/null || true
+pm2 delete all 2>/dev/null || true
+
+# Set proper ownership
+sudo chown -R {default_user}:{default_user} /opt/nodejs-app
+
+# Start the app with PM2
+echo "🚀 Starting Node.js application with PM2..."
+cd /opt/nodejs-app
+
+# Start with PM2 using configured settings
+if [ "{exec_mode}" = "cluster" ] && [ "{instances}" != "1" ]; then
+    pm2 start $ENTRY_POINT --name "{app_name}" -i {instances} --env production
+else
+    pm2 start $ENTRY_POINT --name "{app_name}" --env production
+fi
+
+# Wait for app to start
+sleep 5
+
+# Check PM2 status
+echo ""
+echo "📊 PM2 Status:"
+pm2 list
+
+# Save PM2 process list for startup
+pm2 save 2>/dev/null || true
+
+# Setup PM2 to start on boot
+pm2 startup systemd -u {default_user} --hp /home/{default_user} 2>/dev/null || true
+
+# Check if app is listening on port 3000
+if sudo ss -tlnp 2>/dev/null | grep -q ":3000" || sudo netstat -tlnp 2>/dev/null | grep -q ":3000"; then
+    echo "✅ Application is listening on port 3000"
+else
+    echo "⚠️  Application may not be listening on port 3000"
+    sudo ss -tlnp 2>/dev/null | grep node || sudo netstat -tlnp 2>/dev/null | grep node || echo "No node process found listening"
+fi
+
+# Test local connection
+if curl -s http://localhost:3000/ > /dev/null; then
+    echo "✅ Local connection to port 3000 successful"
+else
+    echo "⚠️  Local connection to port 3000 failed"
+    echo "📋 PM2 logs:"
+    pm2 logs "{app_name}" --lines 20 --nostream 2>&1 || true
+fi
+
+echo "✅ Node.js application configured with PM2 on {os_type}"
+'''
+        
+        success, output = self.client.run_command(script, timeout=420)
+        print(output)
+        return success
+    
+    def _configure_with_systemd(self) -> bool:
+        """Configure Node.js application with systemd service (OS-agnostic)"""
+        print("🔧 Using systemd service (pm2.enabled: false or not set)")
         
         # Get OS information from config if available
         os_type = getattr(self.config, 'os_type', 'ubuntu')

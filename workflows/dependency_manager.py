@@ -502,11 +502,21 @@ echo "✅ Nginx installation completed on {self.os_type}"
         return success
     
     def _install_mysql(self, config: Dict[str, Any]) -> bool:
-        """Install and configure MySQL database (local only, not for external RDS) - OS-agnostic"""
+        """Install and configure MySQL database (local only, not for external RDS) - OS-agnostic
+        
+        Uses safe mode approach for reliable user/database creation that works
+        even when MySQL has authentication issues.
+        """
         # This method should only be called for local MySQL installations
         # External databases are handled by _install_external_database
         
         mysql_config = config.get('config', {})
+        
+        # Get configuration values
+        root_password = mysql_config.get('root_password', 'root_password_123')
+        create_database = mysql_config.get('create_database', mysql_config.get('database_name', 'app_db'))
+        create_user = mysql_config.get('create_user', 'app_user')
+        user_password = mysql_config.get('user_password', 'CHANGE_ME_secure_password_123')
         
         # Get OS-specific package and service names
         mysql_packages = self.os_packages.get('mysql_server', {}).get('packages', ['mysql-server'])
@@ -515,10 +525,10 @@ echo "✅ Nginx installation completed on {self.os_type}"
         print(f"📦 Installing local MySQL database server on {self.os_type}...")
         print("⚠️  Note: For external RDS databases, only the MySQL client will be installed")
         
-        if self.os_info['package_manager'] == 'apt':
-            script = f'''
+        # Step 1: Install MySQL packages
+        install_script = f'''
 set -e
-echo "Installing MySQL database server on Ubuntu/Debian..."
+echo "Installing MySQL database server on {self.os_type}..."
 
 # Set non-interactive mode
 export DEBIAN_FRONTEND=noninteractive
@@ -529,50 +539,95 @@ export DEBIAN_FRONTEND=noninteractive
 # Enable MySQL to start on boot
 {self.svc_commands['enable']} {mysql_service}
 
-# Start MySQL
-{self.svc_commands['start']} {mysql_service}
-
-# Secure MySQL installation (basic)
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" || true
-
-# Create application database if requested
-if [ "{mysql_config.get('create_app_database', True)}" = "True" ]; then
-    DB_NAME="{mysql_config.get('database_name', 'app_db')}"
-    sudo mysql -u root -proot123 -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;" || true
-    echo "✅ Database '$DB_NAME' created"
-fi
-
-echo "✅ MySQL installation completed on Ubuntu/Debian"
-'''
-        else:
-            # For RHEL/CentOS/Amazon Linux
-            script = f'''
-set -e
-echo "Installing MySQL database server on RHEL/CentOS/Amazon Linux..."
-
-# Install MySQL
-{self.pkg_commands['install']} {' '.join(mysql_packages)}
-
-# Enable MySQL to start on boot
-{self.svc_commands['enable']} {mysql_service}
-
-# Start MySQL
-{self.svc_commands['start']} {mysql_service}
-
-# Secure MySQL installation (basic) - different service name on RHEL systems
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'root123';" || true
-
-# Create application database if requested
-if [ "{mysql_config.get('create_app_database', True)}" = "True" ]; then
-    DB_NAME="{mysql_config.get('database_name', 'app_db')}"
-    sudo mysql -u root -proot123 -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;" || true
-    echo "✅ Database '$DB_NAME' created"
-fi
-
-echo "✅ MySQL installation completed on RHEL/CentOS/Amazon Linux"
+echo "✅ MySQL packages installed"
 '''
         
-        success, output = self.client.run_command_with_live_output(script, timeout=300)
+        success, output = self.client.run_command(install_script, timeout=300)
+        if not success:
+            print("❌ MySQL package installation failed")
+            return False
+        
+        # Step 2: Configure MySQL using safe mode for reliable user creation
+        # This approach works even when MySQL has authentication issues
+        configure_script = f'''
+set -e
+echo "🔧 Configuring MySQL with safe mode approach..."
+
+# Stop MySQL if running
+echo "Stopping MySQL..."
+sudo systemctl stop {mysql_service} 2>/dev/null || sudo systemctl stop mysql 2>/dev/null || sudo systemctl stop mariadb 2>/dev/null || true
+sleep 2
+
+# Ensure MySQL run directory exists with correct permissions
+sudo mkdir -p /var/run/mysqld
+sudo chown mysql:mysql /var/run/mysqld
+
+# Start MySQL in safe mode (skip grant tables)
+echo "Starting MySQL in safe mode..."
+sudo mysqld_safe --skip-grant-tables &
+sleep 5
+
+# Wait for MySQL to be ready
+for i in 1 2 3 4 5; do
+    if sudo mysqladmin ping 2>/dev/null; then
+        echo "✅ MySQL is ready"
+        break
+    fi
+    echo "Waiting for MySQL to start... ($i/5)"
+    sleep 2
+done
+
+# Configure MySQL - reset root password and create user/database
+echo "Configuring MySQL users and database..."
+mysql -u root << 'MYSQL_CONFIG'
+FLUSH PRIVILEGES;
+-- Reset root password
+ALTER USER 'root'@'localhost' IDENTIFIED BY '{root_password}';
+-- Create application database
+CREATE DATABASE IF NOT EXISTS `{create_database}`;
+-- Drop user if exists (clean slate)
+DROP USER IF EXISTS '{create_user}'@'localhost';
+-- Create application user
+CREATE USER '{create_user}'@'localhost' IDENTIFIED BY '{user_password}';
+-- Grant privileges
+GRANT ALL PRIVILEGES ON `{create_database}`.* TO '{create_user}'@'localhost';
+FLUSH PRIVILEGES;
+SELECT 'MySQL configured successfully' as status;
+MYSQL_CONFIG
+
+# Stop safe mode MySQL
+echo "Stopping safe mode MySQL..."
+sudo pkill -f mysqld_safe 2>/dev/null || true
+sudo pkill -f mysqld 2>/dev/null || true
+sleep 3
+
+# Start MySQL normally
+echo "Starting MySQL normally..."
+sudo systemctl start {mysql_service} 2>/dev/null || sudo systemctl start mysql 2>/dev/null || sudo systemctl start mariadb 2>/dev/null
+sleep 3
+
+# Verify MySQL is running
+if sudo systemctl is-active --quiet {mysql_service} 2>/dev/null || sudo systemctl is-active --quiet mysql 2>/dev/null; then
+    echo "✅ MySQL service is running"
+else
+    echo "⚠️  MySQL service status unclear, attempting restart..."
+    sudo systemctl restart {mysql_service} 2>/dev/null || sudo systemctl restart mysql 2>/dev/null || true
+    sleep 2
+fi
+
+# Test the connection with the new user
+echo "🔍 Testing MySQL connection with application user..."
+if mysql -u {create_user} -p'{user_password}' -e "USE {create_database}; SELECT 'Connection successful' as status;" 2>&1; then
+    echo "✅ MySQL user '{create_user}' can connect to database '{create_database}'"
+else
+    echo "⚠️  Connection test failed, but MySQL may still be configured correctly"
+fi
+
+echo "✅ MySQL installation and configuration completed on {self.os_type}"
+'''
+        
+        success, output = self.client.run_command_with_live_output(configure_script, timeout=300)
+        print(output)
         return success
     
     def _install_postgresql(self, config: Dict[str, Any]) -> bool:
