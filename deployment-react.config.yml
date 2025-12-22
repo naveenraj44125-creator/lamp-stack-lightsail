@@ -6,7 +6,7 @@ aws:
   
 # Lightsail Instance Configuration
 lightsail:
-  instance_name: react-dashboard-v14-20251221
+  instance_name: react-dashboard-v15-20251221
   static_ip: ""  # Will be fetched automatically from AWS
   
   # Instance size configuration (optional)
