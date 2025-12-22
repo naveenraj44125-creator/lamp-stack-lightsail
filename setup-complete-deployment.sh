@@ -258,7 +258,7 @@ application:
   type: ${app_type}
   
   package_files:
-    - "example-${app_type}-app/"
+    - "./"
   
   package_fallback: true
   
@@ -709,6 +709,46 @@ create_github_workflow() {
     
     # Create workflow that calls the reusable workflow from the source repo
     # This ensures new repos always use the latest workflow code
+    
+    # Determine file patterns based on app type
+    local file_patterns=""
+    case $app_type in
+        "lamp")
+            file_patterns="      - '**/*.php'
+      - '**/*.html'
+      - '**/*.css'
+      - '**/*.js'"
+            ;;
+        "nodejs")
+            file_patterns="      - '**/*.js'
+      - '**/*.json'
+      - '**/*.html'
+      - '**/*.css'"
+            ;;
+        "python")
+            file_patterns="      - '**/*.py'
+      - 'requirements.txt'
+      - '**/*.html'
+      - '**/*.css'"
+            ;;
+        "react")
+            file_patterns="      - 'src/**'
+      - 'public/**'
+      - 'package.json'"
+            ;;
+        "docker")
+            file_patterns="      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '**/*.php'
+      - '**/*.js'"
+            ;;
+        "nginx")
+            file_patterns="      - '**/*.html'
+      - '**/*.css'
+      - '**/*.js'"
+            ;;
+    esac
+    
     cat > ".github/workflows/deploy-${app_type}.yml" << EOF
 name: ${app_name} Deployment
 
@@ -716,13 +756,13 @@ on:
   push:
     branches: [ main, master ]
     paths:
-      - 'example-${app_type}-app/**'
+${file_patterns}
       - 'deployment-${app_type}.config.yml'
       - '.github/workflows/deploy-${app_type}.yml'
   pull_request:
     branches: [ main, master ]
     paths:
-      - 'example-${app_type}-app/**'
+${file_patterns}
       - 'deployment-${app_type}.config.yml'
   workflow_dispatch:
     inputs:
@@ -832,14 +872,12 @@ create_example_app() {
     local app_type="$1"
     local app_name="$2"
     
-    echo -e "${BLUE}Creating example ${app_type} application...${NC}"
-    
-    mkdir -p "example-${app_type}-app"
+    echo -e "${BLUE}Creating example ${app_type} application in root directory...${NC}"
     
     case $app_type in
         "lamp")
             # Create PHP application similar to existing examples
-            cat > "example-${app_type}-app/index.php" << 'PHP_EOF'
+            cat > "index.php" << 'PHP_EOF'
 <?php
 header('Content-Type: text/html; charset=UTF-8');
 ?>
@@ -901,8 +939,8 @@ header('Content-Type: text/html; charset=UTF-8');
 PHP_EOF
 
             # Create API test endpoint
-            mkdir -p "example-${app_type}-app/api"
-            cat > "example-${app_type}-app/api/test.php" << 'PHP_EOF'
+            mkdir -p "api"
+            cat > "api/test.php" << 'PHP_EOF'
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -921,7 +959,7 @@ PHP_EOF
         "nodejs")
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
-            cat > "example-${app_type}-app/package.json" << EOF
+            cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
@@ -945,7 +983,7 @@ PHP_EOF
 }
 EOF
             
-            cat > "example-${app_type}-app/app.js" << EOF
+            cat > "app.js" << EOF
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -1030,13 +1068,13 @@ EOF
         
         "python")
             # Create Python Flask application similar to existing examples
-            cat > "example-${app_type}-app/requirements.txt" << 'REQ_EOF'
+            cat > "requirements.txt" << 'REQ_EOF'
 Flask==3.0.0
 gunicorn==21.2.0
 flask-cors==4.0.0
 REQ_EOF
             
-            cat > "example-${app_type}-app/app.py" << EOF
+            cat > "app.py" << EOF
 from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
 from datetime import datetime
@@ -1130,7 +1168,7 @@ EOF
         "react")
             # Create React application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
-            cat > "example-${app_type}-app/package.json" << EOF
+            cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
@@ -1167,10 +1205,10 @@ EOF
 }
 EOF
             
-            mkdir -p "example-${app_type}-app/public"
-            mkdir -p "example-${app_type}-app/src"
+            mkdir -p "public"
+            mkdir -p "src"
             
-            cat > "example-${app_type}-app/public/index.html" << EOF
+            cat > "public/index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1187,7 +1225,7 @@ EOF
 </html>
 EOF
             
-            cat > "example-${app_type}-app/src/index.js" << 'JS_EOF'
+            cat > "src/index.js" << 'JS_EOF'
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -1201,7 +1239,7 @@ root.render(
 );
 JS_EOF
             
-            cat > "example-${app_type}-app/src/App.js" << EOF
+            cat > "src/App.js" << EOF
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
@@ -1251,7 +1289,7 @@ function App() {
 export default App;
 EOF
 
-            cat > "example-${app_type}-app/src/App.css" << 'CSS_EOF'
+            cat > "src/App.css" << 'CSS_EOF'
 .App {
   text-align: center;
 }
@@ -1300,7 +1338,7 @@ EOF
 }
 CSS_EOF
 
-            cat > "example-${app_type}-app/src/index.css" << 'CSS_EOF'
+            cat > "src/index.css" << 'CSS_EOF'
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -1319,7 +1357,7 @@ CSS_EOF
         
         "nginx")
             # Create static site similar to existing examples
-            cat > "example-${app_type}-app/index.html" << EOF
+            cat > "index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1389,7 +1427,7 @@ EOF
         
         "docker")
             # Create Docker application similar to existing examples
-            cat > "example-${app_type}-app/docker-compose.yml" << EOF
+            cat > "docker-compose.yml" << EOF
 version: '3.8'
 
 services:
@@ -1420,7 +1458,7 @@ networks:
     name: $(to_lowercase "${app_name}")_network
 EOF
             
-            cat > "example-${app_type}-app/Dockerfile" << 'DOCKER_EOF'
+            cat > "Dockerfile" << 'DOCKER_EOF'
 FROM nginx:alpine
 
 # Copy custom nginx config
@@ -1439,7 +1477,7 @@ EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 DOCKER_EOF
 
-            cat > "example-${app_type}-app/Dockerfile.app" << 'DOCKER_EOF'
+            cat > "Dockerfile.app" << 'DOCKER_EOF'
 FROM node:18-alpine
 
 WORKDIR /app
@@ -1468,8 +1506,8 @@ EXPOSE 3000
 CMD ["node", "index.js"]
 DOCKER_EOF
 
-            mkdir -p "example-${app_type}-app/html"
-            cat > "example-${app_type}-app/html/index.html" << EOF
+            mkdir -p "html"
+            cat > "html/index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1522,7 +1560,7 @@ DOCKER_EOF
 </html>
 EOF
 
-            cat > "example-${app_type}-app/nginx.conf" << 'NGINX_EOF'
+            cat > "nginx.conf" << 'NGINX_EOF'
 events {
     worker_connections 1024;
 }
@@ -1563,9 +1601,9 @@ http {
 }
 NGINX_EOF
 
-            mkdir -p "example-${app_type}-app/app"
+            mkdir -p "app"
             local app_name_lower=$(to_lowercase "${app_name}")
-            cat > "example-${app_type}-app/package.json" << EOF
+            cat > "package.json" << EOF
 {
   "name": "${app_name_lower}-backend",
   "version": "1.0.0",
@@ -1580,7 +1618,7 @@ NGINX_EOF
 }
 EOF
 
-            cat > "example-${app_type}-app/app/index.js" << EOF
+            cat > "app/index.js" << EOF
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1600,7 +1638,7 @@ EOF
             ;;
     esac
     
-    echo -e "${GREEN}✓ Created example-${app_type}-app/${NC}"
+    echo -e "${GREEN}✓ Created ${app_type} application files in root directory${NC}"
 }
 
 # Function to get user input with default value
@@ -1880,7 +1918,7 @@ commit_and_push() {
 
 - Added deployment-${app_type}.config.yml
 - Added .github/workflows/deploy-${app_type}.yml  
-- Added example-${app_type}-app/ with sample application
+- Added ${app_type} application files in root directory
 - Configured for AWS Lightsail deployment via GitHub Actions
 
 Generated by setup-complete-deployment.sh"
@@ -1973,7 +2011,7 @@ show_final_instructions() {
     echo "📁 Files created:"
     echo "  - deployment-${app_type}.config.yml"
     echo "  - .github/workflows/deploy-${app_type}.yml"
-    echo "  - example-${app_type}-app/ (sample application)"
+    echo "  - ${app_type} application files in root directory"
     echo ""
     echo "🚀 Next steps:"
     echo "  1. Review and customize the configuration files"
@@ -2417,7 +2455,7 @@ EXAMPLES:
 WHAT IT CREATES:
     - deployment-{type}.config.yml    Deployment configuration
     - .github/workflows/deploy-{type}.yml    GitHub Actions workflow
-    - example-{type}-app/             Sample application
+    - Application files in root directory
     - AWS IAM role for GitHub OIDC    (if needed)
     - GitHub repository variables     (AWS_ROLE_ARN)
 
