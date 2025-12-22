@@ -1946,8 +1946,8 @@ validate_configuration() {
         fi
     done
     
-    # Check workflow uses reusable workflow
-    if grep -q "uses: ./.github/workflows/deploy-generic-reusable.yml" "$workflow_file"; then
+    # Check workflow uses reusable workflow (either local or cross-repo)
+    if grep -q "uses:.*deploy-generic-reusable.yml" "$workflow_file"; then
         echo -e "${GREEN}✓ Workflow uses reusable deployment${NC}"
     else
         echo -e "${RED}❌ Workflow doesn't use reusable deployment${NC}"
