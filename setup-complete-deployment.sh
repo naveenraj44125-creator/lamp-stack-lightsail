@@ -182,89 +182,18 @@ EOF
     return 0
 }
 
-# Function to setup workflow files (copy from existing repository)
+# Function to setup workflow files
+# NOTE: We no longer copy workflow files to new repos. Instead, the app-specific
+# workflow calls the reusable workflow from the source repo directly. This ensures
+# new repos always use the latest workflow code without needing manual updates.
 setup_workflow_files() {
-    echo -e "${BLUE}Setting up workflow files...${NC}"
+    echo -e "${BLUE}Setting up workflow directory...${NC}"
     
     mkdir -p .github/workflows
-    mkdir -p workflows/app_configurators
     
-    # Check if we already have the reusable workflow
-    if [[ ! -f ".github/workflows/deploy-generic-reusable.yml" ]]; then
-        echo -e "${BLUE}Copying reusable workflow from source repository...${NC}"
-        
-        # Download the reusable workflow
-        curl -s -o ".github/workflows/deploy-generic-reusable.yml" \
-            "https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/.github/workflows/deploy-generic-reusable.yml"
-        
-        if [[ -f ".github/workflows/deploy-generic-reusable.yml" ]]; then
-            echo -e "${GREEN}✓ Reusable workflow downloaded${NC}"
-        else
-            echo -e "${RED}❌ Failed to download reusable workflow${NC}"
-            return 1
-        fi
-    else
-        echo -e "${GREEN}✓ Reusable workflow already exists${NC}"
-    fi
-    
-    # Download Python workflow modules
-    echo -e "${BLUE}Downloading workflow Python modules...${NC}"
-    
-    # Main workflow modules
-    local workflow_files=(
-        "config_loader.py"
-        "dependency_manager.py"
-        "deploy-post-steps-generic.py"
-        "deploy-pre-steps-generic.py"
-        "deployment_monitor.py"
-        "lightsail_bucket.py"
-        "lightsail_common.py"
-        "lightsail_rds.py"
-        "os_detector.py"
-        "setup_instance.py"
-        "view_command_log.py"
-    )
-    
-    for file in "${workflow_files[@]}"; do
-        if [[ ! -f "workflows/$file" ]]; then
-            curl -s -o "workflows/$file" \
-                "https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/workflows/$file"
-            if [[ -f "workflows/$file" ]]; then
-                echo -e "${GREEN}✓ Downloaded workflows/$file${NC}"
-            else
-                echo -e "${RED}❌ Failed to download workflows/$file${NC}"
-            fi
-        fi
-    done
-    
-    # App configurator modules
-    local configurator_files=(
-        "__init__.py"
-        "apache_configurator.py"
-        "base_configurator.py"
-        "configurator_factory.py"
-        "database_configurator.py"
-        "docker_configurator.py"
-        "nginx_configurator.py"
-        "nodejs_configurator.py"
-        "php_configurator.py"
-        "python_configurator.py"
-        "README.md"
-    )
-    
-    for file in "${configurator_files[@]}"; do
-        if [[ ! -f "workflows/app_configurators/$file" ]]; then
-            curl -s -o "workflows/app_configurators/$file" \
-                "https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/workflows/app_configurators/$file"
-            if [[ -f "workflows/app_configurators/$file" ]]; then
-                echo -e "${GREEN}✓ Downloaded workflows/app_configurators/$file${NC}"
-            else
-                echo -e "${RED}❌ Failed to download workflows/app_configurators/$file${NC}"
-            fi
-        fi
-    done
-    
-    echo -e "${GREEN}✓ Workflow files setup complete${NC}"
+    echo -e "${GREEN}✓ Workflow directory created${NC}"
+    echo -e "${BLUE}ℹ️  Using cross-repo workflow from naveenraj44125-creator/lamp-stack-lightsail${NC}"
+    echo -e "${BLUE}ℹ️  No local workflow files needed - always uses latest from source repo${NC}"
     return 0
 }
 
@@ -778,7 +707,8 @@ create_github_workflow() {
     
     mkdir -p .github/workflows
     
-    # Create workflow that matches our existing examples
+    # Create workflow that calls the reusable workflow from the source repo
+    # This ensures new repos always use the latest workflow code
     cat > ".github/workflows/deploy-${app_type}.yml" << EOF
 name: ${app_name} Deployment
 
@@ -812,7 +742,8 @@ permissions:
 jobs:
   deploy:
     name: Deploy ${app_name}
-    uses: ./.github/workflows/deploy-generic-reusable.yml
+    # Use reusable workflow from source repo - always gets latest fixes
+    uses: naveenraj44125-creator/lamp-stack-lightsail/.github/workflows/deploy-generic-reusable.yml@main
     with:
       config_file: 'deployment-${app_type}.config.yml'
       aws_region: '${aws_region}'
