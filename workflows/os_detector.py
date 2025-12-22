@@ -153,6 +153,7 @@ class OSDetector:
                 'mysql_client': {'packages': ['mysql-client'], 'service': None},
                 'postgresql_server': {'packages': ['postgresql', 'postgresql-contrib'], 'service': 'postgresql'},
                 'postgresql_client': {'packages': ['postgresql-client'], 'service': None},
+                'mongodb': {'packages': ['gnupg', 'curl'], 'service': 'mongod'},  # MongoDB installed via official repo
                 'php': {'packages': ['php', 'php-fpm'], 'service': 'php8.1-fpm'},
                 'python': {'packages': ['python3', 'python3-pip', 'python3-venv'], 'service': None},
                 'nodejs': {'packages': [], 'service': None},  # Installed via NodeSource
@@ -171,6 +172,7 @@ class OSDetector:
                 'mysql_client': {'packages': ['mysql'], 'service': None},
                 'postgresql_server': {'packages': ['postgresql-server', 'postgresql-contrib'], 'service': 'postgresql'},
                 'postgresql_client': {'packages': ['postgresql'], 'service': None},
+                'mongodb': {'packages': [], 'service': 'mongod'},  # MongoDB installed via official repo
                 'php': {'packages': ['php', 'php-fpm'], 'service': 'php-fpm'},
                 'python': {'packages': ['python3', 'python3-pip'], 'service': None},
                 'nodejs': {'packages': [], 'service': None},  # Installed via NodeSource

@@ -281,6 +281,14 @@ EOF
     DB_RDS_NAME: ${db_rds_name:-${app_type}-${db_type}-db}
 EOF
         fi
+        # MongoDB-specific connection string
+        if [[ "$db_type" == "mongodb" ]]; then
+            cat >> "deployment-${app_type}.config.yml" << EOF
+    # MongoDB specific
+    MONGODB_URI: mongodb://app_user:CHANGE_ME_secure_password_123@localhost:27017/${db_name:-app_db}
+    MONGODB_PORT: "27017"
+EOF
+        fi
     fi
 
     # Add type-specific environment variables
@@ -391,6 +399,24 @@ EOF
         DB_CONNECTION_TIMEOUT: "30"
 EOF
     fi
+
+    # MongoDB configuration (local only - no RDS support)
+    cat >> "deployment-${app_type}.config.yml" << EOF
+  
+  mongodb:
+    enabled: $([ "$db_type" = "mongodb" ] && echo "true" || echo "false")
+    external: false
+    config:
+      version: "7.0"
+      database: "${db_name:-app_db}"
+      auth_enabled: true
+      admin_user: "admin"
+      admin_password: "CHANGE_ME_admin_password_123"
+      app_user: "app_user"
+      app_password: "CHANGE_ME_app_password_123"
+      bind_ip: "127.0.0.1"
+      port: 27017
+EOF
 
     case $app_type in
         "lamp")
@@ -2302,9 +2328,14 @@ main() {
         # Use environment variables
         DB_TYPE="$DATABASE_TYPE"
         # Validate database type
-        if [[ ! "$DB_TYPE" =~ ^(mysql|postgresql|none)$ ]]; then
-            echo -e "${RED}❌ Invalid DATABASE_TYPE: $DB_TYPE. Must be one of: mysql, postgresql, none${NC}"
+        if [[ ! "$DB_TYPE" =~ ^(mysql|postgresql|mongodb|none)$ ]]; then
+            echo -e "${RED}❌ Invalid DATABASE_TYPE: $DB_TYPE. Must be one of: mysql, postgresql, mongodb, none${NC}"
             exit 1
+        fi
+        # MongoDB only supports local installation (no RDS)
+        if [[ "$DB_TYPE" == "mongodb" && "$DB_EXTERNAL" == "true" ]]; then
+            echo -e "${YELLOW}⚠ MongoDB does not support external RDS. Setting to local installation.${NC}"
+            DB_EXTERNAL="false"
         fi
         echo -e "${GREEN}✓ Using DATABASE_TYPE: $DB_TYPE${NC}"
         
@@ -2321,13 +2352,19 @@ main() {
         DB_NAME="app_db"
         
         # Database configuration (available for all application types)
-        DB_TYPES=("mysql" "postgresql" "none")
-        DB_TYPE=$(select_option "Choose database type:" "3" "${DB_TYPES[@]}")
+        DB_TYPES=("mysql" "postgresql" "mongodb" "none")
+        DB_TYPE=$(select_option "Choose database type:" "4" "${DB_TYPES[@]}")
         
         if [[ "$DB_TYPE" != "none" ]]; then
-            DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
-            if [[ "$DB_EXTERNAL" == "true" ]]; then
-                DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
+            # MongoDB only supports local installation
+            if [[ "$DB_TYPE" == "mongodb" ]]; then
+                echo -e "${YELLOW}ℹ MongoDB will be installed locally on the instance${NC}"
+                DB_EXTERNAL="false"
+            else
+                DB_EXTERNAL=$(get_yes_no "Use external RDS database?" "false")
+                if [[ "$DB_EXTERNAL" == "true" ]]; then
+                    DB_RDS_NAME=$(get_input "Enter RDS instance name" "${APP_TYPE}-${DB_TYPE}-db")
+                fi
             fi
             DB_NAME=$(get_input "Enter database name" "app_db")
         fi

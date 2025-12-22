@@ -133,7 +133,7 @@ echo "✅ Package cache updated"
         
         # Install dependencies in order of priority
         dependency_order = [
-            'git', 'firewall', 'apache', 'nginx', 'mysql', 'postgresql', 
+            'git', 'firewall', 'apache', 'nginx', 'mysql', 'postgresql', 'mongodb',
             'php', 'python', 'nodejs', 'redis', 'memcached', 'docker',
             'ssl_certificates', 'monitoring'
         ]
@@ -226,12 +226,14 @@ echo "✅ Common packages installed"
         # Get OS-specific service names
         apache_service = self.os_packages.get('apache', {}).get('service', 'apache2')
         redis_service = self.os_packages.get('redis', {}).get('service', 'redis-server')
+        mongo_service = self.os_packages.get('mongodb', {}).get('service', 'mongod')
         
         check_commands = {
             'apache': f'{self.svc_commands["is_active"]} {apache_service}',
             'nginx': f'{self.svc_commands["is_active"]} nginx',
             'mysql': 'command -v mysql >/dev/null 2>&1',
             'postgresql': 'command -v psql >/dev/null 2>&1',
+            'mongodb': f'{self.svc_commands["is_active"]} {mongo_service} || command -v mongod >/dev/null 2>&1',
             'php': 'command -v php >/dev/null 2>&1',
             'python': 'command -v python3 >/dev/null 2>&1',
             'nodejs': 'command -v node >/dev/null 2>&1',
@@ -350,6 +352,8 @@ echo "✅ Proceeding with installation"
             return self._install_mysql(dep_config)
         elif dep_name == 'postgresql':
             return self._install_postgresql(dep_config)
+        elif dep_name == 'mongodb':
+            return self._install_mongodb(dep_config)
         elif dep_name == 'php':
             return self._install_php(dep_config)
         elif dep_name == 'python':
@@ -668,6 +672,135 @@ echo "✅ PostgreSQL installation completed on {self.os_type}"
 '''
         
         success, output = self.client.run_command(script, timeout=300)
+        return success
+    
+    def _install_mongodb(self, config: Dict[str, Any]) -> bool:
+        """Install and configure MongoDB database (local only) - OS-agnostic
+        
+        MongoDB is installed from the official MongoDB repository for the latest stable version.
+        Note: MongoDB does not support external RDS - only local installation is available.
+        """
+        mongo_config = config.get('config', {})
+        version = mongo_config.get('version', '7.0')
+        create_database = mongo_config.get('create_database', 'app_db')
+        create_user = mongo_config.get('create_user', 'app_user')
+        user_password = mongo_config.get('user_password', 'CHANGE_ME_secure_password_123')
+        
+        # Get OS-specific service name
+        mongo_service = self.os_packages.get('mongodb', {}).get('service', 'mongod')
+        
+        print(f"📦 Installing local MongoDB {version} database server on {self.os_type}...")
+        print("ℹ️  Note: MongoDB only supports local installation (no external RDS option)")
+        
+        if self.os_info['package_manager'] == 'apt':
+            # Ubuntu/Debian installation
+            script = f'''
+set -e
+echo "Installing MongoDB {version} on Ubuntu/Debian..."
+
+# Install prerequisites
+sudo apt-get install -y gnupg curl
+
+# Import MongoDB public GPG key
+curl -fsSL https://www.mongodb.org/static/pgp/server-{version}.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-{version}.gpg --dearmor
+
+# Add MongoDB repository
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-{version}.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/{version} multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-{version}.list
+
+# Update package list
+sudo apt-get update
+
+# Install MongoDB
+sudo apt-get install -y mongodb-org
+
+# Enable MongoDB to start on boot
+sudo systemctl enable {mongo_service}
+
+# Start MongoDB
+sudo systemctl start {mongo_service}
+
+# Wait for MongoDB to be ready
+echo "Waiting for MongoDB to start..."
+sleep 5
+
+# Verify MongoDB is running
+if sudo systemctl is-active --quiet {mongo_service}; then
+    echo "✅ MongoDB service is running"
+else
+    echo "⚠️  MongoDB service status unclear, attempting restart..."
+    sudo systemctl restart {mongo_service}
+    sleep 3
+fi
+
+# Create application database and user
+echo "Creating database and user..."
+mongosh --eval '
+use {create_database}
+db.createUser({{
+    user: "{create_user}",
+    pwd: "{user_password}",
+    roles: [{{ role: "readWrite", db: "{create_database}" }}]
+}})
+print("✅ Database and user created successfully")
+' || echo "⚠️  User may already exist or MongoDB auth not enabled"
+
+echo "✅ MongoDB {version} installation completed on Ubuntu/Debian"
+'''
+        else:
+            # RHEL/CentOS/Amazon Linux installation
+            script = f'''
+set -e
+echo "Installing MongoDB {version} on RHEL/CentOS/Amazon Linux..."
+
+# Create MongoDB repo file
+cat << 'REPO' | sudo tee /etc/yum.repos.d/mongodb-org-{version}.repo
+[mongodb-org-{version}]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/amazon/2023/mongodb-org/{version}/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-{version}.asc
+REPO
+
+# Install MongoDB
+sudo {self.os_info['package_manager']} install -y mongodb-org
+
+# Enable MongoDB to start on boot
+sudo systemctl enable {mongo_service}
+
+# Start MongoDB
+sudo systemctl start {mongo_service}
+
+# Wait for MongoDB to be ready
+echo "Waiting for MongoDB to start..."
+sleep 5
+
+# Verify MongoDB is running
+if sudo systemctl is-active --quiet {mongo_service}; then
+    echo "✅ MongoDB service is running"
+else
+    echo "⚠️  MongoDB service status unclear, attempting restart..."
+    sudo systemctl restart {mongo_service}
+    sleep 3
+fi
+
+# Create application database and user
+echo "Creating database and user..."
+mongosh --eval '
+use {create_database}
+db.createUser({{
+    user: "{create_user}",
+    pwd: "{user_password}",
+    roles: [{{ role: "readWrite", db: "{create_database}" }}]
+}})
+print("✅ Database and user created successfully")
+' || echo "⚠️  User may already exist or MongoDB auth not enabled"
+
+echo "✅ MongoDB {version} installation completed on RHEL/CentOS/Amazon Linux"
+'''
+        
+        success, output = self.client.run_command_with_live_output(script, timeout=420)
+        print(output)
         return success
     
     def _install_php(self, config: Dict[str, Any]) -> bool:
