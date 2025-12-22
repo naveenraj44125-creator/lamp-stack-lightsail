@@ -873,10 +873,22 @@ create_example_app() {
     local app_name="$2"
     
     echo -e "${BLUE}Creating example ${app_type} application in root directory...${NC}"
+    echo -e "${YELLOW}Note: Existing files will NOT be overwritten${NC}"
+    
+    # Helper function to create file only if it doesn't exist
+    create_file_if_not_exists() {
+        local filepath="$1"
+        if [[ -f "$filepath" ]]; then
+            echo -e "${YELLOW}  ⚠ Skipping $filepath (already exists)${NC}"
+            return 1
+        fi
+        return 0
+    }
     
     case $app_type in
         "lamp")
             # Create PHP application similar to existing examples
+            if create_file_if_not_exists "index.php"; then
             cat > "index.php" << 'PHP_EOF'
 <?php
 header('Content-Type: text/html; charset=UTF-8');
@@ -937,9 +949,11 @@ header('Content-Type: text/html; charset=UTF-8');
 </body>
 </html>
 PHP_EOF
+            fi
 
             # Create API test endpoint
             mkdir -p "api"
+            if create_file_if_not_exists "api/test.php"; then
             cat > "api/test.php" << 'PHP_EOF'
 <?php
 header('Content-Type: application/json');
@@ -954,11 +968,13 @@ echo json_encode([
 ]);
 ?>
 PHP_EOF
+            fi
             ;;
         
         "nodejs")
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
+            if create_file_if_not_exists "package.json"; then
             cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
@@ -982,7 +998,9 @@ PHP_EOF
   }
 }
 EOF
+            fi
             
+            if create_file_if_not_exists "app.js"; then
             cat > "app.js" << EOF
 const express = require('express');
 const cors = require('cors');
@@ -1064,16 +1082,20 @@ app.listen(PORT, () => {
     console.log(\`📍 Environment: \${process.env.NODE_ENV || 'development'}\`);
 });
 EOF
+            fi
             ;;
         
         "python")
             # Create Python Flask application similar to existing examples
+            if create_file_if_not_exists "requirements.txt"; then
             cat > "requirements.txt" << 'REQ_EOF'
 Flask==3.0.0
 gunicorn==21.2.0
 flask-cors==4.0.0
 REQ_EOF
+            fi
             
+            if create_file_if_not_exists "app.py"; then
             cat > "app.py" << EOF
 from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
@@ -1163,11 +1185,13 @@ if __name__ == '__main__':
     debug = os.environ.get('FLASK_ENV') == 'development'
     app.run(host='0.0.0.0', port=port, debug=debug)
 EOF
+            fi
             ;;
         
         "react")
             # Create React application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
+            if create_file_if_not_exists "package.json"; then
             cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
@@ -1204,10 +1228,12 @@ EOF
   }
 }
 EOF
+            fi
             
             mkdir -p "public"
             mkdir -p "src"
             
+            if create_file_if_not_exists "public/index.html"; then
             cat > "public/index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -1224,7 +1250,9 @@ EOF
 </body>
 </html>
 EOF
+            fi
             
+            if create_file_if_not_exists "src/index.js"; then
             cat > "src/index.js" << 'JS_EOF'
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -1238,7 +1266,9 @@ root.render(
   </React.StrictMode>
 );
 JS_EOF
+            fi
             
+            if create_file_if_not_exists "src/App.js"; then
             cat > "src/App.js" << EOF
 import React, { useState, useEffect } from 'react';
 import './App.css';
@@ -1288,7 +1318,9 @@ function App() {
 
 export default App;
 EOF
+            fi
 
+            if create_file_if_not_exists "src/App.css"; then
             cat > "src/App.css" << 'CSS_EOF'
 .App {
   text-align: center;
@@ -1337,7 +1369,9 @@ EOF
   text-align: left;
 }
 CSS_EOF
+            fi
 
+            if create_file_if_not_exists "src/index.css"; then
             cat > "src/index.css" << 'CSS_EOF'
 body {
   margin: 0;
@@ -1353,10 +1387,12 @@ code {
     monospace;
 }
 CSS_EOF
+            fi
             ;;
         
         "nginx")
             # Create static site similar to existing examples
+            if create_file_if_not_exists "index.html"; then
             cat > "index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -1423,10 +1459,12 @@ CSS_EOF
 </body>
 </html>
 EOF
+            fi
             ;;
         
         "docker")
             # Create Docker application similar to existing examples
+            if create_file_if_not_exists "docker-compose.yml"; then
             cat > "docker-compose.yml" << EOF
 version: '3.8'
 
@@ -1457,7 +1495,9 @@ networks:
   default:
     name: $(to_lowercase "${app_name}")_network
 EOF
+            fi
             
+            if create_file_if_not_exists "Dockerfile"; then
             cat > "Dockerfile" << 'DOCKER_EOF'
 FROM nginx:alpine
 
@@ -1476,7 +1516,9 @@ EXPOSE 80
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
 DOCKER_EOF
+            fi
 
+            if create_file_if_not_exists "Dockerfile.app"; then
             cat > "Dockerfile.app" << 'DOCKER_EOF'
 FROM node:18-alpine
 
@@ -1505,8 +1547,10 @@ EXPOSE 3000
 # Start application
 CMD ["node", "index.js"]
 DOCKER_EOF
+            fi
 
             mkdir -p "html"
+            if create_file_if_not_exists "html/index.html"; then
             cat > "html/index.html" << EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -1559,7 +1603,9 @@ DOCKER_EOF
 </body>
 </html>
 EOF
+            fi
 
+            if create_file_if_not_exists "nginx.conf"; then
             cat > "nginx.conf" << 'NGINX_EOF'
 events {
     worker_connections 1024;
@@ -1600,9 +1646,11 @@ http {
     }
 }
 NGINX_EOF
+            fi
 
             mkdir -p "app"
             local app_name_lower=$(to_lowercase "${app_name}")
+            if create_file_if_not_exists "package.json"; then
             cat > "package.json" << EOF
 {
   "name": "${app_name_lower}-backend",
@@ -1617,7 +1665,9 @@ NGINX_EOF
   }
 }
 EOF
+            fi
 
+            if create_file_if_not_exists "app/index.js"; then
             cat > "app/index.js" << EOF
 const express = require('express');
 const app = express();
@@ -1635,6 +1685,7 @@ app.listen(PORT, () => {
     console.log(\`🚀 ${app_name} backend service running on port \${PORT}\`);
 });
 EOF
+            fi
             ;;
     esac
     
