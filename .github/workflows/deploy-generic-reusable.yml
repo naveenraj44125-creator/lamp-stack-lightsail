@@ -59,8 +59,21 @@ jobs:
       verification_port: ${{ steps.config.outputs.verification_port }}
       verification_path: ${{ steps.config.outputs.verification_path }}
     steps:
-    - name: Checkout code
+    - name: Checkout calling repo (app code and config)
       uses: actions/checkout@v4
+
+    - name: Checkout deployment scripts from source repo
+      uses: actions/checkout@v4
+      with:
+        repository: naveenraj44125-creator/lamp-stack-lightsail
+        path: _deployment_scripts
+
+    - name: Setup deployment scripts
+      run: |
+        # Copy workflows directory from source repo
+        cp -r _deployment_scripts/workflows ./workflows
+        rm -rf _deployment_scripts
+        echo "✅ Deployment scripts copied to working directory"
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -405,6 +418,18 @@ jobs:
     steps:
     - name: Checkout application code
       uses: actions/checkout@v4
+
+    - name: Checkout deployment scripts from source repo
+      uses: actions/checkout@v4
+      with:
+        repository: naveenraj44125-creator/lamp-stack-lightsail
+        path: _deployment_scripts
+
+    - name: Setup deployment scripts
+      run: |
+        cp -r _deployment_scripts/workflows ./workflows
+        rm -rf _deployment_scripts
+        echo "✅ Deployment scripts copied to working directory"
     
     - name: Verify deployment scripts
       run: |
@@ -675,6 +700,18 @@ jobs:
     steps:
     - name: Checkout application code
       uses: actions/checkout@v4
+
+    - name: Checkout deployment scripts from source repo
+      uses: actions/checkout@v4
+      with:
+        repository: naveenraj44125-creator/lamp-stack-lightsail
+        path: _deployment_scripts
+
+    - name: Setup deployment scripts
+      run: |
+        cp -r _deployment_scripts/workflows ./workflows
+        rm -rf _deployment_scripts
+        echo "✅ Deployment scripts copied to working directory"
     
     - name: Verify deployment scripts
       run: |
@@ -738,7 +775,7 @@ jobs:
       with:
         role-to-assume: ${{ vars.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
         role-duration-seconds: 3600  # 1 hour session
-        aws-region: ${{ needs.load-config.outputs.aws_region }}
+        aws-region: ${{ needs.load-config.outputs.aws_region || 'us-east-1' }}
 
     - name: Setup Python environment
       run: |
