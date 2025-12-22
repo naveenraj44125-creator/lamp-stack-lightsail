@@ -172,9 +172,18 @@ MYSQL_CONFIG
 
 # Stop safe mode MySQL
 echo "Stopping safe mode MySQL..."
-sudo pkill -f mysqld_safe 2>/dev/null || true
-sudo pkill -f mysqld 2>/dev/null || true
+sudo pkill -9 -f mysqld_safe 2>/dev/null || true
+sleep 1
+sudo pkill -9 -f mysqld 2>/dev/null || true
 sleep 3
+
+# Verify all MySQL processes are stopped
+if pgrep -f mysqld > /dev/null; then
+    echo "⚠️  MySQL processes still running, force killing..."
+    sudo killall -9 mysqld 2>/dev/null || true
+    sudo killall -9 mysqld_safe 2>/dev/null || true
+    sleep 3
+fi
 
 # Start MySQL normally
 echo "Starting MySQL normally..."
