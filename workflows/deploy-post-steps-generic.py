@@ -341,17 +341,26 @@ done
             return False
         
         # Build directory search logic based on config
+        # Only look for wrapper directories (like example-*-app), not subdirectories of the app
         dir_checks = ""
         if expected_dirs:
-            for dir_name in expected_dirs:
-                dir_checks += f'''
+            # Filter out common app subdirectories that shouldn't be treated as wrapper directories
+            app_subdirs = ['config', 'src', 'lib', 'routes', 'middleware', 'database', 'public', 'views', 'models', 'controllers', 'utils', 'helpers', 'assets', 'static', 'templates', 'tests', 'test', 'spec', 'node_modules', 'vendor', 'dist', 'build']
+            wrapper_dirs = [d for d in expected_dirs if d not in app_subdirs and not d.startswith('.')]
+            
+            if wrapper_dirs:
+                for dir_name in wrapper_dirs:
+                    dir_checks += f'''
 if [ -d "./{dir_name}" ]; then
     EXTRACTED_DIR="./{dir_name}"
-    echo "✅ Found configured directory: {dir_name}"
+    echo "✅ Found configured wrapper directory: {dir_name}"
 elif'''
-            dir_checks += ''' [ -z "$EXTRACTED_DIR" ]; then
+                dir_checks += ''' [ -z "$EXTRACTED_DIR" ]; then
     EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)
 fi'''
+            else:
+                # No wrapper directories found in config, look for example-*-app pattern
+                dir_checks = '''EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)'''
         else:
             dir_checks = '''EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "example-*-app" | head -n 1)'''
         
@@ -400,20 +409,32 @@ if [ -n "$EXTRACTED_DIR" ]; then
         sudo cp -r "$EXTRACTED_DIR"/* {target_dir}/ || true
     fi
 else
-    echo "⚠️  No application directory found (example-*-app), checking for direct files"
+    echo "⚠️  No wrapper directory found (example-*-app), checking for direct files"
     echo "📋 Current directory contents:"
     ls -la | head -20
     
+    # Check if this looks like a Node.js app (has package.json at root)
+    if [ -f "package.json" ]; then
+        echo "✅ Node.js application detected (package.json at root), deploying all files..."
+        sudo cp -r * {target_dir}/ || true
     # Check if this looks like a React build (has index.html and static directory)
-    if [ -f "index.html" ] && [ -d "static" ]; then
+    elif [ -f "index.html" ] && [ -d "static" ]; then
         echo "✅ React build files detected (index.html + static/), deploying directly..."
         sudo cp -r * {target_dir}/ || true
     # Check if build directory exists at root level
     elif [ -d "build" ]; then
         echo "Build directory detected at root, deploying build files..."
         sudo cp -r build/* {target_dir}/ || true
+    # Check if this looks like a Python app (has requirements.txt or app.py)
+    elif [ -f "requirements.txt" ] || [ -f "app.py" ] || [ -f "main.py" ]; then
+        echo "✅ Python application detected, deploying all files..."
+        sudo cp -r * {target_dir}/ || true
+    # Check if this looks like a PHP app (has index.php)
+    elif [ -f "index.php" ]; then
+        echo "✅ PHP application detected, deploying all files..."
+        sudo cp -r * {target_dir}/ || true
     else
-        # Copy all files directly
+        # Copy all files directly as fallback
         echo "📦 Copying all files to {target_dir}/"
         sudo cp -r * {target_dir}/ || true
     fi
