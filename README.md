@@ -374,6 +374,61 @@ dependencies:
   firewall: { enabled: true }
 ```
 
+### Node.js Entry Point Detection
+
+The deployment system automatically detects your Node.js application's entry point using intelligent detection:
+
+#### Detection Priority
+
+1. **package.json scripts** - Parses `scripts.start` or `scripts.server` for `node <file>` patterns
+   ```json
+   {
+     "scripts": {
+       "start": "node server/index.js",
+       "server": "node src/app.js"
+     }
+   }
+   ```
+
+2. **package.json main field** - Uses the `main` field if specified
+   ```json
+   {
+     "main": "dist/index.js"
+   }
+   ```
+
+3. **Common file locations** - Checks in order:
+   - `server/index.js`
+   - `src/index.js`
+   - `server.js`
+   - `app.js`
+   - `index.js`
+
+#### ES Modules Support
+
+Projects using ES modules (`"type": "module"` in package.json) are fully supported:
+
+- PM2 ecosystem config automatically uses `.cjs` extension
+- Entry point detection works with both CommonJS and ES module projects
+- No manual configuration needed
+
+**Example ES module project:**
+```json
+{
+  "name": "my-api",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js"
+  }
+}
+```
+
+The system will:
+1. Detect `"type": "module"` in package.json
+2. Create `ecosystem.config.cjs` (CommonJS for PM2)
+3. Set entry point to `server/index.js` from scripts
+4. Start the app correctly with PM2
+
 #### Python Web Application
 ```yaml
 dependencies:
@@ -1245,6 +1300,23 @@ sudo tail -f /var/log/apache2/error.log
 - Check logs: `docker-compose logs`
 - Verify environment variables
 - Check port conflicts
+
+#### Node.js ES Module Issues
+
+**Error: "require is not defined in ES module scope"**
+- Your project has `"type": "module"` in package.json
+- The deployment system now handles this automatically
+- If using an older deployment, redeploy to get the fix
+
+**App shows "online" in PM2 but port not listening:**
+- Check PM2 logs: `pm2 logs --lines 50`
+- Verify entry point is correct: `pm2 show nodejs-app`
+- The entry point should match your package.json scripts
+
+**Wrong entry point detected:**
+- Add explicit `"main"` field to package.json
+- Or ensure `scripts.start` has `node <your-file.js>` pattern
+- Supported patterns: `server/index.js`, `src/index.js`, `server.js`, `app.js`, `index.js`
 
 ### Verification Steps
 
