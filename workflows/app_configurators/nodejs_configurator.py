@@ -32,6 +32,64 @@ class NodeJSConfigurator(BaseConfigurator):
         instances = pm2_settings.get('instances', 1)
         exec_mode = pm2_settings.get('exec_mode', 'fork')
         
+        # Build the ecosystem.config.js content separately to avoid f-string issues
+        ecosystem_js = '''const fs = require('fs');
+const path = require('path');
+
+// Load environment variables from .env file
+const envPath = path.join(__dirname, '.env');
+const env = {};
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const [key, ...valueParts] = trimmed.split('=');
+      if (key && valueParts.length > 0) {
+        let value = valueParts.join('=');
+        // Remove surrounding quotes if present
+        if ((value.startsWith('"') && value.endsWith('"')) || 
+            (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        env[key.trim()] = value;
+      }
+    }
+  });
+}
+
+// Detect entry point
+let script = 'server.js';
+if (fs.existsSync(path.join(__dirname, 'server.js'))) {
+  script = 'server.js';
+} else if (fs.existsSync(path.join(__dirname, 'app.js'))) {
+  script = 'app.js';
+} else if (fs.existsSync(path.join(__dirname, 'index.js'))) {
+  script = 'index.js';
+}
+
+module.exports = {
+  apps: [{
+    name: 'nodejs-app',
+    script: script,
+    cwd: __dirname,
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000,
+      ...env
+    },
+    instances: 1,
+    exec_mode: 'fork',
+    watch: false,
+    max_memory_restart: '500M',
+    error_file: '/var/log/nodejs-app/error.log',
+    out_file: '/var/log/nodejs-app/output.log',
+    log_file: '/var/log/nodejs-app/combined.log',
+    time: true
+  }]
+};'''
+        
         script = f'''
 set -e
 echo "Configuring Node.js with PM2 process manager on {os_type}..."
@@ -95,20 +153,24 @@ sudo chown -R {default_user}:{default_user} /opt/nodejs-app
 echo "🚀 Starting Node.js application with PM2..."
 cd /opt/nodejs-app
 
-# Source environment variables if .env exists
+# Create PM2 ecosystem file with environment variables
+echo "📋 Creating PM2 ecosystem configuration..."
+cat > /opt/nodejs-app/ecosystem.config.js << 'EOFECO'
+{ecosystem_js}
+EOFECO
+
+sudo chown {default_user}:{default_user} /opt/nodejs-app/ecosystem.config.js
+
+# Show loaded environment variables (without values for security)
 if [ -f "/opt/nodejs-app/.env" ]; then
-    echo "📋 Loading environment variables..."
-    set -a
-    source /opt/nodejs-app/.env
-    set +a
+    echo "📋 Environment variables loaded from .env:"
+    cat /opt/nodejs-app/.env | grep -v "^#" | grep "=" | cut -d'=' -f1 | while read key; do
+        echo "   - $key"
+    done
 fi
 
-# Start with PM2 using configured settings
-if [ "{exec_mode}" = "cluster" ] && [ "{instances}" != "1" ]; then
-    pm2 start $ENTRY_POINT --name "{app_name}" -i {instances}
-else
-    pm2 start $ENTRY_POINT --name "{app_name}"
-fi
+# Start with PM2 using ecosystem file
+pm2 start /opt/nodejs-app/ecosystem.config.js
 
 # Wait for app to start
 sleep 5
@@ -191,6 +253,29 @@ fi
 sudo mkdir -p /var/log/nodejs-app
 sudo chown {default_user}:{default_user} /var/log/nodejs-app
 
+# Copy environment file if it exists
+if [ -f "/var/www/html/.env" ]; then
+    echo "📋 Copying environment variables to Node.js app..."
+    sudo cp /var/www/html/.env /opt/nodejs-app/.env
+    sudo chown {default_user}:{default_user} /opt/nodejs-app/.env
+    echo "✅ Environment file copied"
+fi
+
+# Load environment variables from .env file for systemd
+ENV_LINES=""
+if [ -f "/opt/nodejs-app/.env" ]; then
+    echo "📋 Loading environment variables for systemd..."
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^#.*$ ]] && continue
+        [[ -z "$key" ]] && continue
+        # Remove quotes from value
+        value=$(echo "$value" | sed 's/^["'"'"']//;s/["'"'"']$//')
+        ENV_LINES="$ENV_LINES
+Environment=$key=$value"
+    done < /opt/nodejs-app/.env
+fi
+
 # Create systemd service for Node.js app
 echo "📝 Creating systemd service file with entry point: $ENTRY_POINT"
 sudo tee /etc/systemd/system/nodejs-app.service > /dev/null << EOF
@@ -206,7 +291,7 @@ ExecStart=/usr/bin/node $ENTRY_POINT
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
-Environment=PORT=3000
+Environment=PORT=3000$ENV_LINES
 StandardOutput=append:/var/log/nodejs-app/output.log
 StandardError=append:/var/log/nodejs-app/error.log
 
