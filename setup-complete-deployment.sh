@@ -29,6 +29,12 @@ BUCKET_BUNDLE=${BUCKET_BUNDLE:-small_1_0}
 GITHUB_REPO=${GITHUB_REPO:-}
 REPO_VISIBILITY=${REPO_VISIBILITY:-private}
 
+# Verification endpoint customization (for API-only apps)
+VERIFICATION_ENDPOINT=${VERIFICATION_ENDPOINT:-}
+HEALTH_CHECK_ENDPOINT=${HEALTH_CHECK_ENDPOINT:-}
+EXPECTED_CONTENT=${EXPECTED_CONTENT:-}
+API_ONLY_APP=${API_ONLY_APP:-false}
+
 # Function to convert string to lowercase (compatible with older bash versions)
 to_lowercase() {
     echo "$1" | tr '[:upper:]' '[:lower:]'
@@ -601,26 +607,50 @@ EOF
       health_check: true
       external_connectivity: true
       endpoints_to_test:
+EOF
+
+    # Use custom endpoint if provided, otherwise use defaults
+    if [[ -n "$VERIFICATION_ENDPOINT" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+        - "${VERIFICATION_ENDPOINT}"
+EOF
+    elif [[ "$API_ONLY_APP" == "true" ]]; then
+        # API-only apps don't have a root route
+        cat >> "deployment-${app_type}.config.yml" << EOF
+        - "/api/posts"
+EOF
+    else
+        cat >> "deployment-${app_type}.config.yml" << EOF
         - "/"
 EOF
+    fi
 
     # Add type-specific endpoints and port configuration
     case $app_type in
         "nodejs")
+            # Only add /api/health if not using custom endpoint and not API-only
+            if [[ -z "$VERIFICATION_ENDPOINT" && "$API_ONLY_APP" != "true" ]]; then
             cat >> "deployment-${app_type}.config.yml" << EOF
         - "/api/health"
+EOF
+            fi
+            cat >> "deployment-${app_type}.config.yml" << EOF
       port: 3000  # Node.js applications run on port 3000
 EOF
             ;;
         "python")
+            if [[ -z "$VERIFICATION_ENDPOINT" && "$API_ONLY_APP" != "true" ]]; then
             cat >> "deployment-${app_type}.config.yml" << EOF
         - "/api/health"
 EOF
+            fi
             ;;
         "lamp")
+            if [[ -z "$VERIFICATION_ENDPOINT" && "$API_ONLY_APP" != "true" ]]; then
             cat >> "deployment-${app_type}.config.yml" << EOF
         - "/api/test.php"
 EOF
+            fi
             ;;
     esac
 
@@ -666,43 +696,77 @@ EOF
 
 monitoring:
   health_check:
-    endpoint: "/"
 EOF
 
+    # Use custom health check endpoint if provided
+    if [[ -n "$HEALTH_CHECK_ENDPOINT" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    endpoint: "${HEALTH_CHECK_ENDPOINT}"
+EOF
+    elif [[ -n "$VERIFICATION_ENDPOINT" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    endpoint: "${VERIFICATION_ENDPOINT}"
+EOF
+    elif [[ "$API_ONLY_APP" == "true" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    endpoint: "/api/posts"
+EOF
+    else
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    endpoint: "/"
+EOF
+    fi
+
     # Add type-specific expected content
-    case $app_type in
-        "lamp")
-            cat >> "deployment-${app_type}.config.yml" << EOF
+    if [[ -n "$EXPECTED_CONTENT" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    expected_content: "${EXPECTED_CONTENT}"
+EOF
+    elif [[ "$API_ONLY_APP" == "true" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    expected_content: "["
+EOF
+    else
+        case $app_type in
+            "lamp")
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "LAMP Stack"
 EOF
-            ;;
-        "nodejs")
-            cat >> "deployment-${app_type}.config.yml" << EOF
+                ;;
+            "nodejs")
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "Node.js"
-    port: 3000  # Node.js applications run on port 3000
 EOF
-            ;;
-        "python")
-            cat >> "deployment-${app_type}.config.yml" << EOF
+                ;;
+            "python")
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "Flask"
 EOF
-            ;;
-        "react")
-            cat >> "deployment-${app_type}.config.yml" << EOF
+                ;;
+            "react")
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "React"
 EOF
-            ;;
-        "docker")
-            cat >> "deployment-${app_type}.config.yml" << EOF
+                ;;
+            "docker")
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "Docker"
 EOF
-            ;;
-        *)
-            cat >> "deployment-${app_type}.config.yml" << EOF
+                ;;
+            *)
+                cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "${app_name}"
 EOF
-            ;;
-    esac
+                ;;
+        esac
+    fi
+
+    # Add nodejs port if applicable
+    if [[ "$app_type" == "nodejs" ]]; then
+        cat >> "deployment-${app_type}.config.yml" << EOF
+    port: 3000  # Node.js applications run on port 3000
+EOF
+    fi
 
     cat >> "deployment-${app_type}.config.yml" << EOF
     max_attempts: 15
