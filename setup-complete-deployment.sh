@@ -2224,12 +2224,22 @@ GITIGNORE
                 echo "We need to create a new GitHub repository for your deployment."
                 echo ""
                 
+                # Try to get GitHub username from gh CLI first
+                DEFAULT_GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null || echo "")
+                
                 # Get GitHub username
-                GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
-                while [[ -z "$GITHUB_USERNAME" ]]; do
-                    echo -e "${RED}GitHub username is required${NC}"
-                    GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
-                done
+                GITHUB_USERNAME=$(get_input "Enter your GitHub username" "$DEFAULT_GITHUB_USERNAME")
+                if [[ -z "$GITHUB_USERNAME" ]]; then
+                    if [[ "$AUTO_MODE" == "true" ]]; then
+                        echo -e "${RED}❌ GitHub username is required but could not be determined${NC}"
+                        echo -e "${YELLOW}💡 Please run 'gh auth login' first or provide GITHUB_USERNAME environment variable${NC}"
+                        exit 1
+                    fi
+                    while [[ -z "$GITHUB_USERNAME" ]]; do
+                        echo -e "${RED}GitHub username is required${NC}"
+                        GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
+                    done
+                fi
                 
                 # Get repository name (default to app name in lowercase)
                 DEFAULT_REPO_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
