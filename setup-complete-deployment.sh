@@ -149,8 +149,8 @@ create_iam_role_if_needed() {
 }
 EOF
 
-    # Create role
-    if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json 2>&1; then
+    # Create role (redirect output to stderr so only the final ARN goes to stdout)
+    if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json >&2 2>&1; then
         echo -e "${GREEN}✓ IAM role created${NC}" >&2
     else
         echo -e "${YELLOW}⚠️  IAM role already exists, updating trust policy...${NC}" >&2
