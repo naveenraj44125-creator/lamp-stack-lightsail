@@ -2116,11 +2116,28 @@ main() {
     # Check prerequisites
     check_prerequisites
     
-    # Check if we're in a git repository
+    # Check if we're in a git repository, auto-initialize if not
     if ! check_git_repo; then
-        echo -e "${RED}❌ Not in a git repository${NC}"
-        echo "Please run this script from within a git repository."
-        exit 1
+        echo -e "${YELLOW}⚠ Not in a git repository. Initializing git...${NC}"
+        git init
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to initialize git repository${NC}"
+            exit 1
+        fi
+        # Create initial .gitignore
+        cat > .gitignore << 'GITIGNORE'
+node_modules/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+GITIGNORE
+        git add .
+        git commit -m "Initial commit"
+        echo -e "${GREEN}✓ Git repository initialized${NC}"
     fi
     
     # Get AWS account ID
