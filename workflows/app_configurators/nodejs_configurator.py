@@ -132,6 +132,24 @@ if [ -f "/var/www/html/.env" ]; then
     echo "✅ Environment file copied"
 fi
 
+# Fix common environment variable naming issues
+if [ -f "/opt/nodejs-app/.env" ]; then
+    # Add S3_BUCKET_NAME if BUCKET_NAME exists (for multer-s3 compatibility)
+    if grep -q "BUCKET_NAME=" /opt/nodejs-app/.env && ! grep -q "S3_BUCKET_NAME=" /opt/nodejs-app/.env; then
+        BUCKET_VALUE=$(grep "BUCKET_NAME=" /opt/nodejs-app/.env | head -1 | cut -d'=' -f2 | tr -d '"'"'"')
+        echo "S3_BUCKET_NAME=\\"$BUCKET_VALUE\\"" >> /opt/nodejs-app/.env
+        echo "✅ Added S3_BUCKET_NAME for S3 compatibility"
+    fi
+fi
+
+# Fix hardcoded PORT in server.js (common issue)
+if [ -f "/opt/nodejs-app/server.js" ]; then
+    if grep -q "const PORT = [0-9]" /opt/nodejs-app/server.js; then
+        sed -i 's/const PORT = [0-9]\\+;/const PORT = process.env.PORT || 3000;/' /opt/nodejs-app/server.js
+        echo "✅ Fixed hardcoded PORT in server.js to use process.env.PORT"
+    fi
+fi
+
 # Install PM2 globally if not installed
 echo "📦 Installing PM2 globally..."
 if ! command -v pm2 &> /dev/null; then
@@ -259,6 +277,24 @@ if [ -f "/var/www/html/.env" ]; then
     sudo cp /var/www/html/.env /opt/nodejs-app/.env
     sudo chown {default_user}:{default_user} /opt/nodejs-app/.env
     echo "✅ Environment file copied"
+fi
+
+# Fix common environment variable naming issues
+if [ -f "/opt/nodejs-app/.env" ]; then
+    # Add S3_BUCKET_NAME if BUCKET_NAME exists (for multer-s3 compatibility)
+    if grep -q "BUCKET_NAME=" /opt/nodejs-app/.env && ! grep -q "S3_BUCKET_NAME=" /opt/nodejs-app/.env; then
+        BUCKET_VALUE=$(grep "BUCKET_NAME=" /opt/nodejs-app/.env | head -1 | cut -d'=' -f2 | tr -d '"'"'"')
+        echo "S3_BUCKET_NAME=\\"$BUCKET_VALUE\\"" >> /opt/nodejs-app/.env
+        echo "✅ Added S3_BUCKET_NAME for S3 compatibility"
+    fi
+fi
+
+# Fix hardcoded PORT in server.js (common issue)
+if [ -f "/opt/nodejs-app/server.js" ]; then
+    if grep -q "const PORT = [0-9]" /opt/nodejs-app/server.js; then
+        sed -i 's/const PORT = [0-9]\\+;/const PORT = process.env.PORT || 3000;/' /opt/nodejs-app/server.js
+        echo "✅ Fixed hardcoded PORT in server.js to use process.env.PORT"
+    fi
 fi
 
 # Load environment variables from .env file for systemd
