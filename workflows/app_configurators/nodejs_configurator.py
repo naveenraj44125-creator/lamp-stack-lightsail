@@ -59,7 +59,8 @@ fi
         instances = pm2_settings.get('instances', 1)
         exec_mode = pm2_settings.get('exec_mode', 'fork')
         
-        # Build the ecosystem.config.js content separately to avoid f-string issues
+        # Build the ecosystem.config content separately to avoid f-string issues
+        # Extension (.js or .cjs) is determined at runtime based on package.json "type" field
         ecosystem_js = '''const fs = require('fs');
 const path = require('path');
 
@@ -184,13 +185,22 @@ sudo chown -R {default_user}:{default_user} /opt/nodejs-app
 echo "🚀 Starting Node.js application with PM2..."
 cd /opt/nodejs-app
 
+# Detect if project uses ES modules (has "type": "module" in package.json)
+ECOSYSTEM_EXT="js"
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    if grep -q '"type"[[:space:]]*:[[:space:]]*"module"' /opt/nodejs-app/package.json; then
+        echo "📦 Detected ES modules project, using .cjs extension for PM2 config"
+        ECOSYSTEM_EXT="cjs"
+    fi
+fi
+
 # Create PM2 ecosystem file with environment variables
 echo "📋 Creating PM2 ecosystem configuration..."
-cat > /opt/nodejs-app/ecosystem.config.js << 'EOFECO'
+cat > /opt/nodejs-app/ecosystem.config.$ECOSYSTEM_EXT << 'EOFECO'
 {ecosystem_js}
 EOFECO
 
-sudo chown {default_user}:{default_user} /opt/nodejs-app/ecosystem.config.js
+sudo chown {default_user}:{default_user} /opt/nodejs-app/ecosystem.config.$ECOSYSTEM_EXT
 
 # Show loaded environment variables (without values for security)
 if [ -f "/opt/nodejs-app/.env" ]; then
@@ -201,7 +211,7 @@ if [ -f "/opt/nodejs-app/.env" ]; then
 fi
 
 # Start with PM2 using ecosystem file
-pm2 start /opt/nodejs-app/ecosystem.config.js
+pm2 start /opt/nodejs-app/ecosystem.config.$ECOSYSTEM_EXT
 
 # Wait for app to start
 sleep 5
