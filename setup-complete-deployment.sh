@@ -144,15 +144,21 @@ create_iam_role_if_needed() {
 EOF
 
     # Create role
-    if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json &> /dev/null; then
+    if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json 2>&1; then
         echo -e "${GREEN}✓ IAM role created${NC}" >&2
     else
         echo -e "${YELLOW}⚠️  IAM role already exists, updating trust policy...${NC}" >&2
         # Update the trust policy for existing role
-        if aws iam update-assume-role-policy --role-name "$role_name" --policy-document file://trust-policy.json &> /dev/null; then
+        local update_result
+        update_result=$(aws iam update-assume-role-policy --role-name "$role_name" --policy-document file://trust-policy.json 2>&1)
+        if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Trust policy updated${NC}" >&2
+            # Wait for IAM propagation
+            echo -e "${BLUE}Waiting for IAM policy propagation...${NC}" >&2
+            sleep 10
         else
-            echo -e "${RED}❌ Failed to update trust policy${NC}" >&2
+            echo -e "${RED}❌ Failed to update trust policy: $update_result${NC}" >&2
+            echo -e "${YELLOW}💡 You may need to manually delete the role and re-run: aws iam delete-role --role-name $role_name${NC}" >&2
         fi
     fi
     
