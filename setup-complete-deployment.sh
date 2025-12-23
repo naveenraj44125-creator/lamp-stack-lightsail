@@ -2128,12 +2128,19 @@ main() {
         cat > .gitignore << 'GITIGNORE'
 node_modules/
 .env
+.env.*
 *.log
 .DS_Store
 __pycache__/
 *.pyc
 .venv/
 venv/
+
+# AWS credentials and sensitive files
+.aws-creds*
+*.pem
+*.key
+trust-policy.json
 GITIGNORE
         git add .
         git commit -m "Initial commit"
