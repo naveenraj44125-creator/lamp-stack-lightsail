@@ -2227,14 +2227,17 @@ GITIGNORE
                 # Try to get GitHub username from gh CLI first
                 DEFAULT_GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null || echo "")
                 
-                # Get GitHub username
-                GITHUB_USERNAME=$(get_input "Enter your GitHub username" "$DEFAULT_GITHUB_USERNAME")
-                if [[ -z "$GITHUB_USERNAME" ]]; then
-                    if [[ "$AUTO_MODE" == "true" ]]; then
+                # In auto mode, use gh CLI username directly or fail
+                if [[ "$AUTO_MODE" == "true" ]]; then
+                    if [[ -z "$DEFAULT_GITHUB_USERNAME" ]]; then
                         echo -e "${RED}❌ GitHub username is required but could not be determined${NC}"
                         echo -e "${YELLOW}💡 Please run 'gh auth login' first or provide GITHUB_USERNAME environment variable${NC}"
                         exit 1
                     fi
+                    GITHUB_USERNAME="$DEFAULT_GITHUB_USERNAME"
+                else
+                    # Get GitHub username interactively
+                    GITHUB_USERNAME=$(get_input "Enter your GitHub username" "$DEFAULT_GITHUB_USERNAME")
                     while [[ -z "$GITHUB_USERNAME" ]]; do
                         echo -e "${RED}GitHub username is required${NC}"
                         GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
