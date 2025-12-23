@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager - MongoDB Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        header {
+            text-align: center;
+            padding: 40px 0;
+        }
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        header p { color: #888; margin-top: 10px; }
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            padding: 20px 40px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-card h3 { font-size: 2rem; color: #00d9ff; }
+        .stat-card p { color: #888; font-size: 0.9rem; }
+        .add-form {
+            background: rgba(255,255,255,0.05);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        .form-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        input, select, textarea {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            color: #000;
+            font-weight: 600;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,217,255,0.3); }
+        .task-list { list-style: none; }
+        .task-item {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s;
+        }
+        .task-item:hover { background: rgba(255,255,255,0.1); }
+        .task-item.completed { opacity: 0.6; }
+        .task-item.completed .task-title { text-decoration: line-through; }
+        .task-checkbox {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #00d9ff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .task-checkbox.checked { background: #00d9ff; }
+        .task-checkbox.checked::after { content: '✓'; color: #000; font-weight: bold; }
+        .task-content { flex: 1; }
+        .task-title { font-size: 1.1rem; margin-bottom: 5px; }
+        .task-desc { color: #888; font-size: 0.9rem; }
+        .task-meta { display: flex; gap: 10px; margin-top: 8px; }
+        .priority {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .priority.high { background: #ff4757; }
+        .priority.medium { background: #ffa502; color: #000; }
+        .priority.low { background: #2ed573; color: #000; }
+        .btn-delete {
+            background: transparent;
+            color: #ff4757;
+            padding: 8px;
+        }
+        .btn-delete:hover { background: rgba(255,71,87,0.2); }
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        .mongodb-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,237,100,0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            margin-top: 15px;
+        }
+        .mongodb-badge span { color: #00ed64; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 Task Manager</h1>
+            <p>A simple task management app powered by MongoDB</p>
+            <div class="mongodb-badge">
+                <svg width="20" height="20" viewBox="0 0 256 256" fill="#00ed64">
+                    <path d="M128 0C57.3 0 0 57.3 0 128s57.3 128 128 128 128-57.3 128-128S198.7 0 128 0zm0 234.7c-58.9 0-106.7-47.8-106.7-106.7S69.1 21.3 128 21.3 234.7 69.1 234.7 128 186.9 234.7 128 234.7z"/>
+                </svg>
+                <span>MongoDB Connected</span>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3 id="totalTasks">0</h3>
+                <p>Total Tasks</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="pendingTasks">0</h3>
+                <p>Pending</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="completedTasks">0</h3>
+                <p>Completed</p>
+            </div>
+        </div>
+
+        <div class="add-form">
+            <div class="form-row">
+                <input type="text" id="taskTitle" placeholder="Task title..." />
+                <select id="taskPriority">
+                    <option value="low">Low Priority</option>
+                    <option value="medium" selected>Medium Priority</option>
+                    <option value="high">High Priority</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <input type="text" id="taskDesc" placeholder="Description (optional)" />
+                <button class="btn-primary" onclick="addTask()">Add Task</button>
+            </div>
+        </div>
+
+        <ul class="task-list" id="taskList"></ul>
+    </div>
+
+    <script>
+        async function loadTasks() {
+            const res = await fetch('/api/tasks');
+            const tasks = await res.json();
+            renderTasks(tasks);
+            loadStats();
+        }
+
+        async function loadStats() {
+            const res = await fetch('/api/stats');
+            const stats = await res.json();
+            document.getElementById('totalTasks').textContent = stats.total;
+            document.getElementById('pendingTasks').textContent = stats.pending;
+            document.getElementById('completedTasks').textContent = stats.completed;
+        }
+
+        function renderTasks(tasks) {
+            const list = document.getElementById('taskList');
+            if (tasks.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>No tasks yet. Add one above!</p></div>';
+                return;
+            }
+            list.innerHTML = tasks.map(task => `
+                <li class="task-item ${task.status === 'completed' ? 'completed' : ''}">
+                    <div class="task-checkbox ${task.status === 'completed' ? 'checked' : ''}" 
+                         onclick="toggleTask('${task._id}', '${task.status}')"></div>
+                    <div class="task-content">
+                        <div class="task-title">${task.title}</div>
+                        ${task.description ? `<div class="task-desc">${task.description}</div>` : ''}
+                        <div class="task-meta">
+                            <span class="priority ${task.priority}">${task.priority}</span>
+                        </div>
+                    </div>
+                    <button class="btn-delete" onclick="deleteTask('${task._id}')">🗑️</button>
+                </li>
+            `).join('');
+        }
+
+        async function addTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            const description = document.getElementById('taskDesc').value.trim();
+            const priority = document.getElementById('taskPriority').value;
+            
+            if (!title) return alert('Please enter a task title');
+            
+            await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, description, priority })
+            });
+            
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskDesc').value = '';
+            loadTasks();
+        }
+
+        async function toggleTask(id, currentStatus) {
+            const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+            await fetch(`/api/tasks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            loadTasks();
+        }
+
+        async function deleteTask(id) {
+            if (!confirm('Delete this task?')) return;
+            await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+            loadTasks();
+        }
+
+        // Enter key to add task
+        document.getElementById('taskTitle').addEventListener('keypress', e => {
+            if (e.key === 'Enter') addTask();
+        });
+
+        loadTasks();
+    </script>
+</body>
+</html>
