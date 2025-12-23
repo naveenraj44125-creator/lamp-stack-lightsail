@@ -87,14 +87,50 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-// Detect entry point
-let script = 'server.js';
-if (fs.existsSync(path.join(__dirname, 'server.js'))) {
+// Detect entry point - check package.json first for explicit entry point
+let script = null;
+const pkgPath = path.join(__dirname, 'package.json');
+if (fs.existsSync(pkgPath)) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    // Check scripts.start or scripts.server for entry point hints
+    if (pkg.scripts) {
+      const startScript = pkg.scripts.start || pkg.scripts.server || '';
+      // Extract file path from "node server/index.js" or similar
+      const nodeMatch = startScript.match(/node\\s+([\\w\\/.-]+\\.js)/);
+      if (nodeMatch && fs.existsSync(path.join(__dirname, nodeMatch[1]))) {
+        script = nodeMatch[1];
+      }
+    }
+    // Check main field
+    if (!script && pkg.main && fs.existsSync(path.join(__dirname, pkg.main))) {
+      script = pkg.main;
+    }
+  } catch (e) {
+    // Ignore JSON parse errors
+  }
+}
+
+// Fallback to common entry points if not found in package.json
+if (!script) {
+  const candidates = [
+    'server/index.js',  // Common for server subdirectory
+    'src/index.js',     // Common for src subdirectory
+    'server.js',
+    'app.js',
+    'index.js'
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(__dirname, candidate))) {
+      script = candidate;
+      break;
+    }
+  }
+}
+
+// Final fallback
+if (!script) {
   script = 'server.js';
-} else if (fs.existsSync(path.join(__dirname, 'app.js'))) {
-  script = 'app.js';
-} else if (fs.existsSync(path.join(__dirname, 'index.js'))) {
-  script = 'index.js';
 }
 
 module.exports = {
@@ -124,19 +160,51 @@ module.exports = {
 set -e
 echo "Configuring Node.js with PM2 process manager on {os_type}..."
 
-# Detect entry point file
+# Detect entry point file - check package.json first
 ENTRY_POINT=""
-if [ -f "/opt/nodejs-app/server.js" ]; then
-    ENTRY_POINT="server.js"
-    echo "✅ Found server.js as entry point"
-elif [ -f "/opt/nodejs-app/app.js" ]; then
-    ENTRY_POINT="app.js"
-    echo "✅ Found app.js as entry point"
-elif [ -f "/opt/nodejs-app/index.js" ]; then
-    ENTRY_POINT="index.js"
-    echo "✅ Found index.js as entry point"
-else
-    echo "❌ No entry point file found (server.js, app.js, or index.js)"
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    # Try to extract entry point from package.json scripts
+    SCRIPT_ENTRY=$(cat /opt/nodejs-app/package.json | python3 -c "
+import sys, json
+try:
+    pkg = json.load(sys.stdin)
+    scripts = pkg.get('scripts', {{}})
+    # Check start or server script for 'node <file>' pattern
+    for key in ['start', 'server']:
+        script = scripts.get(key, '')
+        if 'node ' in script:
+            import re
+            match = re.search(r'node\s+([\w/.-]+\.js)', script)
+            if match:
+                print(match.group(1))
+                sys.exit(0)
+    # Check main field
+    main = pkg.get('main', '')
+    if main:
+        print(main)
+except:
+    pass
+" 2>/dev/null || echo "")
+    
+    if [ -n "$SCRIPT_ENTRY" ] && [ -f "/opt/nodejs-app/$SCRIPT_ENTRY" ]; then
+        ENTRY_POINT="$SCRIPT_ENTRY"
+        echo "✅ Found entry point from package.json: $ENTRY_POINT"
+    fi
+fi
+
+# Fallback to common entry points
+if [ -z "$ENTRY_POINT" ]; then
+    for candidate in "server/index.js" "src/index.js" "server.js" "app.js" "index.js"; do
+        if [ -f "/opt/nodejs-app/$candidate" ]; then
+            ENTRY_POINT="$candidate"
+            echo "✅ Found $candidate as entry point"
+            break
+        fi
+    done
+fi
+
+if [ -z "$ENTRY_POINT" ]; then
+    echo "❌ No entry point file found"
     ls -la /opt/nodejs-app/ || echo "Directory does not exist"
     exit 1
 fi
@@ -266,19 +334,51 @@ echo "✅ Node.js application configured with PM2 on {os_type}"
 set -e
 echo "Configuring Node.js for application on {os_type}..."
 
-# Detect entry point file
+# Detect entry point file - check package.json first
 ENTRY_POINT=""
-if [ -f "/opt/nodejs-app/server.js" ]; then
-    ENTRY_POINT="server.js"
-    echo "✅ Found server.js as entry point"
-elif [ -f "/opt/nodejs-app/app.js" ]; then
-    ENTRY_POINT="app.js"
-    echo "✅ Found app.js as entry point"
-elif [ -f "/opt/nodejs-app/index.js" ]; then
-    ENTRY_POINT="index.js"
-    echo "✅ Found index.js as entry point"
-else
-    echo "❌ No entry point file found (server.js, app.js, or index.js)"
+if [ -f "/opt/nodejs-app/package.json" ]; then
+    # Try to extract entry point from package.json scripts
+    SCRIPT_ENTRY=$(cat /opt/nodejs-app/package.json | python3 -c "
+import sys, json
+try:
+    pkg = json.load(sys.stdin)
+    scripts = pkg.get('scripts', {{}})
+    # Check start or server script for 'node <file>' pattern
+    for key in ['start', 'server']:
+        script = scripts.get(key, '')
+        if 'node ' in script:
+            import re
+            match = re.search(r'node\s+([\w/.-]+\.js)', script)
+            if match:
+                print(match.group(1))
+                sys.exit(0)
+    # Check main field
+    main = pkg.get('main', '')
+    if main:
+        print(main)
+except:
+    pass
+" 2>/dev/null || echo "")
+    
+    if [ -n "$SCRIPT_ENTRY" ] && [ -f "/opt/nodejs-app/$SCRIPT_ENTRY" ]; then
+        ENTRY_POINT="$SCRIPT_ENTRY"
+        echo "✅ Found entry point from package.json: $ENTRY_POINT"
+    fi
+fi
+
+# Fallback to common entry points
+if [ -z "$ENTRY_POINT" ]; then
+    for candidate in "server/index.js" "src/index.js" "server.js" "app.js" "index.js"; do
+        if [ -f "/opt/nodejs-app/$candidate" ]; then
+            ENTRY_POINT="$candidate"
+            echo "✅ Found $candidate as entry point"
+            break
+        fi
+    done
+fi
+
+if [ -z "$ENTRY_POINT" ]; then
+    echo "❌ No entry point file found"
     ls -la /opt/nodejs-app/ || echo "Directory does not exist"
     exit 1
 fi
