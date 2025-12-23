@@ -147,7 +147,13 @@ EOF
     if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json &> /dev/null; then
         echo -e "${GREEN}✓ IAM role created${NC}" >&2
     else
-        echo -e "${YELLOW}⚠️  IAM role might already exist${NC}" >&2
+        echo -e "${YELLOW}⚠️  IAM role already exists, updating trust policy...${NC}" >&2
+        # Update the trust policy for existing role
+        if aws iam update-assume-role-policy --role-name "$role_name" --policy-document file://trust-policy.json &> /dev/null; then
+            echo -e "${GREEN}✓ Trust policy updated${NC}" >&2
+        else
+            echo -e "${RED}❌ Failed to update trust policy${NC}" >&2
+        fi
     fi
     
     # Attach policies
