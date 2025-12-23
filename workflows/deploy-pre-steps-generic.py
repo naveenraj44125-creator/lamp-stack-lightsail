@@ -455,6 +455,9 @@ echo "✅ Health check completed"
         
         env_file_content = '\n'.join(env_content)
         
+        # Determine application type
+        app_type = self.config.get('application.type', 'lamp')
+        
         # Determine which web server is being used
         web_server = 'apache'  # default
         if self.config.get('dependencies.nginx.enabled', False):
@@ -468,10 +471,22 @@ echo "✅ Health check completed"
             os_info = OSDetector.get_user_info(self.client.os_type, web_server)
             web_user = os_info['web_user']
             web_group = os_info['web_group']
+            default_user = os_info.get('user', 'ubuntu')
         else:
             # Fallback to Ubuntu defaults
             web_user = 'www-data'
             web_group = 'www-data'
+            default_user = 'ubuntu'
+        
+        # Determine target directory based on app type
+        if app_type == 'nodejs':
+            target_dir = '/opt/nodejs-app'
+            target_user = default_user
+            target_group = default_user
+        else:
+            target_dir = '/var/www/html'
+            target_user = web_user
+            target_group = web_group
         
         script = f'''
 set -e
@@ -482,15 +497,26 @@ cat > /tmp/app.env << 'EOF'
 {env_file_content}
 EOF
 
+# Ensure target directory exists
+sudo mkdir -p {target_dir}
+
 # Move to appropriate location based on application type
-sudo mv /tmp/app.env /var/www/html/.env
-sudo chown {web_user}:{web_group} /var/www/html/.env
-sudo chmod 600 /var/www/html/.env
+sudo mv /tmp/app.env {target_dir}/.env
+sudo chown {target_user}:{target_group} {target_dir}/.env
+sudo chmod 600 {target_dir}/.env
+
+# Also copy to /var/www/html for compatibility
+if [ "{target_dir}" != "/var/www/html" ]; then
+    sudo mkdir -p /var/www/html
+    sudo cp {target_dir}/.env /var/www/html/.env 2>/dev/null || true
+    sudo chown {web_user}:{web_group} /var/www/html/.env 2>/dev/null || true
+fi
 
 # Also create system-wide environment file
-sudo cp /var/www/html/.env /etc/environment.d/app.conf || true
+sudo mkdir -p /etc/environment.d
+sudo cp {target_dir}/.env /etc/environment.d/app.conf || true
 
-echo "✅ Environment variables configured"
+echo "✅ Environment variables configured in {target_dir}/.env"
 '''
         
         success, output = self.client.run_command(script, timeout=60)

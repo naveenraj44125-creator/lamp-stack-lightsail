@@ -66,6 +66,14 @@ fi
 sudo mkdir -p /var/log/nodejs-app
 sudo chown {default_user}:{default_user} /var/log/nodejs-app
 
+# Copy environment file if it exists
+if [ -f "/var/www/html/.env" ]; then
+    echo "📋 Copying environment variables to Node.js app..."
+    sudo cp /var/www/html/.env /opt/nodejs-app/.env
+    sudo chown {default_user}:{default_user} /opt/nodejs-app/.env
+    echo "✅ Environment file copied"
+fi
+
 # Install PM2 globally if not installed
 echo "📦 Installing PM2 globally..."
 if ! command -v pm2 &> /dev/null; then
@@ -87,11 +95,19 @@ sudo chown -R {default_user}:{default_user} /opt/nodejs-app
 echo "🚀 Starting Node.js application with PM2..."
 cd /opt/nodejs-app
 
+# Source environment variables if .env exists
+if [ -f "/opt/nodejs-app/.env" ]; then
+    echo "📋 Loading environment variables..."
+    set -a
+    source /opt/nodejs-app/.env
+    set +a
+fi
+
 # Start with PM2 using configured settings
 if [ "{exec_mode}" = "cluster" ] && [ "{instances}" != "1" ]; then
-    pm2 start $ENTRY_POINT --name "{app_name}" -i {instances} --env production
+    pm2 start $ENTRY_POINT --name "{app_name}" -i {instances}
 else
-    pm2 start $ENTRY_POINT --name "{app_name}" --env production
+    pm2 start $ENTRY_POINT --name "{app_name}"
 fi
 
 # Wait for app to start
