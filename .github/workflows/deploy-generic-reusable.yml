@@ -809,7 +809,13 @@ jobs:
               echo "❌ Got nginx default page - application is not properly configured!"
               echo "This means nginx is running but not proxying to the application."
               cat /tmp/response.html | head -10
-            elif grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker\|healthy\|ok\|Flask\|Python" /tmp/response.html; then
+            # Check for valid JSON array response (common for API endpoints like /api/posts)
+            elif grep -qE '^\[.*\]$' /tmp/response.html || grep -qE '^\{.*\}$' /tmp/response.html; then
+              echo "✅ Application is accessible and responding with valid JSON!"
+              cat /tmp/response.html | head -20
+              echo "status=success" >> $GITHUB_OUTPUT
+              exit 0
+            elif grep -qi "html\|Example\|App\|Hello\|Welcome\|Recipe\|Docker\|healthy\|ok\|Flask\|Python\|Node\|Instagram" /tmp/response.html; then
               echo "✅ Application is accessible and responding with content!"
               cat /tmp/response.html | head -20
               echo "status=success" >> $GITHUB_OUTPUT
