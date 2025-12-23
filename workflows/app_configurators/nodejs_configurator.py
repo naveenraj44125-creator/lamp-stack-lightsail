@@ -17,6 +17,33 @@ class NodeJSConfigurator(BaseConfigurator):
         else:
             return self._configure_with_systemd()
     
+    def _get_env_fix_script(self) -> str:
+        """Get the script to fix common environment variable issues"""
+        # Using simpler quoting that works reliably through SSH
+        return '''
+# Fix common environment variable naming issues
+if [ -f "/opt/nodejs-app/.env" ]; then
+    # Add S3_BUCKET_NAME if BUCKET_NAME exists (for multer-s3 compatibility)
+    if grep -q "^BUCKET_NAME=" /opt/nodejs-app/.env && ! grep -q "^S3_BUCKET_NAME=" /opt/nodejs-app/.env; then
+        # Extract bucket name value using awk for reliable parsing
+        BUCKET_VALUE=$(grep "^BUCKET_NAME=" /opt/nodejs-app/.env | head -1 | awk -F= '{print $2}' | sed 's/^"//;s/"$//;s/^'"'"'//;s/'"'"'$//')
+        if [ -n "$BUCKET_VALUE" ]; then
+            echo "S3_BUCKET_NAME=\\"$BUCKET_VALUE\\"" >> /opt/nodejs-app/.env
+            echo "✅ Added S3_BUCKET_NAME=$BUCKET_VALUE for S3 compatibility"
+        fi
+    fi
+fi
+
+# Fix hardcoded PORT in server.js (common issue)
+if [ -f "/opt/nodejs-app/server.js" ]; then
+    # Check for hardcoded PORT like "const PORT = 5000;" or "const PORT = 3000;"
+    if grep -qE "const PORT = [0-9]+;" /opt/nodejs-app/server.js; then
+        sed -i -E 's/const PORT = [0-9]+;/const PORT = process.env.PORT || 3000;/' /opt/nodejs-app/server.js
+        echo "✅ Fixed hardcoded PORT in server.js to use process.env.PORT"
+    fi
+fi
+'''
+    
     def _configure_with_pm2(self, pm2_config: dict) -> bool:
         """Configure Node.js application with PM2 process manager"""
         print("🔧 Using PM2 process manager (pm2.enabled: true)")
@@ -90,6 +117,8 @@ module.exports = {
   }]
 };'''
         
+        env_fix_script = self._get_env_fix_script()
+        
         script = f'''
 set -e
 echo "Configuring Node.js with PM2 process manager on {os_type}..."
@@ -124,31 +153,15 @@ fi
 sudo mkdir -p /var/log/nodejs-app
 sudo chown {default_user}:{default_user} /var/log/nodejs-app
 
-# Copy environment file if it exists
-if [ -f "/var/www/html/.env" ]; then
-    echo "📋 Copying environment variables to Node.js app..."
+# Copy environment file if it exists in web root (for LAMP-style deployments)
+if [ -f "/var/www/html/.env" ] && [ ! -f "/opt/nodejs-app/.env" ]; then
+    echo "📋 Copying environment variables from web root to Node.js app..."
     sudo cp /var/www/html/.env /opt/nodejs-app/.env
     sudo chown {default_user}:{default_user} /opt/nodejs-app/.env
     echo "✅ Environment file copied"
 fi
 
-# Fix common environment variable naming issues
-if [ -f "/opt/nodejs-app/.env" ]; then
-    # Add S3_BUCKET_NAME if BUCKET_NAME exists (for multer-s3 compatibility)
-    if grep -q "BUCKET_NAME=" /opt/nodejs-app/.env && ! grep -q "S3_BUCKET_NAME=" /opt/nodejs-app/.env; then
-        BUCKET_VALUE=$(grep "BUCKET_NAME=" /opt/nodejs-app/.env | head -1 | cut -d'=' -f2 | tr -d '"'"'"')
-        echo "S3_BUCKET_NAME=\\"$BUCKET_VALUE\\"" >> /opt/nodejs-app/.env
-        echo "✅ Added S3_BUCKET_NAME for S3 compatibility"
-    fi
-fi
-
-# Fix hardcoded PORT in server.js (common issue)
-if [ -f "/opt/nodejs-app/server.js" ]; then
-    if grep -q "const PORT = [0-9]" /opt/nodejs-app/server.js; then
-        sed -i 's/const PORT = [0-9]\\+;/const PORT = process.env.PORT || 3000;/' /opt/nodejs-app/server.js
-        echo "✅ Fixed hardcoded PORT in server.js to use process.env.PORT"
-    fi
-fi
+{env_fix_script}
 
 # Install PM2 globally if not installed
 echo "📦 Installing PM2 globally..."
@@ -237,6 +250,8 @@ echo "✅ Node.js application configured with PM2 on {os_type}"
         os_info = getattr(self.config, 'os_info', {'user': 'ubuntu'})
         default_user = os_info.get('user', 'ubuntu')
         
+        env_fix_script = self._get_env_fix_script()
+        
         script = f'''
 set -e
 echo "Configuring Node.js for application on {os_type}..."
@@ -271,42 +286,27 @@ fi
 sudo mkdir -p /var/log/nodejs-app
 sudo chown {default_user}:{default_user} /var/log/nodejs-app
 
-# Copy environment file if it exists
-if [ -f "/var/www/html/.env" ]; then
-    echo "📋 Copying environment variables to Node.js app..."
+# Copy environment file if it exists in web root (for LAMP-style deployments)
+if [ -f "/var/www/html/.env" ] && [ ! -f "/opt/nodejs-app/.env" ]; then
+    echo "📋 Copying environment variables from web root to Node.js app..."
     sudo cp /var/www/html/.env /opt/nodejs-app/.env
     sudo chown {default_user}:{default_user} /opt/nodejs-app/.env
     echo "✅ Environment file copied"
 fi
 
-# Fix common environment variable naming issues
-if [ -f "/opt/nodejs-app/.env" ]; then
-    # Add S3_BUCKET_NAME if BUCKET_NAME exists (for multer-s3 compatibility)
-    if grep -q "BUCKET_NAME=" /opt/nodejs-app/.env && ! grep -q "S3_BUCKET_NAME=" /opt/nodejs-app/.env; then
-        BUCKET_VALUE=$(grep "BUCKET_NAME=" /opt/nodejs-app/.env | head -1 | cut -d'=' -f2 | tr -d '"'"'"')
-        echo "S3_BUCKET_NAME=\\"$BUCKET_VALUE\\"" >> /opt/nodejs-app/.env
-        echo "✅ Added S3_BUCKET_NAME for S3 compatibility"
-    fi
-fi
-
-# Fix hardcoded PORT in server.js (common issue)
-if [ -f "/opt/nodejs-app/server.js" ]; then
-    if grep -q "const PORT = [0-9]" /opt/nodejs-app/server.js; then
-        sed -i 's/const PORT = [0-9]\\+;/const PORT = process.env.PORT || 3000;/' /opt/nodejs-app/server.js
-        echo "✅ Fixed hardcoded PORT in server.js to use process.env.PORT"
-    fi
-fi
+{env_fix_script}
 
 # Load environment variables from .env file for systemd
 ENV_LINES=""
 if [ -f "/opt/nodejs-app/.env" ]; then
     echo "📋 Loading environment variables for systemd..."
-    while IFS='=' read -r key value; do
+    while IFS='=' read -r key value || [ -n "$key" ]; do
         # Skip comments and empty lines
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
+        case "$key" in
+            \#*|"") continue ;;
+        esac
         # Remove quotes from value
-        value=$(echo "$value" | sed 's/^["'"'"']//;s/["'"'"']$//')
+        value=$(echo "$value" | sed 's/^"//;s/"$//;s/^'"'"'//;s/'"'"'$//')
         ENV_LINES="$ENV_LINES
 Environment=$key=$value"
     done < /opt/nodejs-app/.env
