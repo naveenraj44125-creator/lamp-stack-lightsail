@@ -2578,17 +2578,18 @@ GITIGNORE
     echo ""
     echo -e "${BLUE}Setting up GitHub repository secrets...${NC}"
     
-    # Check if AWS_ROLE_ARN is already set
-    if ! gh variable list | grep -q "AWS_ROLE_ARN"; then
-        if ! gh secret list | grep -q "AWS_ROLE_ARN"; then
-            echo -e "${YELLOW}Setting AWS_ROLE_ARN as repository variable...${NC}"
-            gh variable set AWS_ROLE_ARN --body "$AWS_ROLE_ARN"
-            echo -e "${GREEN}✓ AWS_ROLE_ARN variable set${NC}"
-        else
-            echo -e "${GREEN}✓ AWS_ROLE_ARN secret already exists${NC}"
-        fi
+    # Always set/update AWS_ROLE_ARN to ensure it has the correct value
+    # This handles cases where the variable exists but has an incorrect value
+    if gh variable list | grep -q "AWS_ROLE_ARN"; then
+        echo -e "${YELLOW}Updating AWS_ROLE_ARN variable...${NC}"
+        gh variable set AWS_ROLE_ARN --body "$AWS_ROLE_ARN"
+        echo -e "${GREEN}✓ AWS_ROLE_ARN variable updated${NC}"
+    elif gh secret list | grep -q "AWS_ROLE_ARN"; then
+        echo -e "${GREEN}✓ AWS_ROLE_ARN secret already exists${NC}"
     else
-        echo -e "${GREEN}✓ AWS_ROLE_ARN variable already exists${NC}"
+        echo -e "${YELLOW}Setting AWS_ROLE_ARN as repository variable...${NC}"
+        gh variable set AWS_ROLE_ARN --body "$AWS_ROLE_ARN"
+        echo -e "${GREEN}✓ AWS_ROLE_ARN variable set${NC}"
     fi
     
     # Commit and push changes
