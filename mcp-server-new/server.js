@@ -1017,69 +1017,39 @@ The configuration has been optimized for your specific application type and requ
         return configResult;
       }
 
-      // Step 3: Generate setup script
-      const setupScript = this.generateSetupScript(analysis, app_name, deployment_preferences, github_config);
+      // Generate environment variables for the setup script
+      const envVars = this.generateEnvVarsForSetup(analysis, app_name, deployment_preferences, github_config);
 
+      // Return simplified response - just tell AI to run the setup script
       return {
         content: [{
           type: 'text',
-          text: `# 🎉 Complete Intelligent Deployment Setup
+          text: `# 🎉 Project Analysis Complete
 
-${analysisResult.content[0].text}
+## Summary
+- **App Type**: ${analysis.detected_type}
+- **Instance Size**: ${analysis.infrastructure_needs?.bundle_size || 'micro_3_0'}
+- **Estimated Cost**: $${analysis.estimated_costs?.monthly_min || 3.50}-$${analysis.estimated_costs?.monthly_max || 10}/month
+- **Database**: ${analysis.databases?.length > 0 ? analysis.databases[0].type : 'None'}
+- **Storage Bucket**: ${analysis.storage_needs?.needs_bucket ? 'Yes' : 'No'}
 
----
+## 🚀 Run Setup Script
 
-${configResult.content[0].text}
-
----
-
-## 🛠️ Automated Setup Script
-
-To complete the setup automatically, run this script:
+Run the following command to set up the complete deployment:
 
 \`\`\`bash
-${setupScript}
+${envVars}
+./setup-complete-deployment.sh
 \`\`\`
 
-## 📋 Manual Setup Steps (Alternative)
+This script will automatically:
+1. Create the Lightsail instance
+2. Generate deployment configuration (deployment-${analysis.detected_type}.config.yml)
+3. Create GitHub Actions workflow (.github/workflows/deploy-${analysis.detected_type}.yml)
+4. Set up IAM role for GitHub OIDC
+5. Configure the GitHub repository
 
-If you prefer manual setup:
-
-1. **Create the configuration file**:
-   \`\`\`bash
-   # Extract the YAML configuration from above and save as:
-   # deployment-${analysis.detected_type}.config.yml
-   \`\`\`
-
-2. **Create the GitHub workflow**:
-   \`\`\`bash
-   mkdir -p .github/workflows
-   # Extract the workflow YAML from above and save as:
-   # .github/workflows/deploy-${analysis.detected_type}.yml
-   \`\`\`
-
-3. **Set up GitHub repository**:
-   \`\`\`bash
-   git add .
-   git commit -m "Add intelligent deployment configuration"
-   git push origin main
-   \`\`\`
-
-4. **Configure GitHub secrets**:
-   - Set AWS_ROLE_ARN in repository variables
-   - Ensure GitHub OIDC is configured for AWS
-
-## 🎯 What This Setup Provides
-
-✅ **Intelligent Analysis**: Automatically detected your application type and requirements
-✅ **Optimized Infrastructure**: Right-sized instances and services for your needs  
-✅ **Cost Optimization**: Estimated monthly cost of $${analysis.estimated_costs.monthly_min}-${analysis.estimated_costs.monthly_max}
-✅ **Security Best Practices**: SSL, firewall, and authentication configured
-✅ **Automated Deployment**: GitHub Actions workflow for continuous deployment
-✅ **Monitoring & Health Checks**: Built-in application monitoring
-✅ **Backup Strategy**: Automated backup configuration
-
-Your deployment is now ready for production! 🚀`
+No manual file creation needed - the script handles everything!`
         }]
       };
     } catch (error) {
@@ -1088,6 +1058,62 @@ Your deployment is now ready for production! 🚀`
         isError: true
       };
     }
+  }
+
+  generateEnvVarsForSetup(analysis, appName, deploymentPreferences, githubConfig) {
+    const appType = analysis.detected_type || 'nodejs';
+    const instanceName = `${appType}-${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const awsRegion = deploymentPreferences.aws_region || 'us-east-1';
+    
+    // Database configuration
+    const hasDatabase = analysis.databases && analysis.databases.length > 0;
+    const dbType = hasDatabase ? analysis.databases[0].type : 'none';
+    const dbExternal = hasDatabase && analysis.scale_preference !== 'small' && dbType !== 'mongodb';
+    const dbName = deploymentPreferences.db_name || 'app_db';
+    
+    // Bucket configuration
+    const needsBucket = analysis.storage_needs?.needs_bucket || false;
+    const bucketName = deploymentPreferences.bucket_name || (needsBucket ? `${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-bucket` : '');
+    
+    // Bundle size
+    const bundleSize = analysis.infrastructure_needs?.bundle_size || 'micro_3_0';
+    
+    // Build environment variables string
+    let envVars = `export FULLY_AUTOMATED=true
+export APP_TYPE="${appType}"
+export APP_NAME="${appName}"
+export INSTANCE_NAME="${instanceName}"
+export AWS_REGION="${awsRegion}"
+export BLUEPRINT_ID="ubuntu_22_04"
+export BUNDLE_ID="${bundleSize}"
+export DATABASE_TYPE="${dbType}"
+export DB_EXTERNAL="${dbExternal ? 'true' : 'false'}"
+export DB_NAME="${dbName}"
+export ENABLE_BUCKET="${needsBucket ? 'true' : 'false'}"`;
+
+    if (needsBucket) {
+      envVars += `
+export BUCKET_NAME="${bucketName}"
+export BUCKET_ACCESS="${deploymentPreferences.bucket_access || 'read_write'}"
+export BUCKET_BUNDLE="${deploymentPreferences.bucket_bundle || 'small_1_0'}"`;
+    }
+
+    if (githubConfig.visibility) {
+      envVars += `
+export REPO_VISIBILITY="${githubConfig.visibility}"`;
+    }
+
+    if (githubConfig.username) {
+      envVars += `
+export GITHUB_USERNAME="${githubConfig.username}"`;
+    }
+
+    if (githubConfig.repository) {
+      envVars += `
+export GITHUB_REPO="${githubConfig.repository}"`;
+    }
+
+    return envVars;
   }
 
   generateSetupScript(analysis, appName, deploymentPreferences, githubConfig) {
