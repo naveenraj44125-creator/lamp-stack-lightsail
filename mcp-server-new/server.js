@@ -2964,87 +2964,111 @@ import { ProjectAnalyzer } from './project-analyzer.js';
 import { InfrastructureOptimizer } from './infrastructure-optimizer.js';
 import { ConfigurationGenerator } from './configuration-generator.js';
 
-// HTTP Server setup
-const app = express();
+// Import Stdio transport for Cline integration
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
-// Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public'));
+// Check if running in stdio mode (for Cline integration)
+const STDIO_MODE = process.argv.includes('--stdio') || process.env.MCP_TRANSPORT === 'stdio';
 
-// CORS middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-
-// Authentication middleware
-const authenticate = (req, res, next) => {
-  if (AUTH_TOKEN) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
-  next();
-};
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    version: '3.0.0',
-    features: [
-      'intelligent-analysis', 
-      'cost-optimization', 
-      'security-assessment',
-      'ai-powered-bedrock'
-    ],
-    ai: {
-      provider: 'AWS Bedrock',
-      model: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
-      region: process.env.AWS_REGION || 'us-east-1'
-    },
-    timestamp: new Date().toISOString() 
-  });
-});
-
-// MCP Server endpoint - SSE transport
-app.get('/mcp', authenticate, async (req, res) => {
-  try {
+if (STDIO_MODE) {
+  // Stdio transport mode - for Cline and other MCP clients
+  async function runStdioServer() {
     const server = await new EnhancedLightsailDeploymentServer().initialize();
-    const transport = new SSEServerTransport('/mcp', res);
+    const transport = new StdioServerTransport();
     await server.server.connect(transport);
-  } catch (error) {
-    console.error('MCP Server error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Log to stderr so it doesn't interfere with MCP protocol on stdout
+    console.error('🚀 Enhanced Lightsail Deployment MCP Server v3.0 (Stdio Mode)');
+    console.error('🤖 AI Provider: AWS Bedrock (Claude)');
   }
-});
+  
+  runStdioServer().catch((error) => {
+    console.error('Failed to start stdio server:', error);
+    process.exit(1);
+  });
+} else {
+  // HTTP/SSE transport mode - for web clients and testing
+  const app = express();
 
-// Start server
-app.listen(PORT, HOST, () => {
-  console.log(`🚀 Enhanced Lightsail Deployment MCP Server v3.0 running on http://${HOST}:${PORT}`);
-  console.log(`🤖 AI Provider: AWS Bedrock (Claude)`);
-  console.log(`📊 Features: Intelligent Analysis, Cost Optimization, Security Assessment, AI-Powered Tools`);
-  console.log(`🔗 MCP Endpoint: http://${HOST}:${PORT}/mcp`);
-  console.log(`💡 Health Check: http://${HOST}:${PORT}/health`);
-  if (AUTH_TOKEN) {
-    console.log(`🔒 Authentication: Enabled`);
-  }
-});
+  // Middleware
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.static('public'));
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down Enhanced MCP Server...');
-  process.exit(0);
-});
+  // CORS middleware
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(200);
+    } else {
+      next();
+    }
+  });
 
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Shutting down Enhanced MCP Server...');
-  process.exit(0);
-});
+  // Authentication middleware
+  const authenticate = (req, res, next) => {
+    if (AUTH_TOKEN) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${AUTH_TOKEN}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+    next();
+  };
+
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({ 
+      status: 'healthy', 
+      version: '3.0.0',
+      features: [
+        'intelligent-analysis', 
+        'cost-optimization', 
+        'security-assessment',
+        'ai-powered-bedrock'
+      ],
+      ai: {
+        provider: 'AWS Bedrock',
+        model: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
+        region: process.env.AWS_REGION || 'us-east-1'
+      },
+      timestamp: new Date().toISOString() 
+    });
+  });
+
+  // MCP Server endpoint - SSE transport
+  app.get('/mcp', authenticate, async (req, res) => {
+    try {
+      const server = await new EnhancedLightsailDeploymentServer().initialize();
+      const transport = new SSEServerTransport('/mcp', res);
+      await server.server.connect(transport);
+    } catch (error) {
+      console.error('MCP Server error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Start server
+  app.listen(PORT, HOST, () => {
+    console.log(`🚀 Enhanced Lightsail Deployment MCP Server v3.0 running on http://${HOST}:${PORT}`);
+    console.log(`🤖 AI Provider: AWS Bedrock (Claude)`);
+    console.log(`📊 Features: Intelligent Analysis, Cost Optimization, Security Assessment, AI-Powered Tools`);
+    console.log(`🔗 MCP Endpoint: http://${HOST}:${PORT}/mcp`);
+    console.log(`💡 Health Check: http://${HOST}:${PORT}/health`);
+    if (AUTH_TOKEN) {
+      console.log(`🔒 Authentication: Enabled`);
+    }
+  });
+
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('\n🛑 Shutting down Enhanced MCP Server...');
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('\n🛑 Shutting down Enhanced MCP Server...');
+    process.exit(0);
+  });
+}

@@ -50,11 +50,32 @@ cd lamp-stack-lightsail/mcp-server-new
 
 # Install dependencies
 npm install
+```
 
-# Start the server
+### Running the Server
+
+The server supports two transport modes:
+
+**Option 1: Stdio Mode (for Cline/MCP clients)**
+```bash
+# Run in stdio mode - for Cline integration
+node server.js --stdio
+```
+
+**Option 2: HTTP/SSE Mode (for web clients and testing)**
+```bash
+# Run in HTTP mode - starts server on port 3001
 npm start
 
-# Test the installation
+# Or with custom port
+PORT=3002 npm start
+
+# Test the health endpoint
+curl http://localhost:3001/health
+```
+
+### Test the Installation
+```bash
 npm test
 ```
 

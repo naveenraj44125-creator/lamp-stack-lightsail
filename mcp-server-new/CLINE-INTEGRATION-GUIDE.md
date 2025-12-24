@@ -156,7 +156,7 @@ Or via Cline UI: Click the MCP servers icon in Cline panel → "Configure MCP Se
   "mcpServers": {
     "lightsail-deployment": {
       "command": "node",
-      "args": ["/full/path/to/lamp-stack-lightsail/mcp-server-new/server.js"],
+      "args": ["/full/path/to/lamp-stack-lightsail/mcp-server-new/server.js", "--stdio"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_ACCESS_KEY_ID": "your-access-key",
@@ -167,7 +167,9 @@ Or via Cline UI: Click the MCP servers icon in Cline panel → "Configure MCP Se
 }
 ```
 
-**Important:** Replace `/full/path/to/` with the actual absolute path to your cloned repository.
+**Important:** 
+- The `--stdio` flag is required for Cline integration (enables stdio transport mode)
+- Replace `/full/path/to/` with the actual absolute path to your cloned repository
 
 Example paths:
 - macOS: `/Users/yourname/projects/lamp-stack-lightsail/mcp-server-new/server.js`
