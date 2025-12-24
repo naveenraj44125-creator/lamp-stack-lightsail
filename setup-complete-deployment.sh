@@ -45,6 +45,82 @@ to_uppercase() {
     echo "$1" | tr '[:lower:]' '[:upper:]'
 }
 
+# Function to detect fullstack React + Node.js application
+detect_fullstack_react() {
+    if [ -f "server.js" ] && [ -d "client" ] && [ -f "client/package.json" ]; then
+        echo "fullstack-react"
+        return 0
+    fi
+    return 1
+}
+
+# Function to auto-detect Node.js port from server.js
+detect_node_port() {
+    if [ -f "server.js" ]; then
+        # Look for PORT environment variable usage with fallback
+        PORT=$(grep -o "process\.env\.PORT.*||.*[0-9]\+" server.js | grep -o "[0-9]\+" | head -1)
+        if [ -n "$PORT" ]; then
+            echo "$PORT"
+        else
+            # Look for direct port assignment
+            PORT=$(grep -o "PORT.*=.*[0-9]\+" server.js | grep -o "[0-9]\+" | head -1)
+            echo "${PORT:-3000}"
+        fi
+    else
+        echo "3000"
+    fi
+}
+
+# Function to build React client if detected
+build_react_client_if_needed() {
+    local app_type="$1"
+
+    if [[ "$app_type" == "nodejs" ]] && [ -d "client" ] && [ -f "client/package.json" ]; then
+        echo -e "${BLUE}Detected fullstack React + Node.js application${NC}"
+
+        # Check if client/build already exists
+        if [ -d "client/build" ]; then
+            echo -e "${YELLOW}⚠️ client/build directory already exists${NC}"
+            if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+                BUILD_CLIENT=$(get_yes_no "Rebuild React client?" "true")
+            else
+                BUILD_CLIENT="true"
+            fi
+        else
+            if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+                BUILD_CLIENT=$(get_yes_no "Build React client locally before deployment?" "true")
+            else
+                BUILD_CLIENT="true"
+            fi
+        fi
+
+        if [[ "$BUILD_CLIENT" == "true" ]]; then
+            echo -e "${BLUE}Building React client...${NC}"
+            cd client
+            if [ -f "package-lock.json" ]; then
+                npm ci
+            elif [ -f "yarn.lock" ]; then
+                yarn install --frozen-lockfile
+            else
+                npm install
+            fi
+            npm run build
+            cd ..
+
+            if [ -d "client/build" ]; then
+                echo -e "${GREEN}✓ React client built successfully${NC}"
+                git add client/build/
+                return 0
+            else
+                echo -e "${RED}❌ Failed to build React client${NC}"
+                return 1
+            fi
+        fi
+    fi
+
+    return 0
+}
+
 # Function to check prerequisites
 check_prerequisites() {
     echo -e "${BLUE}Checking prerequisites...${NC}"
@@ -149,14 +225,14 @@ create_iam_role_if_needed() {
 }
 EOF
 
-    # Create role (redirect output to stderr so only the final ARN goes to stdout)
-    if aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json >&2 2>&1; then
+    # Create role (disable pager and redirect output to stderr so only the final ARN goes to stdout)
+    if AWS_PAGER="" aws iam create-role --role-name "$role_name" --assume-role-policy-document file://trust-policy.json --no-cli-pager >&2 2>&1; then
         echo -e "${GREEN}✓ IAM role created${NC}" >&2
     else
         echo -e "${YELLOW}⚠️  IAM role already exists, updating trust policy...${NC}" >&2
         # Update the trust policy for existing role
         local update_result
-        update_result=$(aws iam update-assume-role-policy --role-name "$role_name" --policy-document file://trust-policy.json 2>&1)
+        update_result=$(AWS_PAGER="" aws iam update-assume-role-policy --role-name "$role_name" --policy-document file://trust-policy.json --no-cli-pager 2>&1)
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Trust policy updated${NC}" >&2
             # Wait for IAM propagation
@@ -170,24 +246,25 @@ EOF
     
     # Attach policies
     echo -e "${BLUE}Attaching IAM policies...${NC}" >&2
-    aws iam attach-role-policy --role-name "$role_name" --policy-arn "arn:aws:iam::aws:policy/ReadOnlyAccess" &> /dev/null
+    AWS_PAGER="" aws iam attach-role-policy --role-name "$role_name" --policy-arn "arn:aws:iam::aws:policy/ReadOnlyAccess" --no-cli-pager &> /dev/null
     
     # Create custom Lightsail policy
     local lightsail_policy_name="${role_name}-LightsailAccess"
     local policy_arn="arn:aws:iam::${aws_account_id}:policy/${lightsail_policy_name}"
     
-    if ! aws iam get-policy --policy-arn "$policy_arn" &> /dev/null; then
+    if ! AWS_PAGER="" aws iam get-policy --policy-arn "$policy_arn" --no-cli-pager &> /dev/null; then
         local lightsail_policy='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"lightsail:*","Resource":"*"}]}'
-        aws iam create-policy \
+        AWS_PAGER="" aws iam create-policy \
             --policy-name "$lightsail_policy_name" \
             --policy-document "$lightsail_policy" \
-            --description "Full access to AWS Lightsail for GitHub Actions deployment" &> /dev/null
+            --description "Full access to AWS Lightsail for GitHub Actions deployment" \
+            --no-cli-pager &> /dev/null
         echo -e "${GREEN}✓ Custom Lightsail policy created${NC}" >&2
     else
         echo -e "${YELLOW}⚠️  Custom Lightsail policy already exists${NC}" >&2
     fi
     
-    aws iam attach-role-policy --role-name "$role_name" --policy-arn "$policy_arn" &> /dev/null
+    AWS_PAGER="" aws iam attach-role-policy --role-name "$role_name" --policy-arn "$policy_arn" --no-cli-pager &> /dev/null
     echo -e "${GREEN}✓ IAM policies attached${NC}" >&2
     
     # Set AWS_ROLE_ARN and echo it for capture by caller
@@ -299,11 +376,11 @@ EOF
     DB_RDS_NAME: ${db_rds_name:-${app_type}-${db_type}-db}
 EOF
         fi
-        # MongoDB-specific connection string
+        # MongoDB-specific connection string (no auth - MongoDB installed without authentication)
         if [[ "$db_type" == "mongodb" ]]; then
             cat >> "deployment-${app_type}.config.yml" << EOF
-    # MongoDB specific
-    MONGODB_URI: mongodb://app_user:CHANGE_ME_secure_password_123@localhost:27017/${db_name:-app_db}
+    # MongoDB specific (no authentication - local MongoDB)
+    MONGODB_URI: mongodb://localhost:27017/${db_name:-app_db}
     MONGODB_PORT: "27017"
 EOF
         fi
@@ -318,10 +395,12 @@ EOF
 EOF
             ;;
         "nodejs")
+            # Detect actual port from server.js if it exists
+            DETECTED_PORT=$(detect_node_port)
             cat >> "deployment-${app_type}.config.yml" << EOF
     # Node.js specific
     NODE_ENV: production
-    PORT: "3000"
+    PORT: "${DETECTED_PORT}"
 EOF
             ;;
         "python")
@@ -535,8 +614,10 @@ EOF
     # Add type-specific ports
     case $app_type in
         "nodejs")
+            # Use detected port for firewall configuration
+            DETECTED_PORT=$(detect_node_port)
             cat >> "deployment-${app_type}.config.yml" << EOF
-        - "3000"  # Node.js
+        - "${DETECTED_PORT}"  # Node.js
 EOF
             ;;
         "python")
@@ -634,8 +715,10 @@ EOF
         - "/api/health"
 EOF
             fi
+            # Use detected port for verification
+            DETECTED_PORT=$(detect_node_port)
             cat >> "deployment-${app_type}.config.yml" << EOF
-      port: 3000  # Node.js applications run on port 3000
+      port: ${DETECTED_PORT}  # Node.js applications run on port ${DETECTED_PORT}
 EOF
             ;;
         "python")
@@ -763,8 +846,9 @@ EOF
 
     # Add nodejs port if applicable
     if [[ "$app_type" == "nodejs" ]]; then
+        DETECTED_PORT=$(detect_node_port)
         cat >> "deployment-${app_type}.config.yml" << EOF
-    port: 3000  # Node.js applications run on port 3000
+    port: ${DETECTED_PORT}  # Node.js applications run on port ${DETECTED_PORT}
 EOF
     fi
 
@@ -2546,6 +2630,9 @@ GITIGNORE
     
     # Create example application
     create_example_app "$APP_TYPE" "$APP_NAME"
+    
+    # Build React client if this is a fullstack Node.js + React app
+    build_react_client_if_needed "$APP_TYPE"
     
     # Validate generated configuration
     if ! validate_configuration "$APP_TYPE"; then

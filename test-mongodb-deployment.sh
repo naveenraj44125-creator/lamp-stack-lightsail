@@ -56,7 +56,7 @@ if [[ ! -d "$SOURCE_DIR/example-mongodb-app" ]]; then
     fi
 fi
 
-SCRIPT_DIR="$SOURCE_DIR"
+SCRIPT_DIR="$(cd "$SOURCE_DIR" && pwd)"
 
 # Source AWS credentials if available
 CURRENT_SCRIPT_DIR="$(dirname "$(realpath "$0")")"
