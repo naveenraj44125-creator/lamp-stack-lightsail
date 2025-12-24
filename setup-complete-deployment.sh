@@ -157,6 +157,20 @@ check_prerequisites() {
         exit 1
     fi
     
+    # Get and validate GitHub username (required for OIDC setup)
+    GITHUB_USERNAME=$(gh api user -q .login 2>/dev/null)
+    if [[ -z "$GITHUB_USERNAME" ]]; then
+        echo -e "${YELLOW}⚠️  Could not auto-detect GitHub username${NC}"
+        echo -e "${BLUE}Please enter your GitHub username:${NC}"
+        read -r GITHUB_USERNAME
+        if [[ -z "$GITHUB_USERNAME" ]]; then
+            echo -e "${RED}❌ GitHub username is required for OIDC setup${NC}"
+            exit 1
+        fi
+    fi
+    echo -e "${GREEN}✓ GitHub user: $GITHUB_USERNAME${NC}"
+    export GITHUB_USERNAME
+    
     # Check AWS CLI configuration
     if ! aws sts get-caller-identity &> /dev/null; then
         echo -e "${RED}❌ AWS CLI not configured${NC}"
@@ -2330,24 +2344,38 @@ GITIGNORE
         if [[ "$GITHUB_REPO" != *"/"* ]]; then
             echo -e "${YELLOW}⚠️  GITHUB_REPO missing username, applying workaround...${NC}"
             
-            # Try to get username from git remote first
-            GIT_REMOTE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
-            
-            if [[ -n "$GIT_REMOTE_REPO" && "$GIT_REMOTE_REPO" == *"/"* ]]; then
-                # Extract username from git remote
-                GITHUB_USERNAME=$(echo "$GIT_REMOTE_REPO" | cut -d'/' -f1)
+            # Use GITHUB_USERNAME from prerequisites check (already validated)
+            if [[ -n "$GITHUB_USERNAME" ]]; then
                 GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
-                echo -e "${GREEN}✓ Fixed GITHUB_REPO using git remote: $GITHUB_REPO${NC}"
+                echo -e "${GREEN}✓ Fixed GITHUB_REPO using validated username: $GITHUB_REPO${NC}"
             else
-                # Get GitHub username from gh CLI as fallback
-                GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null)
-                if [[ -n "$GITHUB_USERNAME" ]]; then
+                # Try to get username from git remote first
+                GIT_REMOTE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
+                
+                if [[ -n "$GIT_REMOTE_REPO" && "$GIT_REMOTE_REPO" == *"/"* ]]; then
+                    # Extract username from git remote
+                    GITHUB_USERNAME=$(echo "$GIT_REMOTE_REPO" | cut -d'/' -f1)
                     GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
-                    echo -e "${GREEN}✓ Fixed GITHUB_REPO using gh CLI: $GITHUB_REPO${NC}"
+                    echo -e "${GREEN}✓ Fixed GITHUB_REPO using git remote: $GITHUB_REPO${NC}"
                 else
-                    echo -e "${RED}❌ Could not determine GitHub username${NC}"
-                    echo -e "${RED}❌ OIDC setup will fail without username/repository format${NC}"
-                    echo -e "${YELLOW}💡 Please update MCP server to version 1.1.4+ or provide github_username parameter${NC}"
+                    # Get GitHub username from gh CLI as fallback
+                    GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null)
+                    if [[ -n "$GITHUB_USERNAME" ]]; then
+                        GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
+                        echo -e "${GREEN}✓ Fixed GITHUB_REPO using gh CLI: $GITHUB_REPO${NC}"
+                    else
+                        # Last resort: prompt user for username
+                        echo -e "${YELLOW}Could not auto-detect GitHub username${NC}"
+                        echo -e "${BLUE}Please enter your GitHub username:${NC}"
+                        read -r GITHUB_USERNAME
+                        if [[ -n "$GITHUB_USERNAME" ]]; then
+                            GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
+                            echo -e "${GREEN}✓ Fixed GITHUB_REPO: $GITHUB_REPO${NC}"
+                        else
+                            echo -e "${RED}❌ GitHub username is required for OIDC setup${NC}"
+                            exit 1
+                        fi
+                    fi
                 fi
             fi
         fi
@@ -2644,18 +2672,32 @@ GITIGNORE
     if [[ -n "$GITHUB_REPO" && "$GITHUB_REPO" != *"/"* ]]; then
         echo -e "${YELLOW}⚠️  GITHUB_REPO missing username, applying workaround before OIDC setup...${NC}"
         
-        # Try to get username from git remote
-        GIT_REMOTE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
-        
-        if [[ -n "$GIT_REMOTE_REPO" && "$GIT_REMOTE_REPO" == *"/"* ]]; then
-            # Extract username from git remote
-            GITHUB_USERNAME=$(echo "$GIT_REMOTE_REPO" | cut -d'/' -f1)
+        # Use GITHUB_USERNAME from prerequisites check (already validated)
+        if [[ -n "$GITHUB_USERNAME" ]]; then
             GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
             echo -e "${GREEN}✓ Fixed GITHUB_REPO for OIDC: $GITHUB_REPO${NC}"
         else
-            echo -e "${RED}❌ Could not determine GitHub username from git remote${NC}"
-            echo -e "${RED}❌ OIDC setup will fail without username/repository format${NC}"
-            echo -e "${YELLOW}💡 Please update MCP server to version 1.1.4+ or provide github_username parameter${NC}"
+            # Fallback: Try to get username from git remote
+            GIT_REMOTE_REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github\.com[:/]\([^/]*\/[^/]*\)\.git.*/\1/' | sed 's/\.git$//')
+            
+            if [[ -n "$GIT_REMOTE_REPO" && "$GIT_REMOTE_REPO" == *"/"* ]]; then
+                # Extract username from git remote
+                GITHUB_USERNAME=$(echo "$GIT_REMOTE_REPO" | cut -d'/' -f1)
+                GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
+                echo -e "${GREEN}✓ Fixed GITHUB_REPO for OIDC: $GITHUB_REPO${NC}"
+            else
+                # Last resort: prompt user for username
+                echo -e "${YELLOW}Could not auto-detect GitHub username${NC}"
+                echo -e "${BLUE}Please enter your GitHub username:${NC}"
+                read -r GITHUB_USERNAME
+                if [[ -n "$GITHUB_USERNAME" ]]; then
+                    GITHUB_REPO="${GITHUB_USERNAME}/${GITHUB_REPO}"
+                    echo -e "${GREEN}✓ Fixed GITHUB_REPO for OIDC: $GITHUB_REPO${NC}"
+                else
+                    echo -e "${RED}❌ GitHub username is required for OIDC setup${NC}"
+                    exit 1
+                fi
+            fi
         fi
     fi
     
