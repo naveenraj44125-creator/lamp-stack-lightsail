@@ -134,11 +134,60 @@ Expected output:
 
 ### 2.2 Configure MCP Server in Cline
 
-Open Cline settings and add the MCP server configuration:
+There are two ways to use the MCP server with Cline:
 
-**Option A: Using SSE Transport (Recommended)**
+---
 
-Add to your Cline MCP settings (`~/.cline/mcp_settings.json` or via Cline UI):
+**Option A: Stdio Transport (Recommended - Auto-starts server)**
+
+This option automatically starts the MCP server when Cline needs it. No need to manually run the server.
+
+1. Open VS Code Settings (Cmd+, on Mac, Ctrl+, on Windows)
+2. Search for "Cline MCP" or navigate to Cline extension settings
+3. Find "MCP Servers" configuration
+4. Add the following configuration to your Cline MCP settings file:
+
+**Location:** `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+
+Or via Cline UI: Click the MCP servers icon in Cline panel → "Configure MCP Servers"
+
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "node",
+      "args": ["/full/path/to/lamp-stack-lightsail/mcp-server-new/server.js"],
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "AWS_ACCESS_KEY_ID": "your-access-key",
+        "AWS_SECRET_ACCESS_KEY": "your-secret-key"
+      }
+    }
+  }
+}
+```
+
+**Important:** Replace `/full/path/to/` with the actual absolute path to your cloned repository.
+
+Example paths:
+- macOS: `/Users/yourname/projects/lamp-stack-lightsail/mcp-server-new/server.js`
+- Linux: `/home/yourname/projects/lamp-stack-lightsail/mcp-server-new/server.js`
+- Windows: `C:\\Users\\yourname\\projects\\lamp-stack-lightsail\\mcp-server-new\\server.js`
+
+---
+
+**Option B: SSE Transport (Manual server start)**
+
+This option requires you to manually start the MCP server first.
+
+1. **Start the MCP server in a terminal:**
+```bash
+cd /path/to/lamp-stack-lightsail/mcp-server-new
+source ../.aws-creds.sh  # Load AWS credentials
+npm start
+```
+
+2. **Configure Cline to connect to the running server:**
 
 ```json
 {
@@ -151,28 +200,30 @@ Add to your Cline MCP settings (`~/.cline/mcp_settings.json` or via Cline UI):
 }
 ```
 
-**Option B: Using Stdio Transport**
+**Note:** With SSE transport, you must keep the server running in a terminal. If the server stops, Cline won't be able to use the tools.
 
-```json
-{
-  "mcpServers": {
-    "lightsail-deployment": {
-      "command": "node",
-      "args": ["/full/path/to/lamp-stack-lightsail/mcp-server-new/server.js"],
-      "env": {
-        "AWS_REGION": "us-east-1",
-        "PORT": "3001"
-      }
-    }
-  }
-}
-```
+---
 
 ### 2.3 Verify Cline Connection
 
-1. Open Cline chat panel in VS Code
-2. Type: "List available MCP tools"
-3. You should see the Lightsail deployment tools listed
+After configuring, verify the MCP server is connected:
+
+1. **Restart VS Code** (or reload the window with Cmd+Shift+P → "Reload Window")
+2. Open Cline chat panel
+3. Look for the MCP server status indicator (should show "lightsail-deployment" as connected)
+4. Type: "What MCP tools do you have available?"
+5. Cline should list the Lightsail deployment tools including:
+   - `analyze_project_intelligently`
+   - `generate_smart_deployment_config`
+   - `list_lightsail_instances`
+   - `diagnose_deployment_issue`
+   - And more...
+
+**If tools don't appear:**
+- Check the MCP server logs for errors
+- Verify the path in your configuration is correct
+- Ensure AWS credentials are properly set
+- Try restarting VS Code
 
 ---
 
@@ -473,6 +524,55 @@ Push to deploy!
 ## Troubleshooting
 
 ### Common Issues and Solutions
+
+#### Issue: MCP Server Not Showing in Cline
+
+**Symptoms:** Cline doesn't show the lightsail-deployment tools
+
+**Solutions:**
+
+1. **Check configuration path:**
+```bash
+# Verify the server.js path exists
+ls -la /full/path/to/lamp-stack-lightsail/mcp-server-new/server.js
+```
+
+2. **Test the server manually:**
+```bash
+cd /path/to/lamp-stack-lightsail/mcp-server-new
+source ../.aws-creds.sh
+node server.js
+```
+You should see: `🚀 Enhanced Lightsail Deployment MCP Server v3.0 running on http://0.0.0.0:3001`
+
+3. **Check Cline MCP settings file:**
+```bash
+# macOS/Linux
+cat ~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json
+
+# Verify JSON is valid
+```
+
+4. **Restart VS Code completely** (not just reload window)
+
+5. **Check for Node.js version:**
+```bash
+node --version  # Should be 18+
+```
+
+#### Issue: MCP Server Crashes on Start
+
+**Check for missing dependencies:**
+```bash
+cd mcp-server-new
+npm install
+```
+
+**Check for AWS credential issues:**
+```bash
+# Verify AWS credentials are set
+aws sts get-caller-identity
+```
 
 #### Issue: MCP Server Not Connecting
 
