@@ -45,6 +45,88 @@ to_uppercase() {
     echo "$1" | tr '[:lower:]' '[:upper:]'
 }
 
+# Function to show application-specific warnings for common deployment issues
+show_app_deployment_warnings() {
+    local app_type="$1"
+    
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}⚠️  IMPORTANT: Pre-Deployment Checklist${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Common warnings for all app types
+    echo -e "${BLUE}1. Health Check Endpoint:${NC}"
+    echo -e "   Your app needs a PUBLIC endpoint (no auth) for health checks."
+    echo -e "   The deployment will fail if the health endpoint returns 401/403."
+    echo -e "   ${GREEN}Recommended:${NC} Add GET /api/health returning {\"status\": \"ok\"}"
+    echo ""
+    
+    # Node.js specific warnings
+    if [[ "$app_type" == "nodejs" ]]; then
+        echo -e "${BLUE}2. Frontend Serving (Node.js):${NC}"
+        echo -e "   If you have a React/Vue/Angular frontend in /client:"
+        echo -e "   - Add 'npm run build' script to build the frontend"
+        echo -e "   - Server must serve static files: app.use(express.static('client/dist'))"
+        echo -e "   - Add catch-all route for SPA: app.get('*', (req,res) => res.sendFile(...))"
+        echo ""
+        
+        echo -e "${BLUE}3. Build Script:${NC}"
+        echo -e "   Ensure package.json has a 'build' script if frontend needs building"
+        echo -e "   ${GREEN}Example:${NC} \"build\": \"cd client && npm install && npm run build\""
+        echo ""
+    fi
+    
+    # Check for common issues in current directory
+    local issues_found=false
+    
+    # Check for health endpoint in Node.js apps
+    if [[ "$app_type" == "nodejs" ]]; then
+        if [ -f "server/index.js" ]; then
+            if ! grep -q "/api/health\|/health" server/index.js 2>/dev/null; then
+                echo -e "${RED}⚠️  WARNING: No /api/health endpoint found in server/index.js${NC}"
+                issues_found=true
+            fi
+            if ! grep -q "express.static" server/index.js 2>/dev/null; then
+                if [ -d "client" ]; then
+                    echo -e "${RED}⚠️  WARNING: No express.static() found - frontend won't be served${NC}"
+                    issues_found=true
+                fi
+            fi
+        elif [ -f "server.js" ]; then
+            if ! grep -q "/api/health\|/health" server.js 2>/dev/null; then
+                echo -e "${RED}⚠️  WARNING: No /api/health endpoint found in server.js${NC}"
+                issues_found=true
+            fi
+            if ! grep -q "express.static" server.js 2>/dev/null; then
+                if [ -d "client" ]; then
+                    echo -e "${RED}⚠️  WARNING: No express.static() found - frontend won't be served${NC}"
+                    issues_found=true
+                fi
+            fi
+        fi
+        
+        # Check for build script
+        if [ -f "package.json" ] && [ -d "client" ]; then
+            if ! grep -q '"build"' package.json 2>/dev/null; then
+                echo -e "${RED}⚠️  WARNING: No 'build' script in package.json - frontend won't be built${NC}"
+                issues_found=true
+            fi
+        fi
+    fi
+    
+    if [[ "$issues_found" == "true" ]]; then
+        echo ""
+        echo -e "${YELLOW}Please fix the above issues before deployment to avoid failures.${NC}"
+    else
+        echo -e "${GREEN}✓ No obvious issues detected in your application code.${NC}"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
 # Function to detect fullstack React + Node.js application
 detect_fullstack_react() {
     if [ -f "server.js" ] && [ -d "client" ] && [ -f "client/package.json" ]; then
@@ -895,6 +977,9 @@ EOF
     fi
 
     echo -e "${GREEN}✓ Created deployment-${app_type}.config.yml${NC}"
+    
+    # Show deployment warnings and checks
+    show_app_deployment_warnings "$app_type"
 }
 
 # Function to create GitHub Actions workflow that matches existing examples
