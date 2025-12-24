@@ -6,9 +6,15 @@
  * - Deployment troubleshooting
  * - Configuration recommendations
  * - Natural language deployment assistance
+ * 
+ * Credential Options:
+ * - AWS_PROFILE environment variable or profile option
+ * - Direct credentials via accessKeyId, secretAccessKey, sessionToken
+ * - Default AWS credential chain (env vars, ~/.aws/credentials, IAM role)
  */
 
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { fromIni } from '@aws-sdk/credential-providers';
 
 // Default model - Claude 3 Sonnet via Bedrock
 const DEFAULT_MODEL = 'anthropic.claude-3-sonnet-20240229-v1:0';
@@ -20,9 +26,30 @@ export class BedrockAI {
     this.modelId = options.modelId || DEFAULT_MODEL;
     this.maxTokens = options.maxTokens || 4096;
     
-    this.client = new BedrockRuntimeClient({ 
-      region: this.region 
-    });
+    // Build client configuration
+    const clientConfig = { region: this.region };
+    
+    // Option 1: Direct credentials provided
+    if (options.accessKeyId && options.secretAccessKey) {
+      clientConfig.credentials = {
+        accessKeyId: options.accessKeyId,
+        secretAccessKey: options.secretAccessKey,
+        ...(options.sessionToken && { sessionToken: options.sessionToken })
+      };
+    }
+    // Option 2: AWS profile name provided
+    else if (options.profile || process.env.AWS_PROFILE) {
+      const profileName = options.profile || process.env.AWS_PROFILE;
+      clientConfig.credentials = fromIni({ profile: profileName });
+    }
+    // Option 3: Fall back to default credential chain (env vars, IAM role, etc.)
+    
+    this.client = new BedrockRuntimeClient(clientConfig);
+    
+    // Store credential info for status reporting
+    this.credentialSource = options.accessKeyId ? 'direct' : 
+                            (options.profile || process.env.AWS_PROFILE) ? `profile:${options.profile || process.env.AWS_PROFILE}` : 
+                            'default-chain';
 
     // System prompt for deployment expertise
     this.systemPrompt = `You are an expert AWS Lightsail deployment assistant. You help developers:

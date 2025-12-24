@@ -512,13 +512,65 @@ BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0  # Bedrock model ID
 
 To use AI-powered tools, you need:
 
-1. **AWS Credentials**: Configure via `aws configure` or environment variables
+1. **AWS Credentials**: Configure via one of these methods:
+   - AWS profile in `~/.aws/credentials`
+   - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+   - Pass credentials directly to each AI tool call
 2. **Bedrock Model Access**: Enable Claude models in AWS Bedrock console
 3. **IAM Permissions**: Your IAM user/role needs `bedrock:InvokeModel` permission
 
+#### Credential Options for AI Tools
+
+All AI-powered tools (`ai_analyze_project`, `ai_troubleshoot`, `ai_ask_expert`, `ai_review_config`, `ai_explain_code`, `ai_generate_config`) accept an optional `aws_credentials` parameter:
+
+```javascript
+// Option 1: Use AWS profile from ~/.aws/credentials
+{
+  "name": "ai_troubleshoot",
+  "arguments": {
+    "error_message": "Connection refused",
+    "aws_credentials": {
+      "profile": "my-aws-profile",  // Profile name from ~/.aws/credentials
+      "region": "us-east-1"         // Optional, defaults to us-east-1
+    }
+  }
+}
+
+// Option 2: Pass credentials directly
+{
+  "name": "ai_troubleshoot",
+  "arguments": {
+    "error_message": "Connection refused",
+    "aws_credentials": {
+      "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+      "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      "session_token": "optional-session-token",  // For temporary credentials
+      "region": "us-east-1"
+    }
+  }
+}
+
+// Option 3: Use default credential chain (env vars, IAM role, etc.)
+{
+  "name": "ai_troubleshoot",
+  "arguments": {
+    "error_message": "Connection refused"
+    // No aws_credentials - uses default chain
+  }
+}
+```
+
 ```bash
-# Quick setup
+# Quick setup with AWS CLI
 aws configure
+
+# Or set environment variables
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export AWS_REGION=us-east-1
+
+# Or use a specific profile
+export AWS_PROFILE=my-profile
 
 # Test Bedrock access
 node test-bedrock-ai.js

@@ -68,11 +68,40 @@ class EnhancedLightsailDeploymentServer {
     this.infrastructureOptimizer = new InfrastructureOptimizer();
     this.configurationGenerator = new ConfigurationGenerator();
     
-    // Initialize Bedrock AI
+    // Initialize default Bedrock AI (will be overridden per-request if credentials provided)
     this.bedrockAI = new BedrockAI({
       region: process.env.AWS_REGION || 'us-east-1',
       modelId: process.env.BEDROCK_MODEL_ID
     });
+  }
+
+  /**
+   * Get BedrockAI instance with optional custom credentials
+   * @param {Object} awsCredentials - Optional AWS credentials from tool input
+   * @returns {BedrockAI} - BedrockAI instance configured with credentials
+   */
+  getBedrockAI(awsCredentials = null) {
+    if (!awsCredentials) {
+      return this.bedrockAI; // Use default instance
+    }
+
+    // Create new instance with provided credentials
+    const options = {
+      region: awsCredentials.region || process.env.AWS_REGION || 'us-east-1',
+      modelId: process.env.BEDROCK_MODEL_ID
+    };
+
+    if (awsCredentials.profile) {
+      options.profile = awsCredentials.profile;
+    } else if (awsCredentials.access_key_id && awsCredentials.secret_access_key) {
+      options.accessKeyId = awsCredentials.access_key_id;
+      options.secretAccessKey = awsCredentials.secret_access_key;
+      if (awsCredentials.session_token) {
+        options.sessionToken = awsCredentials.session_token;
+      }
+    }
+
+    return new BedrockAI(options);
   }
 
   async initialize() {
@@ -370,6 +399,17 @@ class EnhancedLightsailDeploymentServer {
               user_description: {
                 type: 'string',
                 description: 'Optional description of the project to help AI understand context'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             },
             required: ['project_files']
@@ -394,6 +434,17 @@ class EnhancedLightsailDeploymentServer {
                   config: { type: 'object', description: 'Current deployment configuration' }
                 },
                 description: 'Additional context about the deployment'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             },
             required: ['error_message']
@@ -412,6 +463,17 @@ class EnhancedLightsailDeploymentServer {
               project_context: {
                 type: 'object',
                 description: 'Optional project context to help AI provide more relevant answers'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             },
             required: ['question']
@@ -430,6 +492,17 @@ class EnhancedLightsailDeploymentServer {
               config_yaml: {
                 type: 'string',
                 description: 'Deployment configuration as YAML string (alternative to config object)'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             }
           }
@@ -447,6 +520,17 @@ class EnhancedLightsailDeploymentServer {
               filename: {
                 type: 'string',
                 description: 'Optional filename for context'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             },
             required: ['code']
@@ -470,6 +554,17 @@ class EnhancedLightsailDeploymentServer {
                   environment: { type: 'string', enum: ['development', 'staging', 'production'], default: 'production' },
                   aws_region: { type: 'string', default: 'us-east-1' }
                 }
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name from ~/.aws/credentials (e.g., "default", "dev", "prod")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key (required if access_key_id is provided)' },
+                  session_token: { type: 'string', description: 'AWS Session Token (optional, for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region for Bedrock (default: us-east-1)' }
+                },
+                description: 'AWS credentials for Bedrock. Provide either profile name OR access keys. If not provided, uses default credential chain.'
               }
             },
             required: ['analysis']
@@ -2106,28 +2201,38 @@ ${isValid ? '✅ Configuration is ready for deployment!' :
    * AI-powered project analysis using Bedrock
    */
   async aiAnalyzeProject(args) {
-    const { project_files, user_description = '' } = args;
+    const { project_files, user_description = '', aws_credentials } = args;
 
     try {
-      const result = await this.bedrockAI.analyzeProject(project_files, user_description);
+      const bedrockAI = this.getBedrockAI(aws_credentials);
+      const result = await bedrockAI.analyzeProject(project_files, user_description);
 
       if (!result.success) {
+        const credentialHint = aws_credentials ? 
+          `\n**Credential Source**: ${aws_credentials.profile ? `Profile: ${aws_credentials.profile}` : 'Direct credentials provided'}` :
+          `\n**Tip**: You can provide AWS credentials via the \`aws_credentials\` parameter:
+- \`profile\`: AWS profile name from ~/.aws/credentials
+- \`access_key_id\` + \`secret_access_key\`: Direct credentials
+- \`region\`: AWS region (default: us-east-1)`;
+
         return {
           content: [{
             type: 'text',
             text: `# ❌ AI Analysis Failed
 
 **Error**: ${result.error}
+${credentialHint}
 
 **Possible causes**:
-- AWS credentials not configured
+- AWS credentials not configured or invalid
 - Bedrock model not available in your region
 - Insufficient permissions for Bedrock
 
 **To fix**:
-1. Ensure AWS credentials are configured: \`aws configure\`
-2. Check Bedrock model access in AWS Console
-3. Verify IAM permissions include \`bedrock:InvokeModel\`
+1. Provide credentials via \`aws_credentials\` parameter
+2. Or ensure AWS credentials are configured: \`aws configure\`
+3. Check Bedrock model access in AWS Console
+4. Verify IAM permissions include \`bedrock:InvokeModel\`
 
 Falling back to rule-based analysis...`
           }],
@@ -2173,7 +2278,7 @@ ${analysis.warnings?.map(w => `- ${w}`).join('\n') || '- No warnings'}
 ` : result.rawResponse}
 
 ---
-*Analysis powered by AWS Bedrock (Claude)*
+*Analysis powered by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*
 
 ## 📋 Raw Analysis Data
 \`\`\`json
@@ -2193,20 +2298,26 @@ ${JSON.stringify(analysis || {}, null, 2)}
    * AI-powered troubleshooting
    */
   async aiTroubleshoot(args) {
-    const { error_message, context = {} } = args;
+    const { error_message, context = {}, aws_credentials } = args;
 
     try {
-      const result = await this.bedrockAI.troubleshoot(error_message, context);
+      const bedrockAI = this.getBedrockAI(aws_credentials);
+      const result = await bedrockAI.troubleshoot(error_message, context);
 
       if (!result.success) {
+        const credentialHint = aws_credentials ? 
+          `\n\n**Credential Source**: ${aws_credentials.profile ? `Profile: ${aws_credentials.profile}` : 'Direct credentials provided'}` :
+          `\n\n**Tip**: You can provide AWS credentials via the \`aws_credentials\` parameter:
+- \`profile\`: AWS profile name from ~/.aws/credentials
+- \`access_key_id\` + \`secret_access_key\`: Direct credentials
+- \`region\`: AWS region (default: us-east-1)`;
+
         return {
           content: [{
             type: 'text',
             text: `# ❌ AI Troubleshooting Unavailable
 
-**Error**: ${result.error}
-
-Please check your AWS Bedrock configuration.`
+**Error**: ${result.error}${credentialHint}`
           }],
           isError: true
         };
@@ -2220,7 +2331,7 @@ Please check your AWS Bedrock configuration.`
 ${result.content}
 
 ---
-*Troubleshooting powered by AWS Bedrock (Claude)*`
+*Troubleshooting powered by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*`
         }]
       };
     } catch (error) {
@@ -2235,20 +2346,23 @@ ${result.content}
    * AI deployment expert Q&A
    */
   async aiAskExpert(args) {
-    const { question, project_context = null } = args;
+    const { question, project_context = null, aws_credentials } = args;
 
     try {
-      const result = await this.bedrockAI.askExpert(question, project_context);
+      const bedrockAI = this.getBedrockAI(aws_credentials);
+      const result = await bedrockAI.askExpert(question, project_context);
 
       if (!result.success) {
+        const credentialHint = aws_credentials ? 
+          `\n\n**Credential Source**: ${aws_credentials.profile ? `Profile: ${aws_credentials.profile}` : 'Direct credentials provided'}` :
+          `\n\n**Tip**: You can provide AWS credentials via the \`aws_credentials\` parameter.`;
+
         return {
           content: [{
             type: 'text',
             text: `# ❌ AI Expert Unavailable
 
-**Error**: ${result.error}
-
-Please check your AWS Bedrock configuration.`
+**Error**: ${result.error}${credentialHint}`
           }],
           isError: true
         };
@@ -2262,7 +2376,7 @@ Please check your AWS Bedrock configuration.`
 ${result.content}
 
 ---
-*Powered by AWS Bedrock (Claude)*
+*Powered by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*
 *Tokens used: ${result.usage?.inputTokens || '?'} input, ${result.usage?.outputTokens || '?'} output*`
         }]
       };
@@ -2278,11 +2392,12 @@ ${result.content}
    * AI-powered config review
    */
   async aiReviewConfig(args) {
-    const { config, config_yaml } = args;
+    const { config, config_yaml, aws_credentials } = args;
 
     try {
+      const bedrockAI = this.getBedrockAI(aws_credentials);
       const configToReview = config_yaml || JSON.stringify(config, null, 2);
-      const result = await this.bedrockAI.reviewConfig(configToReview);
+      const result = await bedrockAI.reviewConfig(configToReview);
 
       if (!result.success) {
         return {
@@ -2292,7 +2407,7 @@ ${result.content}
 
 **Error**: ${result.error}
 
-Please check your AWS Bedrock configuration.`
+Please check your AWS Bedrock configuration or provide credentials via \`aws_credentials\`.`
           }],
           isError: true
         };
@@ -2306,7 +2421,7 @@ Please check your AWS Bedrock configuration.`
 ${result.content}
 
 ---
-*Review powered by AWS Bedrock (Claude)*`
+*Review powered by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*`
         }]
       };
     } catch (error) {
@@ -2321,10 +2436,11 @@ ${result.content}
    * AI-powered code explanation
    */
   async aiExplainCode(args) {
-    const { code, filename = '' } = args;
+    const { code, filename = '', aws_credentials } = args;
 
     try {
-      const result = await this.bedrockAI.explainCode(code, filename);
+      const bedrockAI = this.getBedrockAI(aws_credentials);
+      const result = await bedrockAI.explainCode(code, filename);
 
       if (!result.success) {
         return {
@@ -2334,7 +2450,7 @@ ${result.content}
 
 **Error**: ${result.error}
 
-Please check your AWS Bedrock configuration.`
+Please check your AWS Bedrock configuration or provide credentials via \`aws_credentials\`.`
           }],
           isError: true
         };
@@ -2348,7 +2464,7 @@ Please check your AWS Bedrock configuration.`
 ${result.content}
 
 ---
-*Explanation powered by AWS Bedrock (Claude)*`
+*Explanation powered by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*`
         }]
       };
     } catch (error) {
@@ -2363,10 +2479,11 @@ ${result.content}
    * AI-powered config generation
    */
   async aiGenerateConfig(args) {
-    const { analysis, preferences = {} } = args;
+    const { analysis, preferences = {}, aws_credentials } = args;
 
     try {
-      const result = await this.bedrockAI.generateConfig(analysis, preferences);
+      const bedrockAI = this.getBedrockAI(aws_credentials);
+      const result = await bedrockAI.generateConfig(analysis, preferences);
 
       if (!result.success) {
         return {
@@ -2376,7 +2493,7 @@ ${result.content}
 
 **Error**: ${result.error}
 
-Please check your AWS Bedrock configuration.`
+Please check your AWS Bedrock configuration or provide credentials via \`aws_credentials\`.`
           }],
           isError: true
         };
@@ -2390,7 +2507,7 @@ Please check your AWS Bedrock configuration.`
 ${result.content}
 
 ---
-*Configuration generated by AWS Bedrock (Claude)*`
+*Configuration generated by AWS Bedrock (Claude) | Credentials: ${bedrockAI.credentialSource}*`
         }]
       };
     } catch (error) {
