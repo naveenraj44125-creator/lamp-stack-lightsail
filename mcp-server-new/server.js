@@ -8,12 +8,13 @@
  * accurate deployment configurations based on actual project needs.
  * 
  * Features:
- * - Intelligent project analysis and type detection
+ * - Intelligent project analysis and type detection (AI-powered via Bedrock)
  * - Smart infrastructure sizing recommendations
  * - Automatic configuration generation
  * - Multi-service application support
  * - Database and storage requirement analysis
  * - Security and performance optimization
+ * - AI-powered troubleshooting and Q&A
  * 
  * Usage:
  *   node server.js [--port PORT] [--host HOST]
@@ -22,6 +23,8 @@
  *   PORT - Server port (default: 3000)
  *   HOST - Server host (default: 0.0.0.0)
  *   MCP_AUTH_TOKEN - Optional authentication token
+ *   AWS_REGION - AWS region for Bedrock (default: us-east-1)
+ *   BEDROCK_MODEL_ID - Bedrock model ID (default: anthropic.claude-3-sonnet-20240229-v1:0)
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -30,6 +33,10 @@ import express from 'express';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Import Bedrock AI integration
+import { BedrockAI } from './bedrock-ai.js';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -45,7 +52,7 @@ class EnhancedLightsailDeploymentServer {
     this.server = new Server(
       {
         name: 'enhanced-lightsail-deployment-mcp',
-        version: '2.0.0', // Enhanced version with intelligent analysis
+        version: '3.0.0', // AI-powered version with Bedrock integration
       },
       {
         capabilities: {
@@ -60,6 +67,12 @@ class EnhancedLightsailDeploymentServer {
     this.projectAnalyzer = new ProjectAnalyzer();
     this.infrastructureOptimizer = new InfrastructureOptimizer();
     this.configurationGenerator = new ConfigurationGenerator();
+    
+    // Initialize Bedrock AI
+    this.bedrockAI = new BedrockAI({
+      region: process.env.AWS_REGION || 'us-east-1',
+      modelId: process.env.BEDROCK_MODEL_ID
+    });
   }
 
   async initialize() {
@@ -177,7 +190,19 @@ class EnhancedLightsailDeploymentServer {
                   budget: { type: 'string', enum: ['minimal', 'standard', 'performance'], default: 'standard' },
                   scale: { type: 'string', enum: ['small', 'medium', 'large'], default: 'small' },
                   environment: { type: 'string', enum: ['development', 'staging', 'production'], default: 'production' },
-                  aws_region: { type: 'string', default: 'us-east-1' }
+                  aws_region: { type: 'string', default: 'us-east-1' },
+                  // Database configuration
+                  db_name: { type: 'string', description: 'Database name (default: app_db)' },
+                  db_rds_name: { type: 'string', description: 'RDS database instance name (for external databases)' },
+                  // Bucket configuration
+                  bucket_name: { type: 'string', description: 'S3-compatible bucket name' },
+                  bucket_access: { type: 'string', enum: ['read_only', 'read_write'], default: 'read_write', description: 'Bucket access level' },
+                  bucket_bundle: { type: 'string', default: 'small_1_0', description: 'Bucket bundle size' },
+                  // API-only app configuration
+                  api_only_app: { type: 'boolean', default: false, description: 'Set true for API-only apps without root route' },
+                  verification_endpoint: { type: 'string', description: 'Custom endpoint for deployment verification' },
+                  health_check_endpoint: { type: 'string', description: 'Custom health check endpoint' },
+                  expected_content: { type: 'string', description: 'Expected content in health check response' }
                 }
               },
               github_config: {
@@ -245,6 +270,325 @@ class EnhancedLightsailDeploymentServer {
             },
             required: ['project_analysis']
           }
+        },
+        {
+          name: 'list_lightsail_instances',
+          description: 'List all Lightsail instances in the specified AWS region. Shows instance name, state, IP address, bundle, and blueprint information.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              aws_region: {
+                type: 'string',
+                default: 'us-east-1',
+                description: 'AWS region to list instances from'
+              },
+              filter_by_name: {
+                type: 'string',
+                description: 'Optional filter to match instance names (supports partial match)'
+              },
+              include_stopped: {
+                type: 'boolean',
+                default: true,
+                description: 'Include stopped instances in the list'
+              }
+            }
+          }
+        },
+        {
+          name: 'check_deployment_status',
+          description: 'Check the deployment status of a Lightsail instance including health check, running services, and application status.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              instance_name: {
+                type: 'string',
+                description: 'Name of the Lightsail instance to check'
+              },
+              aws_region: {
+                type: 'string',
+                default: 'us-east-1',
+                description: 'AWS region where the instance is located'
+              },
+              health_check_endpoint: {
+                type: 'string',
+                default: '/',
+                description: 'Endpoint to check for health (e.g., "/", "/api/health")'
+              },
+              health_check_port: {
+                type: 'number',
+                default: 80,
+                description: 'Port to check for health'
+              },
+              expected_content: {
+                type: 'string',
+                description: 'Optional content to expect in the health check response'
+              }
+            },
+            required: ['instance_name']
+          }
+        },
+        {
+          name: 'validate_deployment_config',
+          description: 'Validate a deployment configuration file for correctness and completeness. Checks for required fields, valid values, and potential issues.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              config: {
+                type: 'object',
+                description: 'Deployment configuration object to validate'
+              },
+              config_path: {
+                type: 'string',
+                description: 'Path to deployment configuration file (alternative to config object)'
+              },
+              strict_mode: {
+                type: 'boolean',
+                default: false,
+                description: 'Enable strict validation (fail on warnings)'
+              }
+            }
+          }
+        },
+        // AI-Powered Tools (via AWS Bedrock)
+        {
+          name: 'ai_analyze_project',
+          description: 'Use AI (Claude via AWS Bedrock) to intelligently analyze project files and provide detailed deployment recommendations. More accurate than rule-based analysis.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              project_files: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    path: { type: 'string', description: 'File path' },
+                    content: { type: 'string', description: 'File content' }
+                  }
+                },
+                description: 'Array of project files to analyze'
+              },
+              user_description: {
+                type: 'string',
+                description: 'Optional description of the project to help AI understand context'
+              }
+            },
+            required: ['project_files']
+          }
+        },
+        {
+          name: 'ai_troubleshoot',
+          description: 'Use AI to troubleshoot deployment errors and issues. Provides root cause analysis and step-by-step solutions.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              error_message: {
+                type: 'string',
+                description: 'The error message or issue description'
+              },
+              context: {
+                type: 'object',
+                properties: {
+                  app_type: { type: 'string', description: 'Application type (nodejs, python, php, etc.)' },
+                  instance_name: { type: 'string', description: 'Lightsail instance name' },
+                  logs: { type: 'string', description: 'Relevant log output' },
+                  config: { type: 'object', description: 'Current deployment configuration' }
+                },
+                description: 'Additional context about the deployment'
+              }
+            },
+            required: ['error_message']
+          }
+        },
+        {
+          name: 'ai_ask_expert',
+          description: 'Ask the AI deployment expert any question about AWS Lightsail, deployment, configuration, or troubleshooting.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              question: {
+                type: 'string',
+                description: 'Your question about deployment'
+              },
+              project_context: {
+                type: 'object',
+                description: 'Optional project context to help AI provide more relevant answers'
+              }
+            },
+            required: ['question']
+          }
+        },
+        {
+          name: 'ai_review_config',
+          description: 'Use AI to review a deployment configuration and suggest improvements for security, performance, and cost optimization.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              config: {
+                type: 'object',
+                description: 'Deployment configuration to review'
+              },
+              config_yaml: {
+                type: 'string',
+                description: 'Deployment configuration as YAML string (alternative to config object)'
+              }
+            }
+          }
+        },
+        {
+          name: 'ai_explain_code',
+          description: 'Use AI to explain code from a deployment perspective - what dependencies it needs, ports it uses, environment variables required, etc.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'Code to analyze'
+              },
+              filename: {
+                type: 'string',
+                description: 'Optional filename for context'
+              }
+            },
+            required: ['code']
+          }
+        },
+        {
+          name: 'ai_generate_config',
+          description: 'Use AI to generate a complete deployment configuration based on project analysis and preferences.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              analysis: {
+                type: 'object',
+                description: 'Project analysis result (from ai_analyze_project or analyze_project_intelligently)'
+              },
+              preferences: {
+                type: 'object',
+                properties: {
+                  budget: { type: 'string', enum: ['minimal', 'standard', 'performance'], default: 'standard' },
+                  scale: { type: 'string', enum: ['small', 'medium', 'large'], default: 'small' },
+                  environment: { type: 'string', enum: ['development', 'staging', 'production'], default: 'production' },
+                  aws_region: { type: 'string', default: 'us-east-1' }
+                }
+              }
+            },
+            required: ['analysis']
+          }
+        },
+        // Troubleshooting Tools
+        {
+          name: 'list_troubleshooting_scripts',
+          description: 'List all available troubleshooting scripts organized by category (docker, general, lamp, nginx, nodejs, python, react). Use this to discover what troubleshooting tools are available.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              category: {
+                type: 'string',
+                enum: ['all', 'docker', 'general', 'lamp', 'nginx', 'nodejs', 'python', 'react'],
+                default: 'all',
+                description: 'Filter scripts by category. Use "all" to see all available scripts.'
+              }
+            }
+          }
+        },
+        {
+          name: 'run_troubleshooting_script',
+          description: 'Run a specific troubleshooting script to diagnose or fix deployment issues on a Lightsail instance. Scripts can debug issues, fix common problems, or verify deployments.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              script_name: {
+                type: 'string',
+                description: 'Name of the script to run (e.g., "debug-nodejs.py", "fix-nginx.py"). Use list_troubleshooting_scripts to see available scripts.'
+              },
+              category: {
+                type: 'string',
+                enum: ['docker', 'general', 'lamp', 'nginx', 'nodejs', 'python', 'react'],
+                description: 'Category of the script (e.g., "nodejs", "nginx")'
+              },
+              instance_name: {
+                type: 'string',
+                description: 'Name of the Lightsail instance to troubleshoot'
+              },
+              aws_region: {
+                type: 'string',
+                default: 'us-east-1',
+                description: 'AWS region where the instance is located'
+              },
+              additional_args: {
+                type: 'object',
+                description: 'Additional arguments to pass to the script (varies by script)'
+              }
+            },
+            required: ['script_name', 'category', 'instance_name']
+          }
+        },
+        {
+          name: 'diagnose_deployment_issue',
+          description: 'Use AI to analyze deployment errors and automatically recommend and optionally run the appropriate troubleshooting scripts. Combines AI analysis with automated troubleshooting.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              instance_name: {
+                type: 'string',
+                description: 'Name of the Lightsail instance with issues'
+              },
+              aws_region: {
+                type: 'string',
+                default: 'us-east-1',
+                description: 'AWS region where the instance is located'
+              },
+              error_description: {
+                type: 'string',
+                description: 'Description of the error or issue you are experiencing'
+              },
+              app_type: {
+                type: 'string',
+                enum: ['nodejs', 'python', 'php', 'lamp', 'docker', 'nginx', 'react', 'unknown'],
+                description: 'Type of application deployed (helps narrow down troubleshooting)'
+              },
+              logs: {
+                type: 'string',
+                description: 'Any relevant log output or error messages'
+              },
+              auto_fix: {
+                type: 'boolean',
+                default: false,
+                description: 'If true, automatically run recommended fix scripts after diagnosis'
+              }
+            },
+            required: ['instance_name', 'error_description']
+          }
+        },
+        {
+          name: 'get_instance_logs',
+          description: 'Retrieve logs from a Lightsail instance for troubleshooting. Can get application logs, system logs, or specific service logs.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              instance_name: {
+                type: 'string',
+                description: 'Name of the Lightsail instance'
+              },
+              aws_region: {
+                type: 'string',
+                default: 'us-east-1',
+                description: 'AWS region where the instance is located'
+              },
+              log_type: {
+                type: 'string',
+                enum: ['application', 'system', 'nginx', 'apache', 'pm2', 'docker', 'all'],
+                default: 'application',
+                description: 'Type of logs to retrieve'
+              },
+              lines: {
+                type: 'number',
+                default: 100,
+                description: 'Number of log lines to retrieve'
+              }
+            },
+            required: ['instance_name']
+          }
         }
       ],
     }));
@@ -253,6 +597,15 @@ class EnhancedLightsailDeploymentServer {
       const { name, arguments: args } = request.params;
 
       try {
+        // Input validation
+        const validationError = this.validateToolInput(name, args);
+        if (validationError) {
+          return {
+            content: [{ type: 'text', text: `❌ Validation Error: ${validationError}` }],
+            isError: true,
+          };
+        }
+
         switch (name) {
           case 'analyze_project_intelligently':
             return await this.analyzeProjectIntelligently(args);
@@ -264,9 +617,37 @@ class EnhancedLightsailDeploymentServer {
             return await this.optimizeInfrastructureCosts(args);
           case 'detect_security_requirements':
             return await this.detectSecurityRequirements(args);
+          case 'list_lightsail_instances':
+            return await this.listLightsailInstances(args);
+          case 'check_deployment_status':
+            return await this.checkDeploymentStatus(args);
+          case 'validate_deployment_config':
+            return await this.validateDeploymentConfig(args);
+          // AI-Powered Tools
+          case 'ai_analyze_project':
+            return await this.aiAnalyzeProject(args);
+          case 'ai_troubleshoot':
+            return await this.aiTroubleshoot(args);
+          case 'ai_ask_expert':
+            return await this.aiAskExpert(args);
+          case 'ai_review_config':
+            return await this.aiReviewConfig(args);
+          case 'ai_explain_code':
+            return await this.aiExplainCode(args);
+          case 'ai_generate_config':
+            return await this.aiGenerateConfig(args);
+          // Troubleshooting Tools
+          case 'list_troubleshooting_scripts':
+            return await this.listTroubleshootingScripts(args);
+          case 'run_troubleshooting_script':
+            return await this.runTroubleshootingScript(args);
+          case 'diagnose_deployment_issue':
+            return await this.diagnoseDeploymentIssue(args);
+          case 'get_instance_logs':
+            return await this.getInstanceLogs(args);
           default:
             return {
-              content: [{ type: 'text', text: `Tool ${name} not implemented. Available tools: analyze_project_intelligently, generate_smart_deployment_config, setup_intelligent_deployment, optimize_infrastructure_costs, detect_security_requirements` }],
+              content: [{ type: 'text', text: `Tool ${name} not implemented.` }],
             };
         }
       } catch (error) {
@@ -276,6 +657,141 @@ class EnhancedLightsailDeploymentServer {
         };
       }
     });
+  }
+
+  // Input validation for all tools
+  validateToolInput(toolName, args) {
+    if (!args) args = {};
+
+    switch (toolName) {
+      case 'analyze_project_intelligently':
+        if (!args.project_path && !args.project_files) {
+          return 'Either project_path or project_files must be provided';
+        }
+        if (args.project_files && !Array.isArray(args.project_files)) {
+          return 'project_files must be an array';
+        }
+        break;
+
+      case 'generate_smart_deployment_config':
+        if (!args.analysis_result) {
+          return 'analysis_result is required';
+        }
+        if (!args.app_name) {
+          return 'app_name is required';
+        }
+        if (args.app_name && !/^[a-zA-Z][a-zA-Z0-9-_]*$/.test(args.app_name)) {
+          return 'app_name must start with a letter and contain only letters, numbers, hyphens, and underscores';
+        }
+        break;
+
+      case 'setup_intelligent_deployment':
+        if (!args.app_name) {
+          return 'app_name is required';
+        }
+        if (args.app_name && !/^[a-zA-Z][a-zA-Z0-9-_]*$/.test(args.app_name)) {
+          return 'app_name must start with a letter and contain only letters, numbers, hyphens, and underscores';
+        }
+        break;
+
+      case 'optimize_infrastructure_costs':
+        if (!args.current_config) {
+          return 'current_config is required';
+        }
+        break;
+
+      case 'detect_security_requirements':
+        if (!args.project_analysis) {
+          return 'project_analysis is required';
+        }
+        break;
+
+      case 'check_deployment_status':
+        if (!args.instance_name) {
+          return 'instance_name is required';
+        }
+        break;
+
+      case 'validate_deployment_config':
+        if (!args.config && !args.config_path) {
+          return 'Either config or config_path must be provided';
+        }
+        break;
+
+      // AI tool validations
+      case 'ai_analyze_project':
+        if (!args.project_files || !Array.isArray(args.project_files)) {
+          return 'project_files array is required';
+        }
+        if (args.project_files.length === 0) {
+          return 'project_files cannot be empty';
+        }
+        break;
+
+      case 'ai_troubleshoot':
+        if (!args.error_message) {
+          return 'error_message is required';
+        }
+        break;
+
+      case 'ai_ask_expert':
+        if (!args.question) {
+          return 'question is required';
+        }
+        break;
+
+      case 'ai_review_config':
+        if (!args.config && !args.config_yaml) {
+          return 'Either config or config_yaml must be provided';
+        }
+        break;
+
+      case 'ai_explain_code':
+        if (!args.code) {
+          return 'code is required';
+        }
+        break;
+
+      case 'ai_generate_config':
+        if (!args.analysis) {
+          return 'analysis is required';
+        }
+        break;
+
+      // Troubleshooting tool validations
+      case 'list_troubleshooting_scripts':
+        // No required parameters
+        break;
+
+      case 'run_troubleshooting_script':
+        if (!args.script_name) {
+          return 'script_name is required';
+        }
+        if (!args.category) {
+          return 'category is required';
+        }
+        if (!args.instance_name) {
+          return 'instance_name is required';
+        }
+        break;
+
+      case 'diagnose_deployment_issue':
+        if (!args.instance_name) {
+          return 'instance_name is required';
+        }
+        if (!args.error_description) {
+          return 'error_description is required';
+        }
+        break;
+
+      case 'get_instance_logs':
+        if (!args.instance_name) {
+          return 'instance_name is required';
+        }
+        break;
+    }
+
+    return null; // No validation errors
   }
   async analyzeProjectIntelligently(args) {
     const { project_path, project_files, user_description = '', deployment_preferences = {} } = args;
@@ -575,9 +1091,43 @@ Your deployment is now ready for production! 🚀`
   }
 
   generateSetupScript(analysis, appName, deploymentPreferences, githubConfig) {
-    const appType = analysis.detected_type;
+    const appType = analysis.detected_type || 'nodejs';
     const instanceName = `${appType}-${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     const awsRegion = deploymentPreferences.aws_region || 'us-east-1';
+    
+    // Database configuration
+    const hasDatabase = analysis.databases && analysis.databases.length > 0;
+    const dbType = hasDatabase ? analysis.databases[0].type : 'none';
+    const dbExternal = hasDatabase && analysis.scale_preference !== 'small' && dbType !== 'mongodb'; // MongoDB doesn't support RDS
+    const dbName = deploymentPreferences.db_name || 'app_db';
+    const dbRdsName = deploymentPreferences.db_rds_name || (dbExternal ? `${appType}-${dbType}-db` : '');
+    
+    // MongoDB-specific configuration
+    const isMongoDb = dbType === 'mongodb';
+    const mongoDbUser = deploymentPreferences.mongodb_user || 'app_user';
+    const mongoDbPort = deploymentPreferences.mongodb_port || '27017';
+    
+    // Bucket configuration
+    const needsBucket = analysis.storage_needs?.needs_bucket || false;
+    const bucketName = deploymentPreferences.bucket_name || (needsBucket ? `${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-bucket` : '');
+    const bucketAccess = deploymentPreferences.bucket_access || 'read_write';
+    const bucketBundle = deploymentPreferences.bucket_bundle || 'small_1_0';
+    
+    // API-only app configuration (for apps without root route)
+    const apiOnlyApp = deploymentPreferences.api_only_app || false;
+    const verificationEndpoint = deploymentPreferences.verification_endpoint || '';
+    const healthCheckEndpoint = deploymentPreferences.health_check_endpoint || '';
+    const expectedContent = deploymentPreferences.expected_content || '';
+    
+    // Get bundle size safely
+    const bundleSize = analysis.infrastructure_needs?.bundle_size || 'micro_3_0';
+    
+    // Build MongoDB-specific exports
+    const mongoDbExports = isMongoDb ? `
+# MongoDB-specific configuration
+export MONGODB_USER="${mongoDbUser}"
+export MONGODB_PORT="${mongoDbPort}"
+export MONGODB_URI="mongodb://${mongoDbUser}:CHANGE_ME_PASSWORD@localhost:${mongoDbPort}/${dbName}"` : '';
     
     return `#!/bin/bash
 # Intelligent Deployment Setup Script
@@ -594,13 +1144,30 @@ export APP_NAME="${appName}"
 export INSTANCE_NAME="${instanceName}"
 export AWS_REGION="${awsRegion}"
 export BLUEPRINT_ID="ubuntu_22_04"
-export BUNDLE_ID="${analysis.infrastructure_needs.bundle_size}"
-export DATABASE_TYPE="${analysis.databases.length > 0 ? analysis.databases[0].type : 'none'}"
-export DB_EXTERNAL="${analysis.databases.length > 0 && analysis.scale_preference !== 'small' ? 'true' : 'false'}"
-export ENABLE_BUCKET="${analysis.storage_needs.needs_bucket ? 'true' : 'false'}"
+export BUNDLE_ID="${bundleSize}"
+
+# Database configuration
+export DATABASE_TYPE="${dbType}"
+export DB_EXTERNAL="${dbExternal ? 'true' : 'false'}"
+export DB_NAME="${dbName}"
+${dbExternal ? `export DB_RDS_NAME="${dbRdsName}"` : '# DB_RDS_NAME not needed for local database'}${mongoDbExports}
+
+# Bucket configuration
+export ENABLE_BUCKET="${needsBucket ? 'true' : 'false'}"
+${needsBucket ? `export BUCKET_NAME="${bucketName}"
+export BUCKET_ACCESS="${bucketAccess}"
+export BUCKET_BUNDLE="${bucketBundle}"` : '# Bucket not enabled'}
+
+# GitHub configuration
 export REPO_VISIBILITY="${githubConfig.visibility || 'private'}"
 ${githubConfig.username ? `export GITHUB_USERNAME="${githubConfig.username}"` : ''}
 ${githubConfig.repository ? `export GITHUB_REPO="${githubConfig.repository}"` : ''}
+
+# API-only app configuration (for apps without root route)
+export API_ONLY_APP="${apiOnlyApp ? 'true' : 'false'}"
+${verificationEndpoint ? `export VERIFICATION_ENDPOINT="${verificationEndpoint}"` : '# Using default verification endpoint'}
+${healthCheckEndpoint ? `export HEALTH_CHECK_ENDPOINT="${healthCheckEndpoint}"` : '# Using default health check endpoint'}
+${expectedContent ? `export EXPECTED_CONTENT="${expectedContent}"` : '# Using default expected content'}
 
 # Download and run the setup script
 curl -sSL https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh | bash
@@ -976,6 +1543,1420 @@ Your security configuration has been tailored for ${data_sensitivity} data with 
 
     return config;
   }
+
+  // New tool: List Lightsail instances
+  async listLightsailInstances(args) {
+    const { aws_region = 'us-east-1', filter_by_name = '', include_stopped = true } = args;
+
+    try {
+      // Execute AWS CLI command to list instances
+      const command = `aws lightsail get-instances --region ${aws_region} --output json`;
+      const result = execSync(command, { encoding: 'utf8', timeout: 30000 });
+      const data = JSON.parse(result);
+
+      if (!data.instances || data.instances.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# 📋 Lightsail Instances in ${aws_region}
+
+No instances found in this region.
+
+To create a new instance, use the \`setup_intelligent_deployment\` tool.`
+          }]
+        };
+      }
+
+      // Filter instances
+      let instances = data.instances;
+      
+      if (filter_by_name) {
+        instances = instances.filter(i => 
+          i.name.toLowerCase().includes(filter_by_name.toLowerCase())
+        );
+      }
+
+      if (!include_stopped) {
+        instances = instances.filter(i => i.state.name === 'running');
+      }
+
+      // Format instance information
+      const instanceList = instances.map(i => {
+        const state = i.state.name;
+        const stateEmoji = state === 'running' ? '🟢' : state === 'stopped' ? '🔴' : '🟡';
+        return `### ${stateEmoji} ${i.name}
+- **State**: ${state}
+- **Public IP**: ${i.publicIpAddress || 'No public IP'}
+- **Private IP**: ${i.privateIpAddress || 'N/A'}
+- **Bundle**: ${i.bundleId}
+- **Blueprint**: ${i.blueprintId}
+- **Created**: ${new Date(i.createdAt).toLocaleDateString()}
+- **Region**: ${i.location.regionName}
+- **Availability Zone**: ${i.location.availabilityZone}`;
+      }).join('\n\n');
+
+      const runningCount = instances.filter(i => i.state.name === 'running').length;
+      const stoppedCount = instances.filter(i => i.state.name === 'stopped').length;
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 📋 Lightsail Instances in ${aws_region}
+
+## Summary
+- **Total Instances**: ${instances.length}
+- **Running**: ${runningCount} 🟢
+- **Stopped**: ${stoppedCount} 🔴
+${filter_by_name ? `- **Filter**: "${filter_by_name}"` : ''}
+
+## Instance Details
+
+${instanceList}
+
+---
+Use \`check_deployment_status\` to check the health of a specific instance.`
+        }]
+      };
+    } catch (error) {
+      // Check if AWS CLI is not configured
+      if (error.message.includes('Unable to locate credentials') || 
+          error.message.includes('could not be found')) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AWS CLI Not Configured
+
+Unable to list Lightsail instances. Please ensure:
+
+1. AWS CLI is installed: \`aws --version\`
+2. AWS credentials are configured: \`aws configure\`
+3. You have permissions to access Lightsail
+
+**Quick Setup:**
+\`\`\`bash
+# Configure AWS CLI
+aws configure
+
+# Or set environment variables
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
+export AWS_DEFAULT_REGION=${aws_region}
+\`\`\`
+
+Error: ${error.message}`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{ type: 'text', text: `❌ Failed to list instances: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  // New tool: Check deployment status
+  async checkDeploymentStatus(args) {
+    const { 
+      instance_name, 
+      aws_region = 'us-east-1', 
+      health_check_endpoint = '/',
+      health_check_port = 80,
+      expected_content = ''
+    } = args;
+
+    try {
+      // Get instance details
+      const instanceCommand = `aws lightsail get-instance --instance-name "${instance_name}" --region ${aws_region} --output json`;
+      let instanceData;
+      
+      try {
+        const result = execSync(instanceCommand, { encoding: 'utf8', timeout: 30000 });
+        instanceData = JSON.parse(result).instance;
+      } catch (e) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ Instance Not Found
+
+Instance \`${instance_name}\` was not found in region \`${aws_region}\`.
+
+**Possible reasons:**
+- Instance name is incorrect
+- Instance is in a different region
+- Instance has been deleted
+
+Use \`list_lightsail_instances\` to see available instances.`
+          }],
+          isError: true
+        };
+      }
+
+      const publicIp = instanceData.publicIpAddress;
+      const state = instanceData.state.name;
+      const stateEmoji = state === 'running' ? '🟢' : state === 'stopped' ? '🔴' : '🟡';
+
+      // If instance is not running, return early
+      if (state !== 'running') {
+        return {
+          content: [{
+            type: 'text',
+            text: `# 📊 Deployment Status: ${instance_name}
+
+## Instance Status
+- **State**: ${stateEmoji} ${state.toUpperCase()}
+- **Public IP**: ${publicIp || 'No public IP'}
+- **Bundle**: ${instanceData.bundleId}
+- **Blueprint**: ${instanceData.blueprintId}
+
+## ⚠️ Instance Not Running
+
+The instance is currently ${state}. Health checks cannot be performed.
+
+**To start the instance:**
+\`\`\`bash
+aws lightsail start-instance --instance-name "${instance_name}" --region ${aws_region}
+\`\`\`
+
+Then run this check again.`
+          }]
+        };
+      }
+
+      // Perform health check
+      let healthStatus = 'unknown';
+      let healthDetails = '';
+      let responseTime = 0;
+
+      if (publicIp) {
+        const healthUrl = `http://${publicIp}:${health_check_port}${health_check_endpoint}`;
+        
+        try {
+          const startTime = Date.now();
+          const curlCommand = `curl -s -o /dev/null -w "%{http_code}|%{time_total}" --connect-timeout 10 --max-time 30 "${healthUrl}"`;
+          const curlResult = execSync(curlCommand, { encoding: 'utf8', timeout: 35000 });
+          const [httpCode, timeTotal] = curlResult.split('|');
+          responseTime = Math.round(parseFloat(timeTotal) * 1000);
+
+          if (httpCode === '200') {
+            healthStatus = 'healthy';
+            
+            // Check for expected content if specified
+            if (expected_content) {
+              const contentCommand = `curl -s --connect-timeout 10 --max-time 30 "${healthUrl}"`;
+              const content = execSync(contentCommand, { encoding: 'utf8', timeout: 35000 });
+              
+              if (content.includes(expected_content)) {
+                healthDetails = `Response contains expected content: "${expected_content}"`;
+              } else {
+                healthStatus = 'degraded';
+                healthDetails = `Response does not contain expected content: "${expected_content}"`;
+              }
+            }
+          } else if (httpCode === '301' || httpCode === '302') {
+            healthStatus = 'redirect';
+            healthDetails = `Redirecting (HTTP ${httpCode}) - may need to check HTTPS`;
+          } else if (httpCode === '000') {
+            healthStatus = 'unreachable';
+            healthDetails = 'Connection failed - service may not be running';
+          } else {
+            healthStatus = 'unhealthy';
+            healthDetails = `HTTP ${httpCode} response`;
+          }
+        } catch (e) {
+          healthStatus = 'unreachable';
+          healthDetails = `Health check failed: ${e.message}`;
+        }
+      }
+
+      const healthEmoji = {
+        'healthy': '✅',
+        'degraded': '⚠️',
+        'unhealthy': '❌',
+        'unreachable': '🔴',
+        'redirect': '↪️',
+        'unknown': '❓'
+      }[healthStatus];
+
+      // Get open ports
+      let openPorts = [];
+      try {
+        const portsCommand = `aws lightsail get-instance-port-states --instance-name "${instance_name}" --region ${aws_region} --output json`;
+        const portsResult = execSync(portsCommand, { encoding: 'utf8', timeout: 30000 });
+        const portsData = JSON.parse(portsResult);
+        openPorts = portsData.portStates || [];
+      } catch (e) {
+        // Ignore port check errors
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 📊 Deployment Status: ${instance_name}
+
+## Instance Status
+- **State**: ${stateEmoji} ${state.toUpperCase()}
+- **Public IP**: ${publicIp || 'No public IP'}
+- **Bundle**: ${instanceData.bundleId}
+- **Blueprint**: ${instanceData.blueprintId}
+- **Region**: ${instanceData.location.regionName}
+
+## Health Check
+- **Status**: ${healthEmoji} ${healthStatus.toUpperCase()}
+- **Endpoint**: http://${publicIp}:${health_check_port}${health_check_endpoint}
+- **Response Time**: ${responseTime}ms
+${healthDetails ? `- **Details**: ${healthDetails}` : ''}
+
+## Open Ports
+${openPorts.length > 0 ? 
+  openPorts.map(p => `- Port ${p.fromPort}${p.fromPort !== p.toPort ? `-${p.toPort}` : ''} (${p.protocol}): ${p.state}`).join('\n') :
+  '- No port information available'
+}
+
+## Quick Actions
+
+**SSH into instance:**
+\`\`\`bash
+ssh -i ~/.ssh/lightsail-key.pem ubuntu@${publicIp}
+\`\`\`
+
+**View application logs:**
+\`\`\`bash
+# For Node.js (PM2)
+pm2 logs
+
+# For Apache/PHP
+sudo tail -f /var/log/apache2/error.log
+
+# For Docker
+docker-compose logs -f
+\`\`\`
+
+**Restart services:**
+\`\`\`bash
+# For Node.js (PM2)
+pm2 restart all
+
+# For Apache
+sudo systemctl restart apache2
+
+# For Docker
+docker-compose restart
+\`\`\`
+
+---
+${healthStatus === 'healthy' ? '🎉 Your deployment is healthy and running!' : 
+  healthStatus === 'unreachable' ? '⚠️ Application may not be running. Check the logs for errors.' :
+  '⚠️ There may be issues with your deployment. Check the logs for details.'}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Failed to check deployment status: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  // New tool: Validate deployment configuration
+  async validateDeploymentConfig(args) {
+    const { config, config_path, strict_mode = false } = args;
+
+    let configToValidate = config;
+
+    // Load config from file if path provided
+    if (config_path && !config) {
+      try {
+        const configContent = fs.readFileSync(config_path, 'utf8');
+        // Simple YAML parsing (for basic validation)
+        configToValidate = this.parseSimpleYAML(configContent);
+      } catch (e) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ Configuration File Error
+
+Unable to read configuration file: \`${config_path}\`
+
+Error: ${e.message}
+
+Make sure the file exists and is readable.`
+          }],
+          isError: true
+        };
+      }
+    }
+
+    const errors = [];
+    const warnings = [];
+    const suggestions = [];
+
+    // Validate required sections
+    if (!configToValidate.aws) {
+      errors.push('Missing required section: `aws`');
+    } else {
+      if (!configToValidate.aws.region) {
+        warnings.push('`aws.region` not specified, will default to us-east-1');
+      }
+    }
+
+    if (!configToValidate.lightsail) {
+      errors.push('Missing required section: `lightsail`');
+    } else {
+      if (!configToValidate.lightsail.instance_name) {
+        errors.push('Missing required field: `lightsail.instance_name`');
+      }
+      
+      // Validate bundle_id
+      const validBundles = ['nano_3_0', 'micro_3_0', 'small_3_0', 'medium_3_0', 'large_3_0', 'xlarge_3_0'];
+      if (configToValidate.lightsail.bundle_id && !validBundles.includes(configToValidate.lightsail.bundle_id)) {
+        warnings.push(`Unknown bundle_id: ${configToValidate.lightsail.bundle_id}. Valid options: ${validBundles.join(', ')}`);
+      }
+
+      // Validate blueprint_id
+      const validBlueprints = ['ubuntu_22_04', 'ubuntu_20_04', 'amazon_linux_2', 'amazon_linux_2023', 'debian_11'];
+      if (configToValidate.lightsail.blueprint_id && !validBlueprints.includes(configToValidate.lightsail.blueprint_id)) {
+        warnings.push(`Unknown blueprint_id: ${configToValidate.lightsail.blueprint_id}. Common options: ${validBlueprints.join(', ')}`);
+      }
+    }
+
+    if (!configToValidate.application) {
+      errors.push('Missing required section: `application`');
+    } else {
+      if (!configToValidate.application.name) {
+        errors.push('Missing required field: `application.name`');
+      }
+      if (!configToValidate.application.type) {
+        errors.push('Missing required field: `application.type`');
+      } else {
+        const validTypes = ['lamp', 'nodejs', 'python', 'react', 'docker', 'nginx'];
+        if (!validTypes.includes(configToValidate.application.type)) {
+          errors.push(`Invalid application type: ${configToValidate.application.type}. Valid options: ${validTypes.join(', ')}`);
+        }
+      }
+    }
+
+    // Validate dependencies
+    if (configToValidate.dependencies) {
+      // Check for conflicting database configurations
+      const enabledDbs = [];
+      if (configToValidate.dependencies.mysql?.enabled) enabledDbs.push('mysql');
+      if (configToValidate.dependencies.postgresql?.enabled) enabledDbs.push('postgresql');
+      if (configToValidate.dependencies.mongodb?.enabled) enabledDbs.push('mongodb');
+      
+      if (enabledDbs.length > 1) {
+        warnings.push(`Multiple databases enabled (${enabledDbs.join(', ')}). This may increase resource usage.`);
+      }
+
+      // Check for default passwords
+      const checkDefaultPasswords = (obj, path = '') => {
+        if (typeof obj === 'object' && obj !== null) {
+          for (const [key, value] of Object.entries(obj)) {
+            const currentPath = path ? `${path}.${key}` : key;
+            if (typeof value === 'string' && 
+                (key.toLowerCase().includes('password') || key.toLowerCase().includes('secret')) &&
+                (value.includes('CHANGE_ME') || value === 'password' || value === 'secret')) {
+              warnings.push(`Default password detected at \`${currentPath}\`. Change before production deployment.`);
+            }
+            if (typeof value === 'object') {
+              checkDefaultPasswords(value, currentPath);
+            }
+          }
+        }
+      };
+      checkDefaultPasswords(configToValidate);
+    }
+
+    // Validate deployment section
+    if (!configToValidate.deployment) {
+      suggestions.push('Consider adding a `deployment` section for timeout and retry configuration');
+    }
+
+    // Validate monitoring section
+    if (!configToValidate.monitoring) {
+      suggestions.push('Consider adding a `monitoring` section for health checks');
+    } else {
+      if (!configToValidate.monitoring.health_check?.endpoint) {
+        suggestions.push('Consider specifying a health check endpoint in `monitoring.health_check.endpoint`');
+      }
+    }
+
+    // Validate security section
+    if (!configToValidate.security) {
+      suggestions.push('Consider adding a `security` section for file permissions and SSL configuration');
+    }
+
+    // Determine overall status
+    const isValid = errors.length === 0 && (!strict_mode || warnings.length === 0);
+    const statusEmoji = isValid ? '✅' : errors.length > 0 ? '❌' : '⚠️';
+
+    return {
+      content: [{
+        type: 'text',
+        text: `# ${statusEmoji} Configuration Validation Results
+
+## Status: ${isValid ? 'VALID' : errors.length > 0 ? 'INVALID' : 'VALID WITH WARNINGS'}
+
+${errors.length > 0 ? `## ❌ Errors (${errors.length})
+${errors.map(e => `- ${e}`).join('\n')}
+
+` : ''}${warnings.length > 0 ? `## ⚠️ Warnings (${warnings.length})
+${warnings.map(w => `- ${w}`).join('\n')}
+
+` : ''}${suggestions.length > 0 ? `## 💡 Suggestions (${suggestions.length})
+${suggestions.map(s => `- ${s}`).join('\n')}
+
+` : ''}## Summary
+- **Errors**: ${errors.length}
+- **Warnings**: ${warnings.length}
+- **Suggestions**: ${suggestions.length}
+- **Strict Mode**: ${strict_mode ? 'Enabled' : 'Disabled'}
+
+${isValid ? '✅ Configuration is ready for deployment!' : 
+  errors.length > 0 ? '❌ Please fix the errors before deploying.' :
+  '⚠️ Configuration is valid but has warnings. Review before deploying.'}`
+      }]
+    };
+  }
+
+  // Simple YAML parser for basic validation
+  parseSimpleYAML(content) {
+    // This is a very basic YAML parser for validation purposes
+    // For production, use a proper YAML library
+    const result = {};
+    const lines = content.split('\n');
+    const stack = [{ obj: result, indent: -1 }];
+
+    for (const line of lines) {
+      // Skip comments and empty lines
+      if (line.trim().startsWith('#') || line.trim() === '') continue;
+
+      const indent = line.search(/\S/);
+      const trimmed = line.trim();
+
+      // Handle key-value pairs
+      const colonIndex = trimmed.indexOf(':');
+      if (colonIndex > 0) {
+        const key = trimmed.substring(0, colonIndex).trim();
+        let value = trimmed.substring(colonIndex + 1).trim();
+
+        // Pop stack to find parent
+        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+          stack.pop();
+        }
+
+        const parent = stack[stack.length - 1].obj;
+
+        if (value === '' || value === '|' || value === '>') {
+          // Nested object or multiline string
+          parent[key] = {};
+          stack.push({ obj: parent[key], indent });
+        } else {
+          // Simple value
+          // Remove quotes
+          if ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+          }
+          // Parse booleans and numbers
+          if (value === 'true') value = true;
+          else if (value === 'false') value = false;
+          else if (!isNaN(value) && value !== '') value = Number(value);
+          
+          parent[key] = value;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // ============================================
+  // AI-Powered Tools (AWS Bedrock Integration)
+  // ============================================
+
+  /**
+   * AI-powered project analysis using Bedrock
+   */
+  async aiAnalyzeProject(args) {
+    const { project_files, user_description = '' } = args;
+
+    try {
+      const result = await this.bedrockAI.analyzeProject(project_files, user_description);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Analysis Failed
+
+**Error**: ${result.error}
+
+**Possible causes**:
+- AWS credentials not configured
+- Bedrock model not available in your region
+- Insufficient permissions for Bedrock
+
+**To fix**:
+1. Ensure AWS credentials are configured: \`aws configure\`
+2. Check Bedrock model access in AWS Console
+3. Verify IAM permissions include \`bedrock:InvokeModel\`
+
+Falling back to rule-based analysis...`
+          }],
+          isError: true
+        };
+      }
+
+      const analysis = result.analysis;
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `# 🤖 AI-Powered Project Analysis
+
+## 📊 Detection Results
+${analysis ? `
+- **Application Type**: ${analysis.detected_type} (${Math.round((analysis.confidence || 0) * 100)}% confidence)
+- **Deployment Complexity**: ${analysis.deployment_complexity || 'Unknown'}
+- **Estimated Cost**: $${analysis.estimated_costs?.monthly_min || '?'} - $${analysis.estimated_costs?.monthly_max || '?'}/month
+
+## 🛠️ Detected Technologies
+${analysis.frameworks?.map(f => `- **${f.name}** (${f.type})`).join('\n') || '- None detected'}
+
+## 💾 Database Requirements
+${analysis.databases?.map(db => `- **${db.type}** - ${db.name}`).join('\n') || '- No database needed'}
+
+## 📦 Infrastructure Needs
+- **Recommended Bundle**: ${analysis.infrastructure_needs?.bundle_size || 'micro_3_0'}
+- **Memory Intensive**: ${analysis.infrastructure_needs?.memory_intensive ? 'Yes' : 'No'}
+- **CPU Intensive**: ${analysis.infrastructure_needs?.cpu_intensive ? 'Yes' : 'No'}
+- **Needs Bucket**: ${analysis.storage_needs?.needs_bucket ? 'Yes' : 'No'}
+
+## 🔒 Security Considerations
+- **Needs SSL**: ${analysis.security_considerations?.needs_ssl ? 'Yes' : 'No'}
+- **Needs Auth**: ${analysis.security_considerations?.needs_auth ? 'Yes' : 'No'}
+- **Handles User Data**: ${analysis.security_considerations?.handles_user_data ? 'Yes' : 'No'}
+
+## 💡 AI Recommendations
+${analysis.recommendations?.map(r => `- ${r}`).join('\n') || '- No specific recommendations'}
+
+## ⚠️ Warnings
+${analysis.warnings?.map(w => `- ${w}`).join('\n') || '- No warnings'}
+` : result.rawResponse}
+
+---
+*Analysis powered by AWS Bedrock (Claude)*
+
+## 📋 Raw Analysis Data
+\`\`\`json
+${JSON.stringify(analysis || {}, null, 2)}
+\`\`\``
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Analysis Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI-powered troubleshooting
+   */
+  async aiTroubleshoot(args) {
+    const { error_message, context = {} } = args;
+
+    try {
+      const result = await this.bedrockAI.troubleshoot(error_message, context);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Troubleshooting Unavailable
+
+**Error**: ${result.error}
+
+Please check your AWS Bedrock configuration.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 🔧 AI Troubleshooting Analysis
+
+${result.content}
+
+---
+*Troubleshooting powered by AWS Bedrock (Claude)*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Troubleshooting Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI deployment expert Q&A
+   */
+  async aiAskExpert(args) {
+    const { question, project_context = null } = args;
+
+    try {
+      const result = await this.bedrockAI.askExpert(question, project_context);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Expert Unavailable
+
+**Error**: ${result.error}
+
+Please check your AWS Bedrock configuration.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 🎓 AI Deployment Expert
+
+${result.content}
+
+---
+*Powered by AWS Bedrock (Claude)*
+*Tokens used: ${result.usage?.inputTokens || '?'} input, ${result.usage?.outputTokens || '?'} output*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Expert Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI-powered config review
+   */
+  async aiReviewConfig(args) {
+    const { config, config_yaml } = args;
+
+    try {
+      const configToReview = config_yaml || JSON.stringify(config, null, 2);
+      const result = await this.bedrockAI.reviewConfig(configToReview);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Review Unavailable
+
+**Error**: ${result.error}
+
+Please check your AWS Bedrock configuration.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 🔍 AI Configuration Review
+
+${result.content}
+
+---
+*Review powered by AWS Bedrock (Claude)*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Review Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI-powered code explanation
+   */
+  async aiExplainCode(args) {
+    const { code, filename = '' } = args;
+
+    try {
+      const result = await this.bedrockAI.explainCode(code, filename);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Explanation Unavailable
+
+**Error**: ${result.error}
+
+Please check your AWS Bedrock configuration.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 📖 AI Code Explanation
+
+${result.content}
+
+---
+*Explanation powered by AWS Bedrock (Claude)*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Explanation Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI-powered config generation
+   */
+  async aiGenerateConfig(args) {
+    const { analysis, preferences = {} } = args;
+
+    try {
+      const result = await this.bedrockAI.generateConfig(analysis, preferences);
+
+      if (!result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ AI Config Generation Unavailable
+
+**Error**: ${result.error}
+
+Please check your AWS Bedrock configuration.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# ⚙️ AI-Generated Deployment Configuration
+
+${result.content}
+
+---
+*Configuration generated by AWS Bedrock (Claude)*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ AI Config Generation Error: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  // ============================================
+  // Troubleshooting Tools Implementation
+  // ============================================
+
+  /**
+   * Get the path to troubleshooting tools directory
+   */
+  getTroubleshootingToolsPath() {
+    // Get the directory of this script
+    const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+    return path.resolve(scriptDir, '..', 'troubleshooting-tools');
+  }
+
+  /**
+   * List available troubleshooting scripts
+   */
+  async listTroubleshootingScripts(args) {
+    const { category = 'all' } = args;
+    const toolsPath = this.getTroubleshootingToolsPath();
+
+    try {
+      const categories = category === 'all' 
+        ? ['docker', 'general', 'lamp', 'nginx', 'nodejs', 'python', 'react']
+        : [category];
+
+      const scripts = {};
+      
+      for (const cat of categories) {
+        const catPath = path.join(toolsPath, cat);
+        
+        if (fs.existsSync(catPath)) {
+          const files = fs.readdirSync(catPath)
+            .filter(f => f.endsWith('.py') && !f.startsWith('__'))
+            .map(f => {
+              const scriptPath = path.join(catPath, f);
+              let description = '';
+              
+              // Try to extract description from script docstring
+              try {
+                const content = fs.readFileSync(scriptPath, 'utf8');
+                const docMatch = content.match(/"""([^"]+)"""/);
+                if (docMatch) {
+                  description = docMatch[1].trim().split('\n')[0];
+                }
+              } catch (e) {
+                // Ignore read errors
+              }
+
+              // Determine script type from name
+              const isDebug = f.startsWith('debug-');
+              const isFix = f.startsWith('fix-');
+              const isVerify = f.includes('verify') || f.includes('check') || f.includes('test');
+              
+              return {
+                name: f,
+                type: isDebug ? 'debug' : isFix ? 'fix' : isVerify ? 'verify' : 'utility',
+                description: description || `${isDebug ? 'Debug' : isFix ? 'Fix' : 'Utility'} script for ${cat} deployments`
+              };
+            });
+          
+          if (files.length > 0) {
+            scripts[cat] = files;
+          }
+        }
+      }
+
+      // Format output
+      let output = `# 🔧 Available Troubleshooting Scripts\n\n`;
+      
+      if (Object.keys(scripts).length === 0) {
+        output += `No troubleshooting scripts found${category !== 'all' ? ` in category "${category}"` : ''}.\n`;
+      } else {
+        for (const [cat, files] of Object.entries(scripts)) {
+          const emoji = {
+            docker: '🐳',
+            general: '🔧',
+            lamp: '💡',
+            nginx: '🌐',
+            nodejs: '📦',
+            python: '🐍',
+            react: '⚛️'
+          }[cat] || '📁';
+          
+          output += `## ${emoji} ${cat.charAt(0).toUpperCase() + cat.slice(1)}\n\n`;
+          
+          for (const file of files) {
+            const typeEmoji = file.type === 'debug' ? '🔍' : file.type === 'fix' ? '🔧' : file.type === 'verify' ? '✅' : '📄';
+            output += `- ${typeEmoji} **${file.name}** - ${file.description}\n`;
+          }
+          output += '\n';
+        }
+
+        output += `---\n\n`;
+        output += `## 📖 Usage\n\n`;
+        output += `To run a script, use the \`run_troubleshooting_script\` tool:\n\n`;
+        output += `\`\`\`json\n`;
+        output += `{\n`;
+        output += `  "script_name": "debug-nodejs.py",\n`;
+        output += `  "category": "nodejs",\n`;
+        output += `  "instance_name": "my-instance",\n`;
+        output += `  "aws_region": "us-east-1"\n`;
+        output += `}\n`;
+        output += `\`\`\`\n\n`;
+        output += `Or use \`diagnose_deployment_issue\` for AI-powered diagnosis and automatic script selection.`;
+      }
+
+      return {
+        content: [{ type: 'text', text: output }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Failed to list troubleshooting scripts: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Run a specific troubleshooting script
+   */
+  async runTroubleshootingScript(args) {
+    const { 
+      script_name, 
+      category, 
+      instance_name, 
+      aws_region = 'us-east-1',
+      additional_args = {}
+    } = args;
+
+    const toolsPath = this.getTroubleshootingToolsPath();
+    const scriptPath = path.join(toolsPath, category, script_name);
+
+    try {
+      // Verify script exists
+      if (!fs.existsSync(scriptPath)) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ Script Not Found
+
+Script \`${script_name}\` not found in category \`${category}\`.
+
+Use \`list_troubleshooting_scripts\` to see available scripts.`
+          }],
+          isError: true
+        };
+      }
+
+      // Build environment variables for the script
+      const env = {
+        ...process.env,
+        INSTANCE_NAME: instance_name,
+        AWS_REGION: aws_region,
+        AUTOMATED_MODE: 'true',
+        ...Object.fromEntries(
+          Object.entries(additional_args).map(([k, v]) => [k.toUpperCase(), String(v)])
+        )
+      };
+
+      // Run the script
+      const startTime = Date.now();
+      let output = '';
+      let success = false;
+
+      try {
+        output = execSync(`python3 "${scriptPath}"`, {
+          encoding: 'utf8',
+          timeout: 300000, // 5 minute timeout
+          env,
+          input: `${instance_name}\n${aws_region}\nn\n`, // Provide default inputs
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        success = true;
+      } catch (execError) {
+        output = execError.stdout || execError.stderr || execError.message;
+        success = false;
+      }
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# ${success ? '✅' : '⚠️'} Troubleshooting Script Results
+
+## Script Information
+- **Script**: ${script_name}
+- **Category**: ${category}
+- **Instance**: ${instance_name}
+- **Region**: ${aws_region}
+- **Duration**: ${duration}s
+- **Status**: ${success ? 'Completed' : 'Completed with warnings/errors'}
+
+## Output
+
+\`\`\`
+${output.slice(0, 10000)}${output.length > 10000 ? '\n... (output truncated)' : ''}
+\`\`\`
+
+${success ? '✅ Script completed successfully.' : '⚠️ Script completed with some issues. Review the output above.'}
+
+---
+${!success ? `\n**Next Steps:**\n- Review the error messages above\n- Try running a fix script if available\n- Use \`diagnose_deployment_issue\` for AI-powered analysis\n` : ''}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Failed to run troubleshooting script: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * AI-powered deployment issue diagnosis
+   */
+  async diagnoseDeploymentIssue(args) {
+    const {
+      instance_name,
+      aws_region = 'us-east-1',
+      error_description,
+      app_type = 'unknown',
+      logs = '',
+      auto_fix = false
+    } = args;
+
+    try {
+      // Step 1: Get instance status
+      let instanceStatus = null;
+      try {
+        const statusResult = await this.checkDeploymentStatus({
+          instance_name,
+          aws_region
+        });
+        instanceStatus = statusResult.content[0].text;
+      } catch (e) {
+        instanceStatus = `Could not get instance status: ${e.message}`;
+      }
+
+      // Step 2: Use AI to analyze the issue
+      const analysisPrompt = `You are a deployment troubleshooting expert. Analyze this deployment issue and recommend specific troubleshooting scripts to run.
+
+## Instance Information
+- Instance Name: ${instance_name}
+- Region: ${aws_region}
+- App Type: ${app_type}
+
+## Instance Status
+${instanceStatus}
+
+## Error Description
+${error_description}
+
+## Logs
+${logs || 'No logs provided'}
+
+## Available Troubleshooting Scripts
+- docker: debug-docker.py, fix-docker.py
+- general: comprehensive-endpoint-check.py, fix-all-deployment-issues.py, test-all-deployments.py, verify-all-endpoints.py
+- lamp: debug-lamp.py, fix-lamp.py
+- nginx: debug-nginx.py, fix-nginx.py
+- nodejs: debug-nodejs.py, fix-nodejs.py, debug-react-nodejs.py, fix-react-nodejs.py, quick-check.py
+- python: debug-python.py, fix-python.py
+- react: debug-react.py, fix-react.py
+
+Please provide:
+1. Root cause analysis
+2. Recommended troubleshooting scripts to run (in order)
+3. Step-by-step fix instructions
+4. Prevention tips
+
+Format your response with clear sections.`;
+
+      const aiResult = await this.bedrockAI.askExpert(analysisPrompt);
+
+      let aiAnalysis = '';
+      if (aiResult.success) {
+        aiAnalysis = aiResult.content;
+      } else {
+        // Fallback to rule-based diagnosis
+        aiAnalysis = this.ruleBasedDiagnosis(error_description, app_type, logs);
+      }
+
+      // Step 3: Extract recommended scripts from AI analysis
+      const recommendedScripts = this.extractRecommendedScripts(aiAnalysis, app_type);
+
+      // Step 4: Optionally run fix scripts
+      let fixResults = '';
+      if (auto_fix && recommendedScripts.length > 0) {
+        fixResults = '\n## 🔧 Auto-Fix Results\n\n';
+        
+        for (const script of recommendedScripts.slice(0, 2)) { // Run max 2 scripts
+          try {
+            const result = await this.runTroubleshootingScript({
+              script_name: script.name,
+              category: script.category,
+              instance_name,
+              aws_region
+            });
+            fixResults += `### ${script.name}\n${result.content[0].text}\n\n`;
+          } catch (e) {
+            fixResults += `### ${script.name}\n❌ Failed to run: ${e.message}\n\n`;
+          }
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 🔍 Deployment Issue Diagnosis
+
+## Instance: ${instance_name} (${aws_region})
+## App Type: ${app_type}
+
+---
+
+## 🤖 AI Analysis
+
+${aiAnalysis}
+
+---
+
+## 📋 Recommended Scripts
+
+${recommendedScripts.length > 0 ? 
+  recommendedScripts.map((s, i) => `${i + 1}. **${s.category}/${s.name}** - ${s.reason}`).join('\n') :
+  'No specific scripts recommended. Try running general diagnostics.'}
+
+${auto_fix ? fixResults : `
+---
+
+## 🚀 Next Steps
+
+To run the recommended scripts, use:
+\`\`\`json
+{
+  "tool": "run_troubleshooting_script",
+  "script_name": "${recommendedScripts[0]?.name || 'debug-nodejs.py'}",
+  "category": "${recommendedScripts[0]?.category || 'nodejs'}",
+  "instance_name": "${instance_name}",
+  "aws_region": "${aws_region}"
+}
+\`\`\`
+
+Or set \`auto_fix: true\` to automatically run fix scripts.`}
+
+---
+*Diagnosis powered by ${aiResult.success ? 'AWS Bedrock (Claude)' : 'rule-based analysis'}*`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Diagnosis failed: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Rule-based diagnosis fallback when AI is unavailable
+   */
+  ruleBasedDiagnosis(errorDescription, appType, logs) {
+    const error = (errorDescription + ' ' + logs).toLowerCase();
+    let diagnosis = '## Root Cause Analysis\n\n';
+    let recommendations = [];
+
+    // Common error patterns
+    if (error.includes('502') || error.includes('bad gateway')) {
+      diagnosis += '**Likely Cause**: Backend service not running or not responding.\n\n';
+      recommendations.push({ category: appType === 'nodejs' ? 'nodejs' : 'general', name: `debug-${appType}.py`, reason: 'Check backend service status' });
+      recommendations.push({ category: appType === 'nodejs' ? 'nodejs' : 'general', name: `fix-${appType}.py`, reason: 'Restart backend service' });
+    } else if (error.includes('503') || error.includes('service unavailable')) {
+      diagnosis += '**Likely Cause**: Service overloaded or under maintenance.\n\n';
+      recommendations.push({ category: 'general', name: 'comprehensive-endpoint-check.py', reason: 'Check all endpoints' });
+    } else if (error.includes('connection refused') || error.includes('econnrefused')) {
+      diagnosis += '**Likely Cause**: Service not listening on expected port.\n\n';
+      recommendations.push({ category: appType !== 'unknown' ? appType : 'nodejs', name: `debug-${appType !== 'unknown' ? appType : 'nodejs'}.py`, reason: 'Check port configuration' });
+    } else if (error.includes('permission denied') || error.includes('eacces')) {
+      diagnosis += '**Likely Cause**: File or directory permission issues.\n\n';
+      recommendations.push({ category: appType !== 'unknown' ? appType : 'nodejs', name: `fix-${appType !== 'unknown' ? appType : 'nodejs'}.py`, reason: 'Fix permissions' });
+    } else if (error.includes('nginx') || error.includes('welcome to nginx')) {
+      diagnosis += '**Likely Cause**: Nginx not configured correctly or serving default page.\n\n';
+      recommendations.push({ category: 'nginx', name: 'debug-nginx.py', reason: 'Check nginx configuration' });
+      recommendations.push({ category: 'nginx', name: 'fix-nginx.py', reason: 'Fix nginx configuration' });
+    } else if (error.includes('pm2') || error.includes('node')) {
+      diagnosis += '**Likely Cause**: Node.js application or PM2 process manager issue.\n\n';
+      recommendations.push({ category: 'nodejs', name: 'debug-nodejs.py', reason: 'Check Node.js and PM2 status' });
+      recommendations.push({ category: 'nodejs', name: 'fix-nodejs.py', reason: 'Restart PM2 processes' });
+    } else if (error.includes('docker') || error.includes('container')) {
+      diagnosis += '**Likely Cause**: Docker container not running or misconfigured.\n\n';
+      recommendations.push({ category: 'docker', name: 'debug-docker.py', reason: 'Check Docker containers' });
+      recommendations.push({ category: 'docker', name: 'fix-docker.py', reason: 'Restart Docker containers' });
+    } else if (error.includes('apache') || error.includes('httpd') || error.includes('php')) {
+      diagnosis += '**Likely Cause**: Apache/PHP configuration issue.\n\n';
+      recommendations.push({ category: 'lamp', name: 'debug-lamp.py', reason: 'Check Apache and PHP' });
+      recommendations.push({ category: 'lamp', name: 'fix-lamp.py', reason: 'Fix Apache configuration' });
+    } else {
+      diagnosis += '**Likely Cause**: Unable to determine specific cause from error description.\n\n';
+      recommendations.push({ category: 'general', name: 'comprehensive-endpoint-check.py', reason: 'Run comprehensive diagnostics' });
+      recommendations.push({ category: 'general', name: 'fix-all-deployment-issues.py', reason: 'Attempt general fixes' });
+    }
+
+    diagnosis += '## Recommendations\n\n';
+    diagnosis += recommendations.map((r, i) => `${i + 1}. Run \`${r.category}/${r.name}\` - ${r.reason}`).join('\n');
+
+    return diagnosis;
+  }
+
+  /**
+   * Extract recommended scripts from AI analysis
+   */
+  extractRecommendedScripts(aiAnalysis, appType) {
+    const scripts = [];
+    const analysis = aiAnalysis.toLowerCase();
+
+    // Map of script patterns to detect
+    const scriptPatterns = [
+      { pattern: /debug-nodejs\.py/i, category: 'nodejs', name: 'debug-nodejs.py' },
+      { pattern: /fix-nodejs\.py/i, category: 'nodejs', name: 'fix-nodejs.py' },
+      { pattern: /debug-nginx\.py/i, category: 'nginx', name: 'debug-nginx.py' },
+      { pattern: /fix-nginx\.py/i, category: 'nginx', name: 'fix-nginx.py' },
+      { pattern: /debug-docker\.py/i, category: 'docker', name: 'debug-docker.py' },
+      { pattern: /fix-docker\.py/i, category: 'docker', name: 'fix-docker.py' },
+      { pattern: /debug-lamp\.py/i, category: 'lamp', name: 'debug-lamp.py' },
+      { pattern: /fix-lamp\.py/i, category: 'lamp', name: 'fix-lamp.py' },
+      { pattern: /debug-python\.py/i, category: 'python', name: 'debug-python.py' },
+      { pattern: /fix-python\.py/i, category: 'python', name: 'fix-python.py' },
+      { pattern: /debug-react\.py/i, category: 'react', name: 'debug-react.py' },
+      { pattern: /fix-react\.py/i, category: 'react', name: 'fix-react.py' },
+      { pattern: /comprehensive-endpoint-check\.py/i, category: 'general', name: 'comprehensive-endpoint-check.py' },
+      { pattern: /fix-all-deployment-issues\.py/i, category: 'general', name: 'fix-all-deployment-issues.py' },
+    ];
+
+    for (const { pattern, category, name } of scriptPatterns) {
+      if (pattern.test(aiAnalysis)) {
+        scripts.push({ category, name, reason: 'Recommended by AI analysis' });
+      }
+    }
+
+    // If no scripts found, add defaults based on app type
+    if (scripts.length === 0) {
+      const typeMap = {
+        nodejs: [{ category: 'nodejs', name: 'debug-nodejs.py' }, { category: 'nodejs', name: 'fix-nodejs.py' }],
+        python: [{ category: 'python', name: 'debug-python.py' }, { category: 'python', name: 'fix-python.py' }],
+        php: [{ category: 'lamp', name: 'debug-lamp.py' }, { category: 'lamp', name: 'fix-lamp.py' }],
+        lamp: [{ category: 'lamp', name: 'debug-lamp.py' }, { category: 'lamp', name: 'fix-lamp.py' }],
+        docker: [{ category: 'docker', name: 'debug-docker.py' }, { category: 'docker', name: 'fix-docker.py' }],
+        nginx: [{ category: 'nginx', name: 'debug-nginx.py' }, { category: 'nginx', name: 'fix-nginx.py' }],
+        react: [{ category: 'react', name: 'debug-react.py' }, { category: 'react', name: 'fix-react.py' }],
+      };
+
+      const defaults = typeMap[appType] || [
+        { category: 'general', name: 'comprehensive-endpoint-check.py' },
+        { category: 'general', name: 'fix-all-deployment-issues.py' }
+      ];
+
+      scripts.push(...defaults.map(s => ({ ...s, reason: 'Default for app type' })));
+    }
+
+    return scripts;
+  }
+
+  /**
+   * Get logs from a Lightsail instance
+   */
+  async getInstanceLogs(args) {
+    const {
+      instance_name,
+      aws_region = 'us-east-1',
+      log_type = 'application',
+      lines = 100
+    } = args;
+
+    try {
+      // First, get instance IP using get-instance-access-details API
+      let instanceIp = null;
+      
+      try {
+        const instanceCommand = `aws lightsail get-instance --instance-name "${instance_name}" --region ${aws_region} --output json`;
+        const instanceResult = execSync(instanceCommand, { encoding: 'utf8', timeout: 30000 });
+        const instanceData = JSON.parse(instanceResult).instance;
+        instanceIp = instanceData.publicIpAddress;
+      } catch (e) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ Instance Not Found
+
+Instance \`${instance_name}\` was not found in region \`${aws_region}\`.
+
+Use \`list_lightsail_instances\` to see available instances.`
+          }],
+          isError: true
+        };
+      }
+
+      if (!instanceIp) {
+        return {
+          content: [{
+            type: 'text',
+            text: `# ❌ No Public IP
+
+Instance \`${instance_name}\` does not have a public IP address.
+
+Cannot retrieve logs without SSH access.`
+          }],
+          isError: true
+        };
+      }
+
+      // Build log retrieval commands based on log type
+      const logCommands = {
+        application: `pm2 logs --lines ${lines} --nostream 2>/dev/null || journalctl -u app -n ${lines} 2>/dev/null || tail -n ${lines} /var/log/app.log 2>/dev/null || echo "No application logs found"`,
+        system: `journalctl -n ${lines} --no-pager 2>/dev/null || tail -n ${lines} /var/log/syslog 2>/dev/null || tail -n ${lines} /var/log/messages 2>/dev/null`,
+        nginx: `tail -n ${lines} /var/log/nginx/error.log 2>/dev/null; echo "---ACCESS LOGS---"; tail -n ${Math.floor(lines/2)} /var/log/nginx/access.log 2>/dev/null`,
+        apache: `tail -n ${lines} /var/log/apache2/error.log 2>/dev/null || tail -n ${lines} /var/log/httpd/error_log 2>/dev/null`,
+        pm2: `pm2 logs --lines ${lines} --nostream 2>/dev/null || echo "PM2 not running or no logs"`,
+        docker: `docker-compose logs --tail=${lines} 2>/dev/null || docker logs $(docker ps -q | head -1) --tail ${lines} 2>/dev/null || echo "No Docker containers running"`,
+        all: `echo "=== SYSTEM LOGS ===" && journalctl -n 50 --no-pager 2>/dev/null; echo "\\n=== APPLICATION LOGS ===" && pm2 logs --lines 50 --nostream 2>/dev/null; echo "\\n=== NGINX LOGS ===" && tail -n 30 /var/log/nginx/error.log 2>/dev/null`
+      };
+
+      const command = logCommands[log_type] || logCommands.application;
+
+      // Use get-instance-access-details to get SSH credentials
+      // Note: This is the recommended approach instead of using default keypair
+      let logs = '';
+      
+      try {
+        // Try to get temporary SSH access
+        const accessCommand = `aws lightsail get-instance-access-details --instance-name "${instance_name}" --region ${aws_region} --output json`;
+        const accessResult = execSync(accessCommand, { encoding: 'utf8', timeout: 30000 });
+        const accessData = JSON.parse(accessResult).accessDetails;
+        
+        if (accessData && accessData.privateKey) {
+          // Write temporary key
+          const tempKeyPath = `/tmp/lightsail-temp-${Date.now()}.pem`;
+          fs.writeFileSync(tempKeyPath, accessData.privateKey, { mode: 0o600 });
+          
+          try {
+            const sshCommand = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "${tempKeyPath}" ${accessData.username}@${instanceIp} "${command}"`;
+            logs = execSync(sshCommand, { encoding: 'utf8', timeout: 60000 });
+          } finally {
+            // Clean up temp key
+            fs.unlinkSync(tempKeyPath);
+          }
+        } else {
+          logs = `Could not get SSH access. Instance may not support temporary access.\n\nTo get logs manually:\n1. SSH into the instance\n2. Run: ${command}`;
+        }
+      } catch (sshError) {
+        logs = `SSH connection failed: ${sshError.message}\n\nTo get logs manually, SSH into ${instanceIp} and run:\n${command}`;
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `# 📋 Instance Logs: ${instance_name}
+
+## Log Type: ${log_type}
+## Lines: ${lines}
+## Instance IP: ${instanceIp}
+
+---
+
+\`\`\`
+${logs.slice(0, 15000)}${logs.length > 15000 ? '\n... (logs truncated)' : ''}
+\`\`\`
+
+---
+
+**Tips:**
+- Use \`log_type: "all"\` to get logs from multiple sources
+- Increase \`lines\` parameter for more history
+- Use \`diagnose_deployment_issue\` to analyze these logs with AI`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Failed to get instance logs: ${error.message}` }],
+        isError: true
+      };
+    }
+  }
 }
 
 // Import the analysis classes
@@ -1017,8 +2998,18 @@ const authenticate = (req, res, next) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
-    version: '2.0.0',
-    features: ['intelligent-analysis', 'cost-optimization', 'security-assessment'],
+    version: '3.0.0',
+    features: [
+      'intelligent-analysis', 
+      'cost-optimization', 
+      'security-assessment',
+      'ai-powered-bedrock'
+    ],
+    ai: {
+      provider: 'AWS Bedrock',
+      model: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
+      region: process.env.AWS_REGION || 'us-east-1'
+    },
     timestamp: new Date().toISOString() 
   });
 });
@@ -1037,8 +3028,9 @@ app.get('/mcp', authenticate, async (req, res) => {
 
 // Start server
 app.listen(PORT, HOST, () => {
-  console.log(`🚀 Enhanced Lightsail Deployment MCP Server running on http://${HOST}:${PORT}`);
-  console.log(`📊 Features: Intelligent Analysis, Cost Optimization, Security Assessment`);
+  console.log(`🚀 Enhanced Lightsail Deployment MCP Server v3.0 running on http://${HOST}:${PORT}`);
+  console.log(`🤖 AI Provider: AWS Bedrock (Claude)`);
+  console.log(`📊 Features: Intelligent Analysis, Cost Optimization, Security Assessment, AI-Powered Tools`);
   console.log(`🔗 MCP Endpoint: http://${HOST}:${PORT}/mcp`);
   console.log(`💡 Health Check: http://${HOST}:${PORT}/health`);
   if (AUTH_TOKEN) {

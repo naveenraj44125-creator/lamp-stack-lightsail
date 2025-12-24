@@ -8,15 +8,28 @@
 import { ProjectAnalyzer } from './project-analyzer.js';
 import { InfrastructureOptimizer } from './infrastructure-optimizer.js';
 import { ConfigurationGenerator } from './configuration-generator.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// Get the directory of this script to resolve paths correctly
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = resolve(__dirname, '..');
+
+// Helper to resolve project paths relative to the workspace root
+function getProjectPath(relativePath) {
+  return resolve(projectRoot, relativePath);
+}
 
 async function testMCPComponents() {
   console.log('🧪 Testing Enhanced MCP Components Directly...\n');
+  console.log(`📁 Project root: ${projectRoot}\n`);
 
   try {
     // Test 1: Project Analysis
     console.log('🔍 Test 1: Analyzing React App Project...');
     const analyzer = new ProjectAnalyzer();
-    const analysis = await analyzer.analyzeProject('../example-react-app');
+    const analysis = await analyzer.analyzeProject(getProjectPath('example-react-app'));
     
     console.log('📊 Analysis Result:');
     console.log(`  - Detected Type: ${analysis.detected_type}`);
@@ -79,12 +92,12 @@ async function testMCPComponents() {
     
     // Test Docker project
     console.log('\n  📦 Testing Docker Project...');
-    const dockerAnalysis = await analyzer.analyzeProject('../example-docker-app');
+    const dockerAnalysis = await analyzer.analyzeProject(getProjectPath('example-docker-app'));
     console.log(`    - Detected: ${dockerAnalysis.detected_type} (${Math.round(dockerAnalysis.confidence * 100)}%)`);
     
     // Test Recipe Docker project
     console.log('  🍳 Testing Recipe Docker Project...');
-    const recipeAnalysis = await analyzer.analyzeProject('../example-recipe-docker-app');
+    const recipeAnalysis = await analyzer.analyzeProject(getProjectPath('example-recipe-docker-app'));
     console.log(`    - Detected: ${recipeAnalysis.detected_type} (${Math.round(recipeAnalysis.confidence * 100)}%)`);
 
     console.log('\n🎯 Multi-project analysis completed successfully!');
