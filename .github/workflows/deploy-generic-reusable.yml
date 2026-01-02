@@ -542,24 +542,27 @@ jobs:
 
     - name: Build React app if needed
       run: |
-        # Find React application directory from config
+        # Find React application directory from config or common locations
         REACT_DIR=$(python3 << 'EOF'
         import yaml
         import os
+        import json
         
         with open('${{ inputs.config_file }}', 'r') as f:
             config = yaml.safe_load(f)
         
         package_files = config.get('application', {}).get('package_files', [])
         
-        for package_dir in package_files:
+        # Also check common React locations for fullstack apps
+        dirs_to_check = list(package_files) + ['client', 'frontend', 'web']
+        
+        for package_dir in dirs_to_check:
             if os.path.isdir(package_dir):
                 package_json_path = os.path.join(package_dir, 'package.json')
                 if os.path.exists(package_json_path):
                     # Check if it's a React app by looking for react in package.json
                     with open(package_json_path, 'r') as pf:
                         try:
-                            import json
                             pkg_data = json.load(pf)
                             deps = pkg_data.get('dependencies', {})
                             dev_deps = pkg_data.get('devDependencies', {})
