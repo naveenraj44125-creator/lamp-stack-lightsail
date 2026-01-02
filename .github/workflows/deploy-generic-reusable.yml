@@ -598,29 +598,37 @@ jobs:
         package_fallback = config.get('application', {}).get('package_fallback', True)
         
         # Check if this is a React app - if so, package the build directory instead
+        # BUT: For fullstack apps (server/ + client/), package everything
         is_react_app = False
+        is_fullstack_app = False
         react_build_dir = None
         
-        for package_dir in package_files:
-            if os.path.isdir(package_dir):
-                package_json_path = os.path.join(package_dir, 'package.json')
-                if os.path.exists(package_json_path):
-                    with open(package_json_path, 'r') as pf:
-                        try:
-                            pkg_data = json.load(pf)
-                            deps = pkg_data.get('dependencies', {})
-                            if 'react' in deps:
-                                is_react_app = True
-                                build_dir = os.path.join(package_dir, 'build')
-                                if os.path.isdir(build_dir):
-                                    react_build_dir = build_dir
-                                    print(f"🎯 React app detected - will package build directory: {build_dir}")
-                                break
-                        except:
-                            pass
+        # Check for fullstack app structure (server/ + client/ directories)
+        if os.path.isdir('server') and os.path.isdir('client'):
+            is_fullstack_app = True
+            print("🎯 Fullstack app detected (server/ + client/) - will package entire project")
         
-        # For React apps, package the build directory
-        if is_react_app and react_build_dir:
+        if not is_fullstack_app:
+            for package_dir in package_files:
+                if os.path.isdir(package_dir):
+                    package_json_path = os.path.join(package_dir, 'package.json')
+                    if os.path.exists(package_json_path):
+                        with open(package_json_path, 'r') as pf:
+                            try:
+                                pkg_data = json.load(pf)
+                                deps = pkg_data.get('dependencies', {})
+                                if 'react' in deps:
+                                    is_react_app = True
+                                    build_dir = os.path.join(package_dir, 'build')
+                                    if os.path.isdir(build_dir):
+                                        react_build_dir = build_dir
+                                        print(f"🎯 React-only app detected - will package build directory: {build_dir}")
+                                    break
+                            except:
+                                pass
+        
+        # For React-only apps (not fullstack), package the build directory
+        if is_react_app and react_build_dir and not is_fullstack_app:
             print(f"📦 Packaging React build directory: {react_build_dir}")
             cmd = ['tar', '-czf', 'app.tar.gz', '-C', react_build_dir, '.']
             result = subprocess.run(cmd, capture_output=True, text=True)
