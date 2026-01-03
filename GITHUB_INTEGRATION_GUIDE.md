@@ -217,6 +217,50 @@ export APP_TYPE="nodejs"
 export DATABASE_TYPE="postgresql"  # or "mysql" or "none"
 ```
 
+#### Fullstack React + Node.js Requirements
+
+If your Node.js app has a React frontend in `/client`, you need these for deployment to work:
+
+**1. Root package.json scripts:**
+```json
+{
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "cd server && npm start"
+  }
+}
+```
+
+**2. Server must serve React build in production (server/index.js):**
+```javascript
+const path = require('path');
+
+// BEFORE your routes - serve static files
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/build')));
+}
+
+// Your API routes here...
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+
+// AFTER your routes - SPA catch-all
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/build/index.html'));
+  });
+}
+```
+
+**3. Health check endpoint (required for deployment verification):**
+```javascript
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'API is running' });
+});
+```
+
+The setup script will warn you if these are missing, but won't auto-fix server code.
+
 ### 3. Python Applications (Flask/Django)
 ```bash
 export APP_TYPE="python"

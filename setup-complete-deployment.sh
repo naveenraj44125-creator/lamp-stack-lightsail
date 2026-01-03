@@ -67,13 +67,18 @@ show_app_deployment_warnings() {
         echo -e "${BLUE}2. Frontend Serving (Node.js):${NC}"
         echo -e "   If you have a React/Vue/Angular frontend in /client:"
         echo -e "   - Add 'npm run build' script to build the frontend"
-        echo -e "   - Server must serve static files: app.use(express.static('client/dist'))"
+        echo -e "   - Server must serve static files: app.use(express.static('client/build'))"
         echo -e "   - Add catch-all route for SPA: app.get('*', (req,res) => res.sendFile(...))"
         echo ""
         
         echo -e "${BLUE}3. Build Script:${NC}"
         echo -e "   Ensure package.json has a 'build' script if frontend needs building"
         echo -e "   ${GREEN}Example:${NC} \"build\": \"cd client && npm install && npm run build\""
+        echo ""
+        
+        echo -e "${BLUE}4. Start Script:${NC}"
+        echo -e "   Root package.json needs a 'start' script for production"
+        echo -e "   ${GREEN}Example:${NC} \"start\": \"cd server && npm start\" or \"start\": \"node app.js\""
         echo ""
     fi
     
@@ -82,25 +87,31 @@ show_app_deployment_warnings() {
     
     # Check for health endpoint in Node.js apps
     if [[ "$app_type" == "nodejs" ]]; then
+        # Check multiple possible server file locations
+        local server_file=""
         if [ -f "server/index.js" ]; then
-            if ! grep -q "/api/health\|/health" server/index.js 2>/dev/null; then
-                echo -e "${RED}⚠️  WARNING: No /api/health endpoint found in server/index.js${NC}"
+            server_file="server/index.js"
+        elif [ -f "server.js" ]; then
+            server_file="server.js"
+        elif [ -f "app.js" ]; then
+            server_file="app.js"
+        fi
+        
+        if [ -n "$server_file" ]; then
+            if ! grep -q "/api/health\|/health" "$server_file" 2>/dev/null; then
+                echo -e "${RED}⚠️  WARNING: No /api/health endpoint found in $server_file${NC}"
                 issues_found=true
             fi
-            if ! grep -q "express.static" server/index.js 2>/dev/null; then
+            if ! grep -q "express.static" "$server_file" 2>/dev/null; then
                 if [ -d "client" ]; then
-                    echo -e "${RED}⚠️  WARNING: No express.static() found - frontend won't be served${NC}"
+                    echo -e "${RED}⚠️  WARNING: No express.static() found in $server_file - frontend won't be served${NC}"
                     issues_found=true
                 fi
             fi
-        elif [ -f "server.js" ]; then
-            if ! grep -q "/api/health\|/health" server.js 2>/dev/null; then
-                echo -e "${RED}⚠️  WARNING: No /api/health endpoint found in server.js${NC}"
-                issues_found=true
-            fi
-            if ! grep -q "express.static" server.js 2>/dev/null; then
-                if [ -d "client" ]; then
-                    echo -e "${RED}⚠️  WARNING: No express.static() found - frontend won't be served${NC}"
+            # Check for SPA catch-all route
+            if [ -d "client" ]; then
+                if ! grep -q "sendFile.*index.html\|sendFile.*build" "$server_file" 2>/dev/null; then
+                    echo -e "${RED}⚠️  WARNING: No SPA catch-all route found - React routing won't work${NC}"
                     issues_found=true
                 fi
             fi
@@ -113,11 +124,20 @@ show_app_deployment_warnings() {
                 issues_found=true
             fi
         fi
+        
+        # Check for start script
+        if [ -f "package.json" ]; then
+            if ! grep -q '"start"' package.json 2>/dev/null; then
+                echo -e "${RED}⚠️  WARNING: No 'start' script in package.json - PM2 won't know how to start the app${NC}"
+                issues_found=true
+            fi
+        fi
     fi
     
     if [[ "$issues_found" == "true" ]]; then
         echo ""
         echo -e "${YELLOW}Please fix the above issues before deployment to avoid failures.${NC}"
+        echo -e "${YELLOW}The deployment workflow expects these to be in place.${NC}"
     else
         echo -e "${GREEN}✓ No obvious issues detected in your application code.${NC}"
     fi
@@ -136,16 +156,29 @@ detect_fullstack_react() {
     return 1
 }
 
-# Function to auto-detect Node.js port from server.js
+# Function to auto-detect Node.js port from server.js or server/index.js
 detect_node_port() {
+    local server_file=""
+    
+    # Check multiple possible server file locations
     if [ -f "server.js" ]; then
+        server_file="server.js"
+    elif [ -f "server/index.js" ]; then
+        server_file="server/index.js"
+    elif [ -f "app.js" ]; then
+        server_file="app.js"
+    elif [ -f "index.js" ]; then
+        server_file="index.js"
+    fi
+    
+    if [ -n "$server_file" ]; then
         # Look for PORT environment variable usage with fallback
-        PORT=$(grep -o "process\.env\.PORT.*||.*[0-9]\+" server.js | grep -o "[0-9]\+" | head -1)
+        PORT=$(grep -o "process\.env\.PORT.*||.*[0-9]\+" "$server_file" | grep -o "[0-9]\+" | head -1)
         if [ -n "$PORT" ]; then
             echo "$PORT"
         else
             # Look for direct port assignment
-            PORT=$(grep -o "PORT.*=.*[0-9]\+" server.js | grep -o "[0-9]\+" | head -1)
+            PORT=$(grep -o "PORT.*=.*[0-9]\+" "$server_file" | grep -o "[0-9]\+" | head -1)
             echo "${PORT:-3000}"
         fi
     else
@@ -159,6 +192,113 @@ build_react_client_if_needed() {
 
     if [[ "$app_type" == "nodejs" ]] && [ -d "client" ] && [ -f "client/package.json" ]; then
         echo -e "${BLUE}Detected fullstack React + Node.js application${NC}"
+        
+        # Get detected port for consistency
+        local DETECTED_PORT=$(detect_node_port)
+        
+        # Fix package.json scripts if needed
+        if [ -f "package.json" ]; then
+            local needs_fix=false
+            
+            # Check for missing scripts
+            if ! grep -q '"build"' package.json 2>/dev/null; then
+                needs_fix=true
+            fi
+            if ! grep -q '"start"' package.json 2>/dev/null; then
+                needs_fix=true
+            fi
+            
+            if [[ "$needs_fix" == "true" ]]; then
+                echo -e "${YELLOW}⚠️  Root package.json missing required scripts for deployment${NC}"
+                
+                local FIX_PACKAGE="true"
+                if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+                    FIX_PACKAGE=$(get_yes_no "Add missing 'build' and 'start' scripts to package.json?" "true")
+                fi
+                
+                if [[ "$FIX_PACKAGE" == "true" ]]; then
+                    echo -e "${BLUE}Updating package.json with deployment scripts...${NC}"
+                    
+                    # Determine the server entry point
+                    local server_entry=""
+                    if [ -f "server/index.js" ]; then
+                        server_entry="cd server && npm start"
+                    elif [ -f "server.js" ]; then
+                        server_entry="node server.js"
+                    elif [ -f "app.js" ]; then
+                        server_entry="node app.js"
+                    else
+                        server_entry="node server/index.js"
+                    fi
+                    
+                    # Use node to safely update package.json
+                    node -e "
+                        const fs = require('fs');
+                        const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                        pkg.scripts = pkg.scripts || {};
+                        if (!pkg.scripts.build) {
+                            pkg.scripts.build = 'cd client && npm install && npm run build';
+                        }
+                        if (!pkg.scripts.start) {
+                            pkg.scripts.start = '$server_entry';
+                        }
+                        if (!pkg.scripts.test) {
+                            pkg.scripts.test = 'echo \"Error: no test specified\" && exit 1';
+                        }
+                        fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                        console.log('Updated package.json scripts');
+                    " 2>/dev/null || {
+                        echo -e "${YELLOW}⚠️  Could not auto-update package.json - please add scripts manually${NC}"
+                    }
+                    
+                    echo -e "${GREEN}✓ Updated package.json with build and start scripts${NC}"
+                fi
+            fi
+        fi
+        
+        # Check and fix server file for production static serving
+        local server_file=""
+        if [ -f "server/index.js" ]; then
+            server_file="server/index.js"
+        elif [ -f "server.js" ]; then
+            server_file="server.js"
+        fi
+        
+        if [ -n "$server_file" ] && [ -d "client" ]; then
+            local needs_static_fix=false
+            
+            # Check if express.static for client/build is missing
+            if ! grep -q "express.static.*client/build\|express.static.*client.*build" "$server_file" 2>/dev/null; then
+                if ! grep -q "express.static.*build" "$server_file" 2>/dev/null; then
+                    needs_static_fix=true
+                fi
+            fi
+            
+            # Check if SPA catch-all is missing
+            if ! grep -q "sendFile.*index.html" "$server_file" 2>/dev/null; then
+                needs_static_fix=true
+            fi
+            
+            if [[ "$needs_static_fix" == "true" ]]; then
+                echo -e "${YELLOW}⚠️  Server file missing production static file serving${NC}"
+                echo -e "${YELLOW}   Your server needs to serve the React build in production:${NC}"
+                echo ""
+                echo -e "${BLUE}   Add this BEFORE your routes:${NC}"
+                echo "   if (process.env.NODE_ENV === 'production') {"
+                echo "     app.use(express.static(path.join(__dirname, '../client/build')));"
+                echo "   }"
+                echo ""
+                echo -e "${BLUE}   Add this AFTER your API routes:${NC}"
+                echo "   if (process.env.NODE_ENV === 'production') {"
+                echo "     app.get('*', (req, res) => {"
+                echo "       res.sendFile(path.join(__dirname, '../client/build/index.html'));"
+                echo "     });"
+                echo "   }"
+                echo ""
+                echo -e "${YELLOW}   Without these, your React frontend won't load in production!${NC}"
+                echo ""
+            fi
+        fi
 
         # Check if client/build already exists
         if [ -d "client/build" ]; then
@@ -913,9 +1053,16 @@ EOF
 EOF
                 ;;
             "nodejs")
-                cat >> "deployment-${app_type}.config.yml" << EOF
+                # For fullstack React + Node.js apps, look for React-specific content
+                if [ -d "client" ] && [ -f "client/package.json" ]; then
+                    cat >> "deployment-${app_type}.config.yml" << EOF
+    expected_content: "root"
+EOF
+                else
+                    cat >> "deployment-${app_type}.config.yml" << EOF
     expected_content: "Node.js"
 EOF
+                fi
                 ;;
             "python")
                 cat >> "deployment-${app_type}.config.yml" << EOF
@@ -924,7 +1071,7 @@ EOF
                 ;;
             "react")
                 cat >> "deployment-${app_type}.config.yml" << EOF
-    expected_content: "React"
+    expected_content: "root"
 EOF
                 ;;
             "docker")
@@ -1105,12 +1252,25 @@ EOF
 EOF
             ;;
         "nodejs")
-            cat >> ".github/workflows/deploy-${app_type}.yml" << EOF
+            # Check if this is a fullstack React + Node.js app
+            if [ -d "client" ] && [ -f "client/package.json" ]; then
+                # Fullstack React + Node.js app
+                cat >> ".github/workflows/deploy-${app_type}.yml" << EOF
+            echo "### ⚛️ Fullstack React + Node.js" >> \$GITHUB_STEP_SUMMARY
+            echo "- **Web App**: \${{ needs.deploy.outputs.deployment_url }}" >> \$GITHUB_STEP_SUMMARY
+            echo "- **API Health**: \${{ needs.deploy.outputs.deployment_url }}api/health" >> \$GITHUB_STEP_SUMMARY
+            echo "- **Frontend**: React (production build)" >> \$GITHUB_STEP_SUMMARY
+            echo "- **Backend**: Node.js + Express" >> \$GITHUB_STEP_SUMMARY
+EOF
+            else
+                # Regular Node.js API
+                cat >> ".github/workflows/deploy-${app_type}.yml" << EOF
             echo "### 📡 Endpoints" >> \$GITHUB_STEP_SUMMARY
             echo "- **Home**: \${{ needs.deploy.outputs.deployment_url }}" >> \$GITHUB_STEP_SUMMARY
             echo "- **Health**: \${{ needs.deploy.outputs.deployment_url }}api/health" >> \$GITHUB_STEP_SUMMARY
             echo "- **Info**: \${{ needs.deploy.outputs.deployment_url }}api/info" >> \$GITHUB_STEP_SUMMARY
 EOF
+            fi
             ;;
         "python")
             cat >> ".github/workflows/deploy-${app_type}.yml" << EOF
