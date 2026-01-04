@@ -7,7 +7,6 @@ echo ""
 # Array of all deployment configurations
 DEPLOYMENTS=(
     "deployment-lamp-stack.config.yml"
-    "deployment-nodejs.config.yml" 
     "deployment-python.config.yml"
     "deployment-react.config.yml"
     "deployment-nginx.config.yml"
@@ -29,9 +28,6 @@ trigger_deployment() {
     case "$app_name" in
         "lamp-stack")
             workflow_name="Deploy LAMP Stack Example"
-            ;;
-        "nodejs")
-            workflow_name="Node.js Application Deployment"
             ;;
         "python")
             workflow_name="Python Flask API Deployment"
