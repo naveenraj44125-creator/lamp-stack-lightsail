@@ -214,14 +214,43 @@ export DATABASE_TYPE="mysql"  # or "postgresql"
 ### 2. Node.js Applications
 ```bash
 export APP_TYPE="nodejs"
-export DATABASE_TYPE="postgresql"  # or "mysql" or "none"
+export DATABASE_TYPE="postgresql"  # or "mysql", "mongodb", or "none"
+```
+
+#### MongoDB Support (Local Only)
+```bash
+export APP_TYPE="nodejs"
+export DATABASE_TYPE="mongodb"
+# Note: MongoDB is installed locally on the instance (no RDS support)
+# Connection string: mongodb://localhost:27017/your_db_name
 ```
 
 #### Fullstack React + Node.js Requirements
 
-If your Node.js app has a React frontend in `/client`, you need these for deployment to work:
+If your Node.js app has a React frontend in `/client` directory, the setup script will automatically:
+- Detect the fullstack structure (`client/` + `server/` directories)
+- Add `build` and `start` scripts to root `package.json` if missing
+- Set `expected_content: "root"` for React UI verification
+- Detect the server port from `server/index.js`
 
-**1. Root package.json scripts:**
+**Required project structure:**
+```
+your-app/
+├── package.json          # Root package.json (scripts added automatically)
+├── client/
+│   ├── package.json      # React app package.json
+│   ├── public/
+│   │   └── index.html
+│   └── src/
+│       ├── App.js
+│       └── index.js
+└── server/
+    ├── package.json      # Server package.json
+    ├── index.js          # Main server file
+    └── routes/
+```
+
+**1. Root package.json scripts (auto-added if missing):**
 ```json
 {
   "scripts": {
@@ -299,7 +328,7 @@ export DATABASE_TYPE="none"
 | `INSTANCE_NAME` | Yes* | - | Lightsail instance name |
 | `BLUEPRINT_ID` | No | `ubuntu_22_04` | Operating system (ubuntu_22_04, ubuntu_20_04, amazon_linux_2023) |
 | `BUNDLE_ID` | No | `small_3_0` | Instance size (nano_3_0, micro_3_0, small_3_0, medium_3_0, large_3_0) |
-| `DATABASE_TYPE` | No | `none` | Database type (mysql, postgresql, none) |
+| `DATABASE_TYPE` | No | `none` | Database type (mysql, postgresql, mongodb, none) |
 | `DB_EXTERNAL` | No | `false` | Use external RDS database |
 | `DB_RDS_NAME` | No | - | RDS instance name (if DB_EXTERNAL=true) |
 | `DB_NAME` | No | `app_db` | Database name |
@@ -327,9 +356,17 @@ export DATABASE_TYPE="none"
 
 **Local Database (on instance):**
 ```bash
-export DATABASE_TYPE="mysql"        # or "postgresql"
+export DATABASE_TYPE="mysql"        # or "postgresql" or "mongodb"
 export DB_EXTERNAL="false"
 export DB_NAME="my_app_db"
+```
+
+**MongoDB (local only - no RDS support):**
+```bash
+export DATABASE_TYPE="mongodb"
+export DB_EXTERNAL="false"          # MongoDB only supports local installation
+export DB_NAME="my_app_db"
+# Environment variable set: MONGODB_URI=mongodb://localhost:27017/my_app_db
 ```
 
 **External RDS Database:**
@@ -484,6 +521,70 @@ export REPO_VISIBILITY="public"
 ./setup-complete-deployment.sh --auto
 ```
 
+### Example 5: Node.js with MongoDB
+
+```bash
+# Step 1: Create GitHub repository
+gh repo create task-manager-app --private --description "Task manager with Node.js and MongoDB"
+
+# Step 2: Clone and setup
+git clone https://github.com/YOUR_USERNAME/task-manager-app.git
+cd task-manager-app
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh
+chmod +x setup-complete-deployment.sh
+
+# Step 3: Configure for Node.js with MongoDB
+export AUTO_MODE=true
+export AWS_REGION="us-east-1"
+export APP_TYPE="nodejs"
+export APP_NAME="Task Manager App"
+export INSTANCE_NAME="task-manager-instance"
+export BUNDLE_ID="small_3_0"
+export DATABASE_TYPE="mongodb"  # MongoDB installed locally
+export DB_NAME="task_manager_db"
+export GITHUB_REPO="YOUR_USERNAME/task-manager-app"  # ✅ Include username!
+export REPO_VISIBILITY="private"
+
+# Step 4: Run deployment setup
+./setup-complete-deployment.sh --auto
+
+# Your app will have access to:
+# MONGODB_URI=mongodb://localhost:27017/task_manager_db
+```
+
+### Example 6: Fullstack React + Node.js
+
+```bash
+# Step 1: Create GitHub repository
+gh repo create fullstack-notes-app --private --description "Fullstack notes app with React frontend and Node.js backend"
+
+# Step 2: Clone and setup
+git clone https://github.com/YOUR_USERNAME/fullstack-notes-app.git
+cd fullstack-notes-app
+curl -O https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh
+chmod +x setup-complete-deployment.sh
+
+# Step 3: Configure for Fullstack app
+export AUTO_MODE=true
+export AWS_REGION="us-east-1"
+export APP_TYPE="nodejs"
+export APP_NAME="Fullstack Notes App"
+export INSTANCE_NAME="fullstack-notes-instance"
+export BUNDLE_ID="small_3_0"
+export DATABASE_TYPE="none"     # Using SQLite in this example
+export GITHUB_REPO="YOUR_USERNAME/fullstack-notes-app"  # ✅ Include username!
+export REPO_VISIBILITY="private"
+
+# Step 4: Run deployment setup
+./setup-complete-deployment.sh --auto
+
+# The script will:
+# - Detect client/ and server/ directories
+# - Auto-add build and start scripts to root package.json
+# - Set expected_content to "root" for React UI verification
+# - Configure proper port detection from server/index.js
+```
+
 ## 🔄 What the Script Does
 
 The setup script automatically performs these steps:
@@ -526,20 +627,46 @@ The setup script automatically performs these steps:
 
 After running the script, you'll have these files in your repository:
 
+**For existing projects (files in root):**
 ```
 your-repository/
 ├── .github/workflows/
-│   ├── deploy-generic-reusable.yml    # Reusable workflow (downloaded)
+│   └── deploy-nodejs.yml              # Your app-specific workflow
+├── deployment-nodejs.config.yml       # Deployment configuration
+├── .gitignore                         # Git ignore file (if not present)
+├── package.json                       # Your existing package.json
+├── server.js or app.js                # Your existing server file
+└── ...                                # Your other application files
+```
+
+**For new projects (example app created):**
+```
+your-repository/
+├── .github/workflows/
 │   └── deploy-{type}.yml              # Your app-specific workflow
 ├── deployment-{type}.config.yml       # Deployment configuration
-├── example-{type}-app/                # Sample application
-│   ├── index.php                      # (for LAMP)
-│   ├── app.js                         # (for Node.js)
-│   ├── app.py                         # (for Python)
-│   ├── package.json                   # (for Node.js/React)
-│   ├── docker-compose.yml             # (for Docker)
-│   └── ...                           # Other app-specific files
-└── README.md                          # (if created by script)
+├── app.js                             # (for Node.js - created in root)
+├── package.json                       # (for Node.js - created in root)
+├── index.php                          # (for LAMP - created in root)
+├── app.py                             # (for Python - created in root)
+└── ...                                # Other app-specific files
+```
+
+**For fullstack React + Node.js projects:**
+```
+your-repository/
+├── .github/workflows/
+│   └── deploy-nodejs.yml              # Workflow with React build support
+├── deployment-nodejs.config.yml       # Config with expected_content: "root"
+├── package.json                       # Root package.json (build/start scripts added)
+├── client/                            # React frontend
+│   ├── package.json
+│   ├── public/
+│   └── src/
+└── server/                            # Node.js backend
+    ├── package.json
+    ├── index.js
+    └── routes/
 ```
 
 ## 🚀 Deployment Process
