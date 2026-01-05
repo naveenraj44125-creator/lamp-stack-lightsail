@@ -1,6 +1,24 @@
-# 🚀 Enhanced Lightsail Deployment MCP Server
+# 🚀 Enhanced Lightsail Deployment MCP Server v3.0.0
 
 An intelligent Model Context Protocol (MCP) server that provides automated AWS Lightsail deployment with smart project analysis, cost optimization, security assessment, and **AI-powered assistance via AWS Bedrock**.
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Quick Start](#-quick-start)
+- [AWS Credentials Configuration](#-aws-credentials-configuration)
+- [Transport Modes](#-transport-modes)
+- [Available Tools (18 Total)](#-available-tools)
+- [Cline/MCP Client Integration](#-clinemcp-client-integration)
+- [Troubleshooting Tools](#-troubleshooting-tools-directory)
+- [AWS Bedrock AI Integration](#-aws-bedrock-ai-integration)
+- [Tool Usage Examples](#-tool-usage-examples)
+- [Configuration Reference](#-configuration-reference)
+- [Testing](#-testing)
+- [Support](#-support)
+
+---
 
 ## ✨ Features
 
@@ -12,32 +30,67 @@ An intelligent Model Context Protocol (MCP) server that provides automated AWS L
 - **Code Explanation**: Understand code from a deployment perspective
 
 ### 🔍 Intelligent Project Analysis
-- **Automatic Application Type Detection**: Analyzes your codebase to detect Node.js, Python, PHP, React, Docker, or static applications
-- **Framework Recognition**: Identifies Express, Flask, Laravel, React, Vue, Angular, and more
-- **Database Requirements**: Detects MySQL, PostgreSQL, MongoDB usage patterns
-- **Storage Needs**: Identifies file upload requirements and S3 bucket needs
-- **Security Analysis**: Detects authentication, user data handling, and security requirements
+- **Automatic Application Type Detection**: Node.js, Python, PHP, React, Docker, or static
+- **Framework Recognition**: Express, Flask, Laravel, React, Vue, Angular, and more
+- **Database Requirements**: MySQL, PostgreSQL, MongoDB detection
+- **Storage Needs**: File upload requirements and S3 bucket needs
+- **Security Analysis**: Authentication, user data handling, security requirements
 
 ### 💰 Cost Optimization
-- **Right-Sizing**: Recommends optimal instance sizes based on application requirements
-- **Database Optimization**: Suggests local vs RDS database configurations
-- **Storage Optimization**: Optimizes S3 bucket configurations
-- **Cost Estimation**: Provides accurate monthly cost estimates
-- **Performance vs Cost**: Balances performance needs with budget constraints
+- **Right-Sizing**: Optimal instance sizes based on application requirements
+- **Database Optimization**: Local vs RDS database configurations
+- **Storage Optimization**: S3 bucket configurations
+- **Cost Estimation**: Accurate monthly cost estimates
 
 ### 🔒 Security Assessment
-- **Compliance Support**: GDPR, HIPAA, SOC2, PCI-DSS compliance configurations
-- **SSL/TLS Configuration**: Automatic HTTPS setup and certificate management
-- **Firewall Rules**: Intelligent firewall configuration based on application needs
-- **Data Protection**: Encryption at rest and in transit recommendations
-- **File Upload Security**: Secure file handling and validation
+- **Compliance Support**: GDPR, HIPAA, SOC2, PCI-DSS configurations
+- **SSL/TLS Configuration**: Automatic HTTPS setup
+- **Firewall Rules**: Intelligent firewall configuration
+- **Data Protection**: Encryption recommendations
 
-### 🛠️ Infrastructure Automation
-- **Smart Configuration Generation**: Creates optimized deployment configurations
-- **GitHub Actions Workflows**: Generates CI/CD pipelines
-- **Environment Variables**: Intelligent environment configuration
-- **Monitoring Setup**: Built-in health checks and monitoring
-- **Backup Configuration**: Automated backup strategies
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    MCP Server (server.js - 3217 lines)                  │
+│                                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────┐ │
+│  │  Transport      │  │  Tool Handlers  │  │  AWS Integration        │ │
+│  │  ─────────────  │  │  ─────────────  │  │  ─────────────────────  │ │
+│  │  • stdio        │  │  • 8 Core Tools │  │  • Lightsail SDK        │ │
+│  │  • HTTP/SSE     │  │  • 6 AI Tools   │  │  • Bedrock Runtime      │ │
+│  │                 │  │  • 4 Debug Tools│  │  • Credential Provider  │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────┘ │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                    Supporting Modules                            │   │
+│  │  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │   │
+│  │  │ project-analyzer │ │ infrastructure-  │ │ configuration-   │ │   │
+│  │  │ .js              │ │ optimizer.js     │ │ generator.js     │ │   │
+│  │  │ ────────────────│ │ ────────────────│ │ ────────────────│ │   │
+│  │  │ • Type detection │ │ • Cost analysis  │ │ • YAML configs   │ │   │
+│  │  │ • Framework scan │ │ • Right-sizing   │ │ • GitHub Actions │ │   │
+│  │  │ • DB detection   │ │ • Performance    │ │ • Env variables  │ │   │
+│  │  └──────────────────┘ └──────────────────┘ └──────────────────┘ │   │
+│  │                                                                  │   │
+│  │  ┌──────────────────────────────────────────────────────────┐   │   │
+│  │  │ bedrock-ai.js                                             │   │   │
+│  │  │ ────────────────────────────────────────────────────────  │   │   │
+│  │  │ • Claude 3 Sonnet (default) / Haiku (quick tasks)         │   │   │
+│  │  │ • 3 credential methods: Profile, Direct, Default Chain    │   │   │
+│  │  │ • AI analysis, troubleshooting, config generation         │   │   │
+│  │  └──────────────────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  External: ../troubleshooting-tools/ (7 categories, 40+ scripts)│   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 🚀 Quick Start
 
@@ -54,318 +107,311 @@ npm install
 
 ### Running the Server
 
-The server supports two transport modes:
-
-**Option 1: Stdio Mode (for Cline/MCP clients)**
 ```bash
-# Run in stdio mode - for Cline integration
+# Stdio mode (for Cline/MCP clients)
 node server.js --stdio
-```
 
-**Option 2: HTTP/SSE Mode (for web clients and testing)**
-```bash
-# Run in HTTP mode - starts server on port 3001
+# HTTP/SSE mode (for web clients)
 npm start
-
 # Or with custom port
 PORT=3002 npm start
-
-# Test the health endpoint
-curl http://localhost:3001/health
 ```
 
-### Test the Installation
+---
+
+## 🔐 AWS Credentials Configuration
+
+The MCP server supports **three methods** for AWS credential configuration, in order of precedence:
+
+### Method 1: AWS Profile (Recommended) ⭐
+
+The cleanest and most secure approach - uses profiles from `~/.aws/credentials`:
+
 ```bash
-npm test
+# In your ~/.aws/credentials file:
+[my-lightsail-profile]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+region = us-east-1
 ```
 
-## 🛠️ Available Tools
-
-The MCP server provides 14 intelligent tools:
-
-### Core Tools
-| Tool | Description |
-|------|-------------|
-| `analyze_project_intelligently` | Analyze project to detect app type, frameworks, databases, and requirements |
-| `generate_smart_deployment_config` | Generate optimized deployment configuration from analysis |
-| `setup_intelligent_deployment` | Complete one-click deployment setup (combines analysis + config) |
-| `optimize_infrastructure_costs` | Analyze and optimize infrastructure costs |
-| `detect_security_requirements` | Analyze security requirements and generate configurations |
-| `list_lightsail_instances` | List all Lightsail instances in a region |
-| `check_deployment_status` | Check deployment health and status of an instance |
-| `validate_deployment_config` | Validate deployment configuration for errors and warnings |
-
-### AI-Powered Tools (AWS Bedrock)
-| Tool | Description |
-|------|-------------|
-| `ai_analyze_project` | Use Claude AI to intelligently analyze project files |
-| `ai_troubleshoot` | AI-powered error diagnosis and solutions |
-| `ai_ask_expert` | Ask the AI deployment expert any question |
-| `ai_review_config` | AI reviews config for security and optimization |
-| `ai_explain_code` | AI explains code from deployment perspective |
-| `ai_generate_config` | AI generates complete deployment configuration |
-
-### Troubleshooting Tools
-| Tool | Description |
-|------|-------------|
-| `list_troubleshooting_scripts` | List all available troubleshooting scripts by category |
-| `run_troubleshooting_script` | Run a specific troubleshooting script on an instance |
-| `diagnose_deployment_issue` | AI-powered diagnosis with automatic script recommendations |
-| `get_instance_logs` | Retrieve logs from a Lightsail instance for troubleshooting |
-
-## 🔗 Cline IDE Integration
-
-For complete step-by-step instructions on using this MCP server with Cline IDE, see:
-
-**📖 [CLINE-INTEGRATION-GUIDE.md](./CLINE-INTEGRATION-GUIDE.md)**
-
-This comprehensive guide covers:
-- ⚙️ Complete setup from scratch
-- 🔧 Cline configuration and MCP setup
-- 🛠️ All available tools and usage examples
-- 🔍 Troubleshooting and debugging
-- 🚀 Real-world deployment workflows
-- 💡 Advanced usage patterns
-
-### Usage with AI Assistants
-
-The server provides several intelligent tools for AI assistants:
-
-#### 1. Analyze Project Intelligently
-```javascript
-// Analyze a project directory or files
+**For Cline/MCP Client:**
+```json
 {
-  "name": "analyze_project_intelligently",
-  "arguments": {
-    "project_path": "/path/to/your/project",
-    "user_description": "A Node.js API with PostgreSQL database",
-    "deployment_preferences": {
-      "budget": "standard",
-      "scale": "medium",
-      "environment": "production"
-    }
-  }
-}
-```
-
-#### 2. Generate Smart Deployment Config
-```javascript
-// Generate optimized deployment configuration
-{
-  "name": "generate_smart_deployment_config",
-  "arguments": {
-    "analysis_result": { /* result from analyze_project_intelligently */ },
-    "app_name": "my-awesome-app",
-    "aws_region": "us-east-1"
-  }
-}
-```
-
-#### 3. Complete Intelligent Setup
-```javascript
-// One-click intelligent deployment setup
-{
-  "name": "setup_intelligent_deployment",
-  "arguments": {
-    "project_path": "/path/to/project",
-    "app_name": "my-app",
-    "deployment_preferences": {
-      // Basic preferences
-      "budget": "standard",           // minimal, standard, performance
-      "scale": "small",               // small, medium, large
-      "environment": "production",    // development, staging, production
-      "aws_region": "us-east-1",
-      
-      // Database configuration
-      "db_name": "app_db",            // Database name
-      "db_rds_name": "my-app-db",     // RDS instance name (for external DB)
-      
-      // Bucket configuration
-      "bucket_name": "my-app-bucket", // S3-compatible bucket name
-      "bucket_access": "read_write",  // read_only, read_write
-      "bucket_bundle": "small_1_0",   // Bucket size
-      
-      // API-only app configuration (for apps without root route)
-      "api_only_app": false,          // Set true for API-only apps
-      "verification_endpoint": "/api/health",  // Custom verification endpoint
-      "health_check_endpoint": "/api/health",  // Custom health check endpoint
-      "expected_content": "ok"        // Expected response content
-    },
-    "github_config": {
-      "username": "your-username",
-      "repository": "your-repo",
-      "visibility": "private"
-    }
-  }
-}
-```
-
-#### 4. List Lightsail Instances
-```javascript
-// List all instances in a region
-{
-  "name": "list_lightsail_instances",
-  "arguments": {
-    "aws_region": "us-east-1",
-    "filter_by_name": "my-app",      // Optional: filter by name
-    "include_stopped": true          // Include stopped instances
-  }
-}
-```
-
-#### 5. Check Deployment Status
-```javascript
-// Check health and status of a deployed instance
-{
-  "name": "check_deployment_status",
-  "arguments": {
-    "instance_name": "nodejs-my-app",
-    "aws_region": "us-east-1",
-    "health_check_endpoint": "/api/health",
-    "health_check_port": 80,
-    "expected_content": "ok"         // Optional: verify response content
-  }
-}
-```
-
-#### 6. Validate Deployment Config
-```javascript
-// Validate a deployment configuration
-{
-  "name": "validate_deployment_config",
-  "arguments": {
-    "config": {
-      "aws": { "region": "us-east-1" },
-      "lightsail": { "instance_name": "my-instance", "bundle_id": "micro_3_0" },
-      "application": { "name": "my-app", "type": "nodejs" }
-    },
-    "strict_mode": false             // Fail on warnings if true
-  }
-}
-
-// Or validate from file path
-{
-  "name": "validate_deployment_config",
-  "arguments": {
-    "config_path": "./deployment-nodejs.config.yml",
-    "strict_mode": true
-  }
-}
-```
-
-### AI-Powered Tools (AWS Bedrock)
-
-#### 7. AI Analyze Project
-```javascript
-// Use AI to analyze project files
-{
-  "name": "ai_analyze_project",
-  "arguments": {
-    "project_files": [
-      { "path": "package.json", "content": "{...}" },
-      { "path": "server.js", "content": "const express = require('express')..." }
-    ],
-    "user_description": "A Node.js API with MongoDB"
-  }
-}
-```
-
-#### 8. AI Troubleshoot
-```javascript
-// Get AI help with deployment errors
-{
-  "name": "ai_troubleshoot",
-  "arguments": {
-    "error_message": "Error: ECONNREFUSED 127.0.0.1:27017",
-    "context": {
-      "app_type": "nodejs",
-      "instance_name": "my-api",
-      "logs": "MongoDB connection failed..."
-    }
-  }
-}
-```
-
-#### 9. AI Ask Expert
-```javascript
-// Ask the AI deployment expert
-{
-  "name": "ai_ask_expert",
-  "arguments": {
-    "question": "What's the best way to set up SSL for my Node.js app on Lightsail?",
-    "project_context": {
-      "app_type": "nodejs",
-      "has_domain": true
-    }
-  }
-}
-```
-
-#### 10. AI Review Config
-```javascript
-// Get AI to review your deployment config
-{
-  "name": "ai_review_config",
-  "arguments": {
-    "config": {
-      "aws": { "region": "us-east-1" },
-      "lightsail": { "instance_name": "my-app", "bundle_id": "micro_3_0" },
-      "dependencies": {
-        "mysql": { "enabled": true, "password": "password123" }
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-server-new/server.js", "--stdio"],
+      "env": {
+        "AWS_PROFILE": "my-lightsail-profile",
+        "AWS_REGION": "us-east-1"
       }
     }
   }
 }
 ```
 
-#### 11. AI Explain Code
-```javascript
-// Get AI to explain code for deployment
-{
-  "name": "ai_explain_code",
-  "arguments": {
-    "code": "const mongoose = require('mongoose');\nmongoose.connect(process.env.MONGODB_URI);",
-    "filename": "db.js"
-  }
-}
+**For Terminal:**
+```bash
+export AWS_PROFILE=my-lightsail-profile
+node server.js --stdio
 ```
 
-#### 12. AI Generate Config
-```javascript
-// Get AI to generate deployment config
+### Method 2: Environment Variables
+
+Direct credentials via environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_REGION=us-east-1
+node server.js --stdio
+```
+
+**For Cline/MCP Client:**
+```json
 {
-  "name": "ai_generate_config",
-  "arguments": {
-    "analysis": {
-      "detected_type": "nodejs",
-      "databases": [{ "type": "mongodb" }],
-      "frameworks": [{ "name": "express" }]
-    },
-    "preferences": {
-      "budget": "standard",
-      "scale": "small",
-      "environment": "production"
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-server-new/server.js", "--stdio"],
+      "env": {
+        "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+        "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "AWS_REGION": "us-east-1"
+      }
     }
   }
 }
 ```
 
-### Troubleshooting Tools
+### Method 3: Per-Request Credentials
 
-#### 13. List Troubleshooting Scripts
+Pass credentials directly in tool calls (useful for multi-account scenarios):
+
 ```javascript
-// List all available troubleshooting scripts
 {
-  "name": "list_troubleshooting_scripts",
+  "name": "ai_troubleshoot",
   "arguments": {
-    "category": "all"  // or: docker, general, lamp, nginx, nodejs, python, react
+    "error_message": "Connection refused",
+    "aws_credentials": {
+      "profile": "my-profile"  // Use profile
+      // OR direct credentials:
+      // "access_key_id": "AKIA...",
+      // "secret_access_key": "...",
+      // "session_token": "...",  // Optional, for temporary creds
+      // "region": "us-east-1"
+    }
   }
 }
 ```
 
-#### 14. Run Troubleshooting Script
+### Credential Resolution Order
+
+```
+1. Per-request credentials (aws_credentials in tool input)
+   ↓ (if not provided)
+2. AWS_PROFILE environment variable → reads ~/.aws/credentials
+   ↓ (if not set)
+3. AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY environment variables
+   ↓ (if not set)
+4. Default AWS credential chain (IAM role, instance profile, etc.)
+```
+
+---
+
+## 🔄 Transport Modes
+
+### Stdio Mode (for MCP Clients)
+
+Used by Cline, Claude Desktop, and other MCP-compatible clients:
+
+```bash
+node server.js --stdio
+```
+
+Communication happens via stdin/stdout using JSON-RPC.
+
+### HTTP/SSE Mode (for Web Clients)
+
+Starts an HTTP server with Server-Sent Events for real-time updates:
+
+```bash
+npm start
+# Server starts on http://localhost:3001
+
+# Endpoints:
+# GET  /health     - Health check
+# POST /mcp        - MCP protocol endpoint
+# GET  /sse        - Server-Sent Events stream
+```
+
+---
+
+## 🛠️ Available Tools
+
+The MCP server provides **18 tools** across three categories:
+
+### Core Tools (8)
+
+| Tool | Description |
+|------|-------------|
+| `analyze_project_intelligently` | Analyze project to detect app type, frameworks, databases |
+| `generate_smart_deployment_config` | Generate optimized deployment configuration |
+| `setup_intelligent_deployment` | One-click deployment setup (analysis + config + GitHub Actions) |
+| `optimize_infrastructure_costs` | Analyze and optimize infrastructure costs |
+| `detect_security_requirements` | Analyze security requirements and generate configs |
+| `list_lightsail_instances` | List all Lightsail instances in a region |
+| `check_deployment_status` | Check deployment health and status |
+| `validate_deployment_config` | Validate deployment configuration |
+
+### AI-Powered Tools (6) - Requires AWS Bedrock
+
+| Tool | Description |
+|------|-------------|
+| `ai_analyze_project` | Claude AI analyzes project files intelligently |
+| `ai_troubleshoot` | AI-powered error diagnosis and solutions |
+| `ai_ask_expert` | Ask the AI deployment expert any question |
+| `ai_review_config` | AI reviews config for security and optimization |
+| `ai_explain_code` | AI explains code from deployment perspective |
+| `ai_generate_config` | AI generates complete deployment configuration |
+
+### Troubleshooting Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `list_troubleshooting_scripts` | List available troubleshooting scripts by category |
+| `run_troubleshooting_script` | Run a specific troubleshooting script on an instance |
+| `diagnose_deployment_issue` | AI-powered diagnosis with script recommendations |
+| `get_instance_logs` | Retrieve logs from a Lightsail instance |
+
+---
+
+## 🔗 Cline/MCP Client Integration
+
+### Complete Cline Configuration
+
+Add to your Cline MCP settings (`~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`):
+
+**Using AWS Profile (Recommended):**
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "node",
+      "args": ["/Users/yourname/projects/lamp-stack-lightsail/mcp-server-new/server.js", "--stdio"],
+      "env": {
+        "AWS_PROFILE": "your-aws-profile",
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
+```
+
+**Using Direct Credentials:**
+```json
+{
+  "mcpServers": {
+    "lightsail-deployment": {
+      "command": "node",
+      "args": ["/Users/yourname/projects/lamp-stack-lightsail/mcp-server-new/server.js", "--stdio"],
+      "env": {
+        "AWS_ACCESS_KEY_ID": "your-access-key",
+        "AWS_SECRET_ACCESS_KEY": "your-secret-key",
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
+```
+
+### Verify Integration
+
+After configuring, ask Cline:
+- "List my Lightsail instances"
+- "Analyze this project for deployment"
+- "What troubleshooting scripts are available?"
+
+For detailed integration guide, see: **[CLINE-INTEGRATION-GUIDE.md](./CLINE-INTEGRATION-GUIDE.md)**
+
+---
+
+## 📁 Troubleshooting Tools Directory
+
+The server integrates with `../troubleshooting-tools/` containing **40+ scripts** across 7 categories:
+
+```
+troubleshooting-tools/
+├── docker/                          # Docker/container issues
+│   ├── debug-docker.py              # Diagnose Docker problems
+│   ├── fix-docker.py                # Auto-fix Docker issues
+│   └── README.md
+│
+├── general/                         # Cross-platform tools
+│   ├── comprehensive-endpoint-check.py
+│   ├── extract-instance-info.py
+│   ├── final-deployment-verification.py
+│   ├── fix-all-deployment-issues.py
+│   ├── monitor-deployment-progress.py
+│   ├── quick-endpoint-check.py
+│   ├── test-all-deployments.py
+│   ├── verify-all-8-deployments.py
+│   ├── verify-all-endpoints.py
+│   └── verify-new-deployments-v7.py
+│
+├── lamp/                            # LAMP stack (Linux/Apache/MySQL/PHP)
+│   ├── debug-lamp.py
+│   ├── diagnose-lamp-failure.py
+│   ├── fix-lamp-amazon-linux-remote.py
+│   ├── fix-lamp-amazon-linux.py
+│   ├── fix-lamp.py
+│   └── README.md
+│
+├── nginx/                           # Nginx web server
+│   ├── check_nginx_config.py
+│   ├── debug-nginx.py
+│   ├── fix-nginx-default-page.py
+│   ├── fix-nginx-verification.py
+│   ├── fix-nginx.py
+│   └── README.md
+│
+├── nodejs/                          # Node.js applications
+│   ├── debug-instagram-clone.py
+│   ├── debug-nodejs.py
+│   ├── debug-react-nodejs.py
+│   ├── fix-instagram-clone.py
+│   ├── fix-nodejs.py
+│   ├── fix-react-nodejs.py
+│   ├── manual-test.py
+│   ├── quick-check.py
+│   └── README.md
+│
+├── python/                          # Python/Flask applications
+│   ├── debug-python.py
+│   ├── final-python-fix.py
+│   ├── fix-python.py
+│   └── README.md
+│
+├── react/                           # React/frontend applications
+│   ├── debug-react.py
+│   ├── fix-react.py
+│   └── README.md
+│
+├── debug-mongodb-test.sh            # MongoDB debugging
+└── fix-reddit-mysql.py              # MySQL fixes
+```
+
+### Using Troubleshooting Tools via MCP
+
 ```javascript
-// Run a specific troubleshooting script
+// List all available scripts
+{ "name": "list_troubleshooting_scripts", "arguments": { "category": "all" } }
+
+// List scripts for specific category
+{ "name": "list_troubleshooting_scripts", "arguments": { "category": "nodejs" } }
+
+// Run a debug script
 {
   "name": "run_troubleshooting_script",
   "arguments": {
@@ -376,93 +422,110 @@ The server provides several intelligent tools for AI assistants:
   }
 }
 
-// Run a fix script
-{
-  "name": "run_troubleshooting_script",
-  "arguments": {
-    "script_name": "fix-nginx.py",
-    "category": "nginx",
-    "instance_name": "my-web-server",
-    "aws_region": "us-east-1"
-  }
-}
-```
-
-#### 15. Diagnose Deployment Issue
-```javascript
-// AI-powered diagnosis with automatic script recommendations
-{
-  "name": "diagnose_deployment_issue",
-  "arguments": {
-    "instance_name": "my-nodejs-app",
-    "aws_region": "us-east-1",
-    "error_description": "Getting 502 Bad Gateway error when accessing the application",
-    "app_type": "nodejs",
-    "logs": "Error: connect ECONNREFUSED 127.0.0.1:3000",
-    "auto_fix": false  // Set to true to automatically run fix scripts
-  }
-}
-```
-
-#### 16. Get Instance Logs
-```javascript
-// Get application logs
-{
-  "name": "get_instance_logs",
-  "arguments": {
-    "instance_name": "my-nodejs-app",
-    "aws_region": "us-east-1",
-    "log_type": "application",  // application, system, nginx, apache, pm2, docker, all
-    "lines": 100
-  }
-}
-
-// Get all logs for comprehensive troubleshooting
-{
-  "name": "get_instance_logs",
-  "arguments": {
-    "instance_name": "my-web-server",
-    "log_type": "all",
-    "lines": 200
-  }
-}
-```
-
-### Troubleshooting Workflow Example
-
-Here's a typical troubleshooting workflow using the MCP tools:
-
-```javascript
-// Step 1: Check deployment status
-{
-  "name": "check_deployment_status",
-  "arguments": {
-    "instance_name": "my-app",
-    "health_check_endpoint": "/api/health"
-  }
-}
-
-// Step 2: If unhealthy, get logs
-{
-  "name": "get_instance_logs",
-  "arguments": {
-    "instance_name": "my-app",
-    "log_type": "all"
-  }
-}
-
-// Step 3: Use AI to diagnose the issue
+// AI-powered diagnosis with auto-fix
 {
   "name": "diagnose_deployment_issue",
   "arguments": {
     "instance_name": "my-app",
     "error_description": "502 Bad Gateway",
     "app_type": "nodejs",
-    "auto_fix": true  // Automatically run recommended fix scripts
+    "auto_fix": true
+  }
+}
+```
+
+---
+
+## 🤖 AWS Bedrock AI Integration
+
+### Supported Models
+
+| Model | ID | Use Case |
+|-------|-----|----------|
+| **Claude 3 Sonnet** | `anthropic.claude-3-sonnet-20240229-v1:0` | Default - balanced performance |
+| **Claude 3 Haiku** | `anthropic.claude-3-haiku-20240307-v1:0` | Quick tasks, lower cost |
+| **Claude 3 Opus** | `anthropic.claude-3-opus-20240229-v1:0` | Complex analysis |
+
+### Required IAM Permissions
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.*"
+    }
+  ]
+}
+```
+
+### Enable Bedrock Models
+
+1. Go to AWS Console → Amazon Bedrock
+2. Navigate to "Model access"
+3. Request access to Claude models
+4. Wait for approval (usually instant for Claude)
+
+### Test Bedrock Connection
+
+```bash
+# Set credentials
+export AWS_PROFILE=your-profile
+
+# Run test
+node test-bedrock-ai.js
+```
+
+---
+
+## 📖 Tool Usage Examples
+
+### Analyze and Deploy a Project
+
+```javascript
+// Step 1: Analyze project
+{
+  "name": "analyze_project_intelligently",
+  "arguments": {
+    "project_path": "/path/to/your/project",
+    "user_description": "A Node.js API with PostgreSQL"
   }
 }
 
-// Step 4: Verify the fix
+// Step 2: Generate deployment config
+{
+  "name": "generate_smart_deployment_config",
+  "arguments": {
+    "analysis_result": { /* from step 1 */ },
+    "app_name": "my-api",
+    "aws_region": "us-east-1"
+  }
+}
+
+// Or use one-click setup
+{
+  "name": "setup_intelligent_deployment",
+  "arguments": {
+    "project_path": "/path/to/project",
+    "app_name": "my-api",
+    "deployment_preferences": {
+      "budget": "standard",
+      "scale": "small",
+      "environment": "production"
+    }
+  }
+}
+```
+
+### Troubleshooting Workflow
+
+```javascript
+// Step 1: Check status
 {
   "name": "check_deployment_status",
   "arguments": {
@@ -470,340 +533,119 @@ Here's a typical troubleshooting workflow using the MCP tools:
     "health_check_endpoint": "/api/health"
   }
 }
+
+// Step 2: Get logs if unhealthy
+{
+  "name": "get_instance_logs",
+  "arguments": {
+    "instance_name": "my-app",
+    "log_type": "all",
+    "lines": 200
+  }
+}
+
+// Step 3: AI diagnosis
+{
+  "name": "diagnose_deployment_issue",
+  "arguments": {
+    "instance_name": "my-app",
+    "error_description": "502 Bad Gateway",
+    "app_type": "nodejs",
+    "auto_fix": true
+  }
+}
 ```
 
-### Deployment Preferences Reference
+### AI-Powered Assistance
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `budget` | string | `standard` | Budget tier: `minimal`, `standard`, `performance` |
-| `scale` | string | `small` | Scale tier: `small`, `medium`, `large` |
-| `environment` | string | `production` | Environment: `development`, `staging`, `production` |
-| `aws_region` | string | `us-east-1` | AWS region for deployment |
-| `db_name` | string | `app_db` | Database name |
-| `db_rds_name` | string | auto | RDS instance name (for external databases) |
-| `bucket_name` | string | auto | S3-compatible bucket name |
-| `bucket_access` | string | `read_write` | Bucket access: `read_only`, `read_write` |
-| `bucket_bundle` | string | `small_1_0` | Bucket bundle size |
-| `api_only_app` | boolean | `false` | Set `true` for API-only apps without root route |
-| `verification_endpoint` | string | `/` | Custom endpoint for deployment verification |
-| `health_check_endpoint` | string | `/` | Custom health check endpoint |
-| `expected_content` | string | auto | Expected content in health check response |
+```javascript
+// Ask the expert
+{
+  "name": "ai_ask_expert",
+  "arguments": {
+    "question": "How do I set up SSL for my Node.js app on Lightsail?",
+    "project_context": { "app_type": "nodejs", "has_domain": true }
+  }
+}
 
-## 🔧 Configuration
+// Review configuration
+{
+  "name": "ai_review_config",
+  "arguments": {
+    "config": { /* your deployment config */ }
+  }
+}
+
+// Troubleshoot error
+{
+  "name": "ai_troubleshoot",
+  "arguments": {
+    "error_message": "ECONNREFUSED 127.0.0.1:27017",
+    "context": { "app_type": "nodejs", "database": "mongodb" }
+  }
+}
+```
+
+---
+
+## ⚙️ Configuration Reference
 
 ### Environment Variables
 
-```bash
-# Server Configuration
-PORT=3000                    # Server port (default: 3000)
-HOST=0.0.0.0                # Server host (default: 0.0.0.0)
-MCP_AUTH_TOKEN=your-token   # Optional authentication token
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_PROFILE` | - | AWS profile name from ~/.aws/credentials |
+| `AWS_REGION` | `us-east-1` | Default AWS region |
+| `AWS_ACCESS_KEY_ID` | - | AWS access key (if not using profile) |
+| `AWS_SECRET_ACCESS_KEY` | - | AWS secret key (if not using profile) |
+| `PORT` | `3001` | HTTP server port |
+| `HOST` | `0.0.0.0` | HTTP server host |
+| `MCP_AUTH_TOKEN` | - | Optional authentication token |
+| `BEDROCK_MODEL_ID` | `anthropic.claude-3-sonnet-20240229-v1:0` | Bedrock model |
 
-# AWS Configuration (for deployment and Bedrock)
-AWS_REGION=us-east-1        # Default AWS region
-AWS_PROFILE=default         # AWS profile to use
+### Deployment Preferences
 
-# Bedrock AI Configuration
-BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0  # Bedrock model ID
-```
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `budget` | `minimal`, `standard`, `performance` | `standard` | Budget tier |
+| `scale` | `small`, `medium`, `large` | `small` | Scale tier |
+| `environment` | `development`, `staging`, `production` | `production` | Environment |
+| `api_only_app` | `true`, `false` | `false` | For API-only apps |
+| `verification_endpoint` | string | `/` | Custom verification endpoint |
+| `health_check_endpoint` | string | `/` | Custom health check endpoint |
 
-### AWS Bedrock Setup
+---
 
-To use AI-powered tools, you need:
-
-1. **AWS Credentials**: Configure via one of these methods:
-   - AWS profile in `~/.aws/credentials`
-   - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
-   - Pass credentials directly to each AI tool call
-2. **Bedrock Model Access**: Enable Claude models in AWS Bedrock console
-3. **IAM Permissions**: Your IAM user/role needs `bedrock:InvokeModel` permission
-
-#### Credential Options for AI Tools
-
-All AI-powered tools (`ai_analyze_project`, `ai_troubleshoot`, `ai_ask_expert`, `ai_review_config`, `ai_explain_code`, `ai_generate_config`) accept an optional `aws_credentials` parameter:
-
-```javascript
-// Option 1: Use AWS profile from ~/.aws/credentials
-{
-  "name": "ai_troubleshoot",
-  "arguments": {
-    "error_message": "Connection refused",
-    "aws_credentials": {
-      "profile": "my-aws-profile",  // Profile name from ~/.aws/credentials
-      "region": "us-east-1"         // Optional, defaults to us-east-1
-    }
-  }
-}
-
-// Option 2: Pass credentials directly
-{
-  "name": "ai_troubleshoot",
-  "arguments": {
-    "error_message": "Connection refused",
-    "aws_credentials": {
-      "access_key_id": "AKIAIOSFODNN7EXAMPLE",
-      "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-      "session_token": "optional-session-token",  // For temporary credentials
-      "region": "us-east-1"
-    }
-  }
-}
-
-// Option 3: Use default credential chain (env vars, IAM role, etc.)
-{
-  "name": "ai_troubleshoot",
-  "arguments": {
-    "error_message": "Connection refused"
-    // No aws_credentials - uses default chain
-  }
-}
-```
+## 🧪 Testing
 
 ```bash
-# Quick setup with AWS CLI
-aws configure
-
-# Or set environment variables
-export AWS_ACCESS_KEY_ID=your-access-key
-export AWS_SECRET_ACCESS_KEY=your-secret-key
-export AWS_REGION=us-east-1
-
-# Or use a specific profile
-export AWS_PROFILE=my-profile
-
-# Test Bedrock access
-node test-bedrock-ai.js
-```
-
-### Supported Bedrock Models
-
-| Model | ID | Best For |
-|-------|-----|----------|
-| Claude 3 Sonnet | `anthropic.claude-3-sonnet-20240229-v1:0` | Default, balanced |
-| Claude 3 Haiku | `anthropic.claude-3-haiku-20240307-v1:0` | Fast, simple tasks |
-| Claude 3 Opus | `anthropic.claude-3-opus-20240229-v1:0` | Complex analysis |
-
-### MCP Client Configuration
-
-Add to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "enhanced-lightsail-deployment": {
-      "command": "node",
-      "args": ["/path/to/mcp-server-new/server.js"],
-      "env": {
-        "PORT": "3000"
-      }
-    }
-  }
-}
-```
-
-## 🎯 Supported Application Types
-
-| Type | Frameworks | Databases | Features |
-|------|------------|-----------|----------|
-| **Node.js** | Express, Fastify, Koa | MySQL, PostgreSQL, MongoDB | API, WebSocket, Real-time |
-| **Python** | Flask, Django | PostgreSQL, MySQL | API, ML, Data Processing |
-| **PHP (LAMP)** | Laravel, Symfony, Plain PHP | MySQL, PostgreSQL | Web Apps, CMS, E-commerce |
-| **React** | React, Vue, Angular, Next.js | Any (via API) | SPA, PWA, Static Sites |
-| **Docker** | Any containerized app | Any | Microservices, Complex Apps |
-| **Static** | HTML, CSS, JS | None | Landing Pages, Documentation |
-
-## 💡 Intelligent Analysis Examples
-
-### Node.js API Detection
-```javascript
-// Detects from package.json
-{
-  "detected_type": "nodejs",
-  "confidence": 0.9,
-  "frameworks": [
-    { "name": "express", "type": "nodejs", "confidence": 0.8 }
-  ],
-  "databases": [
-    { "name": "postgresql", "type": "postgresql", "confidence": 0.7 }
-  ],
-  "infrastructure_needs": {
-    "bundle_size": "small_3_0",
-    "memory_intensive": false,
-    "cpu_intensive": false
-  },
-  "estimated_costs": {
-    "monthly_min": 25,
-    "monthly_max": 45
-  }
-}
-```
-
-### Docker Application Detection
-```javascript
-// Detects from Dockerfile and docker-compose.yml
-{
-  "detected_type": "docker",
-  "confidence": 0.9,
-  "deployment_complexity": "complex",
-  "infrastructure_needs": {
-    "bundle_size": "medium_3_0",  // Docker needs more resources
-    "memory_intensive": true
-  },
-  "estimated_costs": {
-    "monthly_min": 40,
-    "monthly_max": 80
-  }
-}
-```
-
-## 🔒 Security Features
-
-### Automatic Security Configuration
-- **SSL/TLS**: Automatic HTTPS setup with Let's Encrypt
-- **Firewall**: Intelligent port configuration based on application type
-- **Authentication**: JWT and session security for user-facing applications
-- **File Uploads**: Secure file handling with validation and S3 storage
-- **Rate Limiting**: DDoS protection and API rate limiting
-
-### Compliance Support
-- **GDPR**: Data protection and privacy configurations
-- **HIPAA**: Healthcare data security requirements
-- **SOC2**: Security controls for service organizations
-- **PCI-DSS**: Payment card industry security standards
-
-## 💰 Cost Optimization
-
-### Intelligent Right-Sizing
-```javascript
-// Optimization recommendations
-{
-  "recommended_bundle": "small_3_0",
-  "cost_breakdown": {
-    "instance": 10,
-    "database": 15,
-    "storage": 1,
-    "total": 26
-  },
-  "optimizations": [
-    {
-      "type": "performance",
-      "priority": "medium",
-      "message": "Consider upgrading to medium bundle for better performance",
-      "impact": "20% performance improvement"
-    }
-  ],
-  "performance_score": 85,
-  "cost_efficiency_score": 92
-}
-```
-
-## 🛠️ API Reference
-
-### Health Check
-```bash
-GET /health
-```
-
-Returns server status and capabilities.
-
-### MCP Endpoint
-```bash
-POST /mcp
-Content-Type: application/json
-Authorization: Bearer <token>  # If AUTH_TOKEN is set
-```
-
-MCP protocol endpoint for tool execution.
-
-## 🔧 Development
-
-### Running in Development Mode
-```bash
-npm run dev  # Uses nodemon for auto-restart
-```
-
-### Project Structure
-```
-mcp-server-new/
-├── server.js                 # Main server file
-├── project-analyzer.js       # Intelligent project analysis
-├── infrastructure-optimizer.js # Cost and performance optimization
-├── configuration-generator.js # Smart config generation
-├── package.json              # Dependencies and scripts
-└── README.md                 # This file
-```
-
-## � CTesting
-
-### Unit Tests
-```bash
-# Run all unit tests
+# Unit tests
 npm test
 
-# Run specific test suites
-node test-new-tools.js      # Test new tools and validation
-node test-components.js     # Test MCP components
-node test-bedrock-ai.js     # Test Bedrock AI integration
+# Test specific components
+node test-new-tools.js        # New tools and validation
+node test-components.js       # MCP components
+node test-bedrock-ai.js       # Bedrock AI integration
+
+# E2E deployment test
+node test-e2e-deployment.js --dry-run    # Dry run
+node test-e2e-deployment.js              # Full test
+node test-e2e-deployment.js --cleanup    # Cleanup resources
 ```
 
-### End-to-End Deployment Test
-The E2E test demonstrates the full deployment workflow:
-
-```bash
-# Dry run (no actual deployment)
-node test-e2e-deployment.js --dry-run
-
-# Skip deployment but test other steps
-node test-e2e-deployment.js --skip-deploy
-
-# Full deployment test (creates real resources)
-node test-e2e-deployment.js
-
-# Cleanup resources after testing
-node test-e2e-deployment.js --cleanup
-```
-
-The E2E test:
-1. Creates a simple Node.js test application
-2. Analyzes it using MCP tools
-3. Generates deployment configuration
-4. Sets up GitHub repository and Actions
-5. Deploys to AWS Lightsail
-6. Verifies the application is working
-7. Provides the application endpoint URL
-
-**Prerequisites for E2E test:**
-- AWS credentials configured (`source .aws-creds.sh`)
-- GitHub CLI authenticated (`gh auth login`)
-- Node.js 18+
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
 
 ## 🆘 Support
 
 - **Issues**: [GitHub Issues](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/discussions)
-- **Documentation**: [Project Wiki](https://github.com/naveenraj44125-creator/lamp-stack-lightsail/wiki)
+- **Integration Guide**: [CLINE-INTEGRATION-GUIDE.md](./CLINE-INTEGRATION-GUIDE.md)
 
-## 🎉 What's New in v2.0
+---
 
-- ✨ **Intelligent Project Analysis**: Automatic application type detection
-- 💰 **Cost Optimization Engine**: Right-sizing and cost estimation
-- 🔒 **Security Assessment**: Compliance and security configuration
-- 🛠️ **Smart Configuration Generation**: Optimized deployment configs
-- 📊 **Performance Scoring**: Performance vs cost analysis
-- 🎯 **One-Click Setup**: Complete deployment automation
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file.
 
 ---
 

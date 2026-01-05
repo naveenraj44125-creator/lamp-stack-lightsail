@@ -1130,19 +1130,34 @@ The configuration has been optimized for your specific application type and requ
 
 ## 🚀 Run Setup Script
 
-Run the following command to set up the complete deployment:
+### Step 1: Download the setup script (if not present)
+
+\`\`\`bash
+# Download setup-complete-deployment.sh if you don't have it
+curl -sSL -o setup-complete-deployment.sh https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh
+chmod +x setup-complete-deployment.sh
+\`\`\`
+
+### Step 2: Set environment variables and run
 
 \`\`\`bash
 ${envVars}
 ./setup-complete-deployment.sh
 \`\`\`
 
-This script will automatically:
-1. Create the Lightsail instance
-2. Generate deployment configuration (deployment-${analysis.detected_type}.config.yml)
-3. Create GitHub Actions workflow (.github/workflows/deploy-${analysis.detected_type}.yml)
-4. Set up IAM role for GitHub OIDC
-5. Configure the GitHub repository
+### Alternative: One-liner (downloads and runs automatically)
+
+\`\`\`bash
+${envVars}
+curl -sSL https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh | bash
+\`\`\`
+
+## What the script does:
+1. ✅ Creates the Lightsail instance
+2. ✅ Generates deployment configuration (deployment-${analysis.detected_type}.config.yml)
+3. ✅ Creates GitHub Actions workflow (.github/workflows/deploy-${analysis.detected_type}.yml)
+4. ✅ Sets up IAM role for GitHub OIDC authentication
+5. ✅ Configures the GitHub repository with required secrets
 
 No manual file creation needed - the script handles everything!`
         }]
