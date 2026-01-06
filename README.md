@@ -4,15 +4,58 @@ A complete, production-ready deployment automation system for AWS Lightsail with
 
 ## 🚀 Quick Start
 
-### For New Projects
+### Option 1: MCP Server (Recommended - One Command!) ⭐
+
+Deploy any application with a single API call - no manual steps required:
+
+```bash
+# Start the MCP server
+cd mcp-server-new && npm start
+
+# Deploy your app (in another terminal)
+curl -X POST http://localhost:3001/call-tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "setup_intelligent_deployment",
+    "arguments": {
+      "project_path": "/path/to/your/app",
+      "app_name": "my-app",
+      "github_config": {
+        "username": "your-github-username",
+        "repository": "my-app",
+        "visibility": "public"
+      }
+    }
+  }'
+```
+
+**What happens automatically:**
+1. ✅ Analyzes your project (detects Node.js, Python, PHP, etc.)
+2. ✅ Initializes git repository (if needed)
+3. ✅ Creates GitHub repository
+4. ✅ Sets up IAM role for GitHub OIDC
+5. ✅ Configures GitHub secrets
+6. ✅ Generates deployment config & workflow files
+7. ✅ Pushes to trigger GitHub Actions deployment
+8. ✅ Creates Lightsail instance and deploys your app
+
+**Smart Features:**
+- Auto-detects application port from your code
+- Detects frameworks (Express, Flask, React, etc.)
+- Configures appropriate instance size
+- Sets up health checks automatically
+
+### Option 2: Setup Scripts (Interactive)
+
+#### For New Projects
 
 Create a new repository with automated deployment:
 
 ```bash
-./setup-new-repo.sh
+./setup-complete-deployment.sh
 ```
 
-### For Existing Projects
+#### For Existing Projects
 
 Add deployment automation to your existing repository:
 

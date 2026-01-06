@@ -1,6 +1,46 @@
 # 🚀 Enhanced Lightsail Deployment MCP Server v3.0.0
 
-An intelligent Model Context Protocol (MCP) server that provides automated AWS Lightsail deployment with smart project analysis, cost optimization, security assessment, and **AI-powered assistance via AWS Bedrock**.
+An intelligent Model Context Protocol (MCP) server that provides **fully automated AWS Lightsail deployment** with smart project analysis, cost optimization, security assessment, and **AI-powered assistance via AWS Bedrock**.
+
+## 🎯 One-Command Deployment
+
+Deploy any application with a single API call - **zero manual steps**:
+
+```bash
+# Start the server
+npm start
+
+# Deploy your app (in another terminal)
+curl -X POST http://localhost:3001/call-tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "setup_intelligent_deployment",
+    "arguments": {
+      "project_path": "/path/to/your/app",
+      "app_name": "my-app",
+      "github_config": {
+        "username": "your-github-username",
+        "repository": "my-app"
+      }
+    }
+  }'
+```
+
+**What happens automatically:**
+- ✅ Project analysis (detects Node.js, Python, PHP, React, Docker)
+- ✅ Git initialization (if needed)
+- ✅ GitHub repository creation
+- ✅ IAM role setup for GitHub OIDC
+- ✅ GitHub secrets configuration
+- ✅ Deployment config & workflow generation
+- ✅ Push to trigger GitHub Actions
+- ✅ Lightsail instance creation & app deployment
+
+**Smart Detection:**
+- Auto-detects application port from your code (`process.env.PORT || 3000`)
+- Recognizes frameworks (Express, Flask, Laravel, React, Vue, etc.)
+- Configures appropriate instance size based on app requirements
+- Sets up health checks automatically
 
 ## 📋 Table of Contents
 
@@ -241,9 +281,43 @@ npm start
 # Server starts on http://localhost:3001
 
 # Endpoints:
-# GET  /health     - Health check
-# POST /mcp        - MCP protocol endpoint
-# GET  /sse        - Server-Sent Events stream
+# GET  /health      - Health check
+# GET  /tools       - List all available tools
+# POST /call-tool   - Execute a tool directly
+# POST /mcp         - MCP protocol endpoint
+# GET  /sse         - Server-Sent Events stream
+```
+
+#### Direct Tool Execution via HTTP
+
+```bash
+# List available tools
+curl http://localhost:3001/tools
+
+# Execute a tool
+curl -X POST http://localhost:3001/call-tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "list_lightsail_instances",
+    "arguments": {
+      "aws_region": "us-east-1"
+    }
+  }'
+
+# Full deployment
+curl -X POST http://localhost:3001/call-tool \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tool_name": "setup_intelligent_deployment",
+    "arguments": {
+      "project_path": "/path/to/app",
+      "app_name": "my-app",
+      "github_config": {
+        "username": "github-user",
+        "repository": "my-app"
+      }
+    }
+  }'
 ```
 
 ---
