@@ -403,9 +403,13 @@ check_prerequisites() {
     echo -e "${GREEN}✓ All prerequisites met${NC}"
 }
 
-# Function to check if we're in a git repository
+# Function to check if we're in a git repository (checks for .git in current directory, not parent)
 check_git_repo() {
-    git rev-parse --git-dir &> /dev/null
+    # Check if .git exists in current directory (not inherited from parent)
+    if [ -d ".git" ]; then
+        return 0
+    fi
+    return 1
 }
 
 # Function to create GitHub repository if needed
@@ -2538,6 +2542,20 @@ main() {
     echo -e "${BLUE}====================================${NC}"
     echo ""
     
+    # Check if we're in fully automated mode (all required env vars set) - check early!
+    FULLY_AUTOMATED=false
+    if [[ -n "$APP_TYPE" && -n "$APP_NAME" && -n "$INSTANCE_NAME" ]]; then
+        FULLY_AUTOMATED=true
+        echo -e "${GREEN}✓ Running in fully automated mode${NC}"
+        echo -e "${BLUE}Configuration from environment variables:${NC}"
+        echo "  App Type: $APP_TYPE"
+        echo "  App Name: $APP_NAME"
+        echo "  Instance: $INSTANCE_NAME"
+        echo "  Region: $AWS_REGION"
+        echo "  GitHub Repo: $GITHUB_REPO"
+        echo ""
+    fi
+    
     # Check prerequisites
     check_prerequisites
     
@@ -2623,6 +2641,33 @@ GITIGNORE
                     fi
                 fi
             fi
+        fi
+        
+        # Create repo if it doesn't exist and set up git remote
+        echo -e "${BLUE}Checking if GitHub repository exists...${NC}"
+        if ! gh repo view "$GITHUB_REPO" &>/dev/null; then
+            echo -e "${YELLOW}Repository doesn't exist, creating...${NC}"
+            REPO_VISIBILITY_FLAG="--public"
+            if [[ "$REPO_VISIBILITY" == "private" ]]; then
+                REPO_VISIBILITY_FLAG="--private"
+            fi
+            if create_github_repo_if_needed "$GITHUB_REPO" "$APP_NAME deployment repository" "$REPO_VISIBILITY_FLAG"; then
+                echo -e "${GREEN}✓ Repository created${NC}"
+            else
+                echo -e "${RED}❌ Failed to create repository${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✓ Repository already exists${NC}"
+        fi
+        
+        # Set up git remote
+        if ! git remote get-url origin &>/dev/null; then
+            git remote add origin "https://github.com/${GITHUB_REPO}.git"
+            echo -e "${GREEN}✓ Git remote added${NC}"
+        else
+            git remote set-url origin "https://github.com/${GITHUB_REPO}.git"
+            echo -e "${GREEN}✓ Git remote updated${NC}"
         fi
     else
         # Try to get from git remote or use environment variable as fallback
@@ -2723,24 +2768,7 @@ GITIGNORE
     fi
     echo ""
     
-    # Check if we're in fully automated mode (all required env vars set)
-    FULLY_AUTOMATED=false
-    if [[ -n "$APP_TYPE" && -n "$APP_NAME" && -n "$INSTANCE_NAME" ]]; then
-        FULLY_AUTOMATED=true
-        echo -e "${GREEN}✓ Running in fully automated mode${NC}"
-        echo -e "${BLUE}Configuration from environment variables:${NC}"
-        echo "  App Type: $APP_TYPE"
-        echo "  App Name: $APP_NAME"
-        echo "  Instance: $INSTANCE_NAME"
-        echo "  Region: $AWS_REGION"
-        echo "  OS: $BLUEPRINT_ID"
-        echo "  Bundle: $BUNDLE_ID"
-        echo "  Database: $DATABASE_TYPE"
-        echo "  Bucket: $ENABLE_BUCKET"
-        echo ""
-    fi
-    
-    # Application type selection
+    # Application type selection (FULLY_AUTOMATED was already set at the start of main())
     if [[ "$FULLY_AUTOMATED" == "true" ]]; then
         # Validate app type
         if [[ ! "$APP_TYPE" =~ ^(lamp|nodejs|python|react|docker|nginx)$ ]]; then

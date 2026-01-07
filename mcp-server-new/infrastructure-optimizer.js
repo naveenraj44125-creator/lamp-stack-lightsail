@@ -177,7 +177,12 @@ export class InfrastructureOptimizer {
     // Database cost
     if (optimization.database_config) {
       const dbCost = this.databaseCosts[optimization.database_config.type];
-      optimization.cost_breakdown.database = dbCost[optimization.database_config.size];
+      if (dbCost) {
+        optimization.cost_breakdown.database = dbCost[optimization.database_config.size] || 0;
+      } else {
+        // MongoDB and other NoSQL databases run on the instance (no separate cost)
+        optimization.cost_breakdown.database = 0;
+      }
     }
     
     // Storage cost

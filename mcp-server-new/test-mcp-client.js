@@ -5,6 +5,12 @@
  * Tests the MCP server via SSE transport
  */
 
+// Polyfill EventSource for Node.js
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const EventSource = require('eventsource');
+global.EventSource = EventSource;
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 
@@ -13,7 +19,7 @@ async function testMCPServer() {
 
   try {
     // Connect to the MCP server
-    const transport = new SSEClientTransport(new URL('http://localhost:3001/mcp'));
+    const transport = new SSEClientTransport(new URL('http://localhost:3099/mcp'));
     const client = new Client(
       {
         name: 'test-client',

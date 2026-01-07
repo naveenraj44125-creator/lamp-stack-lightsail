@@ -1,0 +1,110 @@
+aws:
+  region: us-east-1
+lightsail:
+  instance_name: nodejs-mcp-test-app
+  static_ip: 
+  bundle_id: nano_3_0
+  blueprint_id: ubuntu_22_04
+application:
+  name: mcp-test-app
+  version: 1.0.0
+  type: unknown
+  package_files:
+    - example-unknown-app/
+  package_fallback: true
+  environment_variables:
+    APP_ENV: production
+    NODE_ENV: production
+dependencies:
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - 22
+        - 80
+        - 443
+      deny_all_other: true
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 600
+    health_check: 180
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+      dependencies:
+        enabled: true
+        install_system_deps: true
+        configure_services: true
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+      dependencies:
+        enabled: true
+        configure_application: true
+        set_permissions: true
+        restart_services: true
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - /
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    pull_request_branches:
+      - main
+      - master
+    workflow_dispatch: true
+  jobs:
+    test:
+      enabled: true
+      docker_test: false
+      language_specific_tests: true
+    deployment:
+      deploy_on_push: true
+      deploy_on_pr: false
+      artifact_retention_days: 1
+      create_summary: true
+monitoring:
+  health_check:
+    endpoint: /
+    max_attempts: 15
+    wait_between_attempts: 20
+    initial_wait: 60
+    expected_content: Welcome
+security:
+  file_permissions:
+    web_files: 644
+    directories: 755
+    config_files: 600
+  ssl:
+    enabled: true
+    force_https: true
+    certificate_auto_renew: true
+  firewall:
+    strict_mode: false
+    rate_limiting: false
+backup:
+  enabled: true
+  retention_days: 7
+  backup_location: /var/backups/app-deployments
+  backup_database: false
+  backup_uploads: false

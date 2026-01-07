@@ -1,0 +1,105 @@
+# GitHub Actions Workflow for mcp-test-app
+# Deploys to AWS Lightsail via SSH
+
+name: Deploy mcp-test-app to Lightsail
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Get Lightsail instance IP
+        id: get-ip
+        run: |
+          IP=$(aws lightsail get-instance --instance-name ${{ secrets.LIGHTSAIL_INSTANCE_NAME }} --query 'instance.publicIpAddress' --output text)
+          echo "instance_ip=$IP" >> $GITHUB_OUTPUT
+          echo "Instance IP: $IP"
+      
+      - name: Get SSH key from Lightsail
+        run: |
+          aws lightsail download-default-key-pair --query 'privateKeyBase64' --output text | base64 -d > lightsail-key.pem
+          chmod 600 lightsail-key.pem
+      
+      - name: Deploy to Lightsail
+        env:
+          INSTANCE_IP: ${{ steps.get-ip.outputs.instance_ip }}
+        run: |
+          # Add host to known hosts
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $INSTANCE_IP >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Create app directory on server
+          ssh -i lightsail-key.pem ubuntu@$INSTANCE_IP "mkdir -p ~/app"
+          
+          # Copy files to server
+          scp -i lightsail-key.pem -r package.json src ubuntu@$INSTANCE_IP:~/app/
+          
+          # Install dependencies and restart app
+          ssh -i lightsail-key.pem ubuntu@$INSTANCE_IP << 'EOF'
+            cd ~/app
+            
+            # Install Node.js if not present
+            if ! command -v node &> /dev/null; then
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            
+            # Install PM2 if not present
+            if ! command -v pm2 &> /dev/null; then
+              sudo npm install -g pm2
+            fi
+            
+            # Install dependencies
+            npm install --production
+            
+            # Restart app with PM2
+            pm2 delete mcp-app 2>/dev/null || true
+            pm2 start src/server.js --name mcp-app
+            pm2 save
+            
+            echo "✅ Deployment complete!"
+          EOF
+      
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f lightsail-key.pem
+      
+      - name: Wait for app to start
+        run: sleep 5
+      
+      - name: Verify deployment
+        run: |
+          echo "Testing health endpoint..."
+          curl -f --max-time 10 http://${{ steps.get-ip.outputs.instance_ip }}:3000/health
+          echo ""
+          echo "✅ Health check passed!"
+      
+      - name: Deployment Summary
+        run: |
+          echo "============================================"
+          echo "✅ DEPLOYMENT SUCCESSFUL!"
+          echo "============================================"
+          echo ""
+          echo "🌐 Application URL: http://${{ steps.get-ip.outputs.instance_ip }}:3000"
+          echo "🏥 Health Check: http://${{ steps.get-ip.outputs.instance_ip }}:3000/health"
+          echo "📊 API Info: http://${{ steps.get-ip.outputs.instance_ip }}:3000/api/info"

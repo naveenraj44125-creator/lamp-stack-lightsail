@@ -15,6 +15,8 @@
  * - Database and storage requirement analysis
  * - Security and performance optimization
  * - AI-powered troubleshooting and Q&A
+ * - ACTUALLY CREATES AWS RESOURCES (Lightsail instances, IAM roles)
+ * - ACTUALLY WRITES FILES (deployment configs, GitHub workflows)
  * 
  * Usage:
  *   node server.js [--port PORT] [--host HOST]
@@ -24,16 +26,23 @@
  *   HOST - Server host (default: 0.0.0.0)
  *   MCP_AUTH_TOKEN - Optional authentication token
  *   AWS_REGION - AWS region for Bedrock (default: us-east-1)
+ *   AWS_PROFILE - AWS profile for credentials (recommended: lightsail-deploy)
  *   BEDROCK_MODEL_ID - Bedrock model ID (default: anthropic.claude-3-sonnet-20240229-v1:0)
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import express from 'express';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// AWS SDK imports for actual resource creation
+import { LightsailClient, CreateInstancesCommand, GetInstanceCommand, GetBundlesCommand, GetBlueprintsCommand, AllocateStaticIpCommand, AttachStaticIpCommand } from '@aws-sdk/client-lightsail';
+import { IAMClient, CreateRoleCommand, AttachRolePolicyCommand, CreatePolicyCommand, GetRoleCommand, UpdateAssumeRolePolicyCommand, GetPolicyCommand } from '@aws-sdk/client-iam';
+import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { fromIni } from '@aws-sdk/credential-providers';
 
 // Import Bedrock AI integration
 import { BedrockAI } from './bedrock-ai.js';
@@ -104,15 +113,350 @@ class EnhancedLightsailDeploymentServer {
     return new BedrockAI(options);
   }
 
+  /**
+   * Get AWS client configuration with credentials
+   * @param {Object} awsCredentials - Optional AWS credentials
+   * @param {string} region - AWS region
+   * @returns {Object} - AWS client configuration
+   */
+  getAwsClientConfig(awsCredentials = null, region = 'us-east-1') {
+    const config = { region };
+    
+    if (awsCredentials?.profile) {
+      config.credentials = fromIni({ profile: awsCredentials.profile });
+    } else if (awsCredentials?.access_key_id && awsCredentials?.secret_access_key) {
+      config.credentials = {
+        accessKeyId: awsCredentials.access_key_id,
+        secretAccessKey: awsCredentials.secret_access_key,
+        ...(awsCredentials.session_token && { sessionToken: awsCredentials.session_token })
+      };
+    } else if (process.env.AWS_PROFILE) {
+      config.credentials = fromIni({ profile: process.env.AWS_PROFILE });
+    }
+    // Otherwise use default credential chain
+    
+    return config;
+  }
+
+  /**
+   * Get AWS Account ID
+   * @param {Object} awsCredentials - Optional AWS credentials
+   * @returns {Promise<string>} - AWS Account ID
+   */
+  async getAwsAccountId(awsCredentials = null) {
+    const config = this.getAwsClientConfig(awsCredentials);
+    const stsClient = new STSClient(config);
+    const response = await stsClient.send(new GetCallerIdentityCommand({}));
+    return response.Account;
+  }
+
+  /**
+   * Create Lightsail instance
+   * @param {Object} params - Instance parameters
+   * @param {Object} awsCredentials - Optional AWS credentials
+   * @returns {Promise<Object>} - Created instance details
+   */
+  async createLightsailInstance(params, awsCredentials = null) {
+    const { instanceName, blueprintId, bundleId, region, availabilityZone, userData } = params;
+    const config = this.getAwsClientConfig(awsCredentials, region);
+    const lightsailClient = new LightsailClient(config);
+    
+    // Check if instance already exists
+    try {
+      const existingInstance = await lightsailClient.send(new GetInstanceCommand({ instanceName }));
+      if (existingInstance.instance) {
+        return {
+          success: true,
+          alreadyExists: true,
+          instance: existingInstance.instance,
+          message: `Instance ${instanceName} already exists`
+        };
+      }
+    } catch (e) {
+      // Instance doesn't exist, continue with creation
+    }
+    
+    const az = availabilityZone || `${region}a`;
+    
+    const command = new CreateInstancesCommand({
+      instanceNames: [instanceName],
+      blueprintId: blueprintId || 'ubuntu_22_04',
+      bundleId: bundleId || 'micro_3_0',
+      availabilityZone: az,
+      userData: userData || ''
+    });
+    
+    const response = await lightsailClient.send(command);
+    return {
+      success: true,
+      alreadyExists: false,
+      operations: response.operations,
+      message: `Instance ${instanceName} creation initiated`
+    };
+  }
+
+  /**
+   * Create IAM role for GitHub OIDC
+   * @param {Object} params - Role parameters
+   * @param {Object} awsCredentials - Optional AWS credentials
+   * @returns {Promise<Object>} - Created role details
+   */
+  async createGitHubOidcRole(params, awsCredentials = null) {
+    const { roleName, githubRepo, awsAccountId } = params;
+    const config = this.getAwsClientConfig(awsCredentials);
+    const iamClient = new IAMClient(config);
+    
+    // Trust policy for GitHub OIDC
+    const trustPolicy = {
+      Version: "2012-10-17",
+      Statement: [{
+        Effect: "Allow",
+        Principal: {
+          Federated: `arn:aws:iam::${awsAccountId}:oidc-provider/token.actions.githubusercontent.com`
+        },
+        Action: "sts:AssumeRoleWithWebIdentity",
+        Condition: {
+          StringEquals: {
+            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+          },
+          StringLike: {
+            "token.actions.githubusercontent.com:sub": [
+              `repo:${githubRepo}:ref:refs/heads/main`,
+              `repo:${githubRepo}:ref:refs/heads/master`,
+              `repo:${githubRepo}:pull_request`
+            ]
+          }
+        }
+      }]
+    };
+    
+    let roleArn;
+    let roleCreated = false;
+    
+    // Try to create role, or update if exists
+    try {
+      const createRoleResponse = await iamClient.send(new CreateRoleCommand({
+        RoleName: roleName,
+        AssumeRolePolicyDocument: JSON.stringify(trustPolicy),
+        Description: `GitHub Actions OIDC role for ${githubRepo}`
+      }));
+      roleArn = createRoleResponse.Role.Arn;
+      roleCreated = true;
+    } catch (e) {
+      if (e.name === 'EntityAlreadyExistsException') {
+        // Update existing role's trust policy
+        await iamClient.send(new UpdateAssumeRolePolicyCommand({
+          RoleName: roleName,
+          PolicyDocument: JSON.stringify(trustPolicy)
+        }));
+        const getRoleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        roleArn = getRoleResponse.Role.Arn;
+      } else {
+        throw e;
+      }
+    }
+    
+    // Attach ReadOnlyAccess policy
+    try {
+      await iamClient.send(new AttachRolePolicyCommand({
+        RoleName: roleName,
+        PolicyArn: 'arn:aws:iam::aws:policy/ReadOnlyAccess'
+      }));
+    } catch (e) {
+      // Ignore if already attached
+    }
+    
+    // Create and attach Lightsail policy
+    const lightsailPolicyName = `${roleName}-LightsailAccess`;
+    const lightsailPolicyArn = `arn:aws:iam::${awsAccountId}:policy/${lightsailPolicyName}`;
+    
+    try {
+      await iamClient.send(new CreatePolicyCommand({
+        PolicyName: lightsailPolicyName,
+        PolicyDocument: JSON.stringify({
+          Version: "2012-10-17",
+          Statement: [{
+            Effect: "Allow",
+            Action: "lightsail:*",
+            Resource: "*"
+          }]
+        }),
+        Description: "Full access to AWS Lightsail for GitHub Actions deployment"
+      }));
+    } catch (e) {
+      // Ignore if policy already exists
+    }
+    
+    try {
+      await iamClient.send(new AttachRolePolicyCommand({
+        RoleName: roleName,
+        PolicyArn: lightsailPolicyArn
+      }));
+    } catch (e) {
+      // Ignore if already attached
+    }
+    
+    return {
+      success: true,
+      roleArn,
+      roleName,
+      roleCreated,
+      message: roleCreated ? `IAM role ${roleName} created` : `IAM role ${roleName} updated`
+    };
+  }
+
+  /**
+   * Configure GitHub repository secrets using gh CLI
+   * @param {Object} params - Secret parameters
+   * @returns {Promise<Object>} - Result
+   */
+  async configureGitHubSecrets(params) {
+    const { repo, secrets } = params;
+    const results = [];
+    
+    for (const [name, value] of Object.entries(secrets)) {
+      try {
+        execSync(`gh secret set ${name} --repo ${repo} --body "${value}"`, {
+          encoding: 'utf8',
+          timeout: 30000,
+          stdio: 'pipe'
+        });
+        results.push({ name, success: true });
+      } catch (e) {
+        results.push({ name, success: false, error: e.message });
+      }
+    }
+    
+    return { success: results.every(r => r.success), results };
+  }
+
+  /**
+   * Write deployment configuration file
+   * @param {Object} params - Config parameters
+   * @returns {Object} - Result
+   */
+  writeDeploymentConfig(params) {
+    const { projectPath, appType, config } = params;
+    const configPath = path.join(projectPath, `deployment-${appType}.config.yml`);
+    
+    fs.writeFileSync(configPath, config, 'utf8');
+    
+    return {
+      success: true,
+      path: configPath,
+      message: `Deployment config written to ${configPath}`
+    };
+  }
+
+  /**
+   * Write GitHub workflow file
+   * @param {Object} params - Workflow parameters
+   * @returns {Object} - Result
+   */
+  writeGitHubWorkflow(params) {
+    const { projectPath, appType, workflow } = params;
+    const workflowDir = path.join(projectPath, '.github', 'workflows');
+    const workflowPath = path.join(workflowDir, `deploy-${appType}.yml`);
+    
+    // Create directory if it doesn't exist
+    fs.mkdirSync(workflowDir, { recursive: true });
+    fs.writeFileSync(workflowPath, workflow, 'utf8');
+    
+    return {
+      success: true,
+      path: workflowPath,
+      message: `GitHub workflow written to ${workflowPath}`
+    };
+  }
+
   async initialize() {
     await this.setupToolHandlers();
     return this;
   }
+
+  /**
+   * List all available tools
+   * @returns {Array} - Array of tool definitions
+   */
+  async listTools() {
+    return this.tools;
+  }
+
+  /**
+   * Handle a tool call directly (for HTTP endpoint testing)
+   * @param {string} toolName - Name of the tool to call
+   * @param {Object} args - Tool arguments
+   * @returns {Object} - Tool result
+   */
+  async handleToolCall(toolName, args = {}) {
+    // Input validation
+    const validationError = this.validateToolInput(toolName, args);
+    if (validationError) {
+      return {
+        content: [{ type: 'text', text: `❌ Validation Error: ${validationError}` }],
+        isError: true,
+      };
+    }
+
+    try {
+      switch (toolName) {
+        case 'analyze_project_intelligently':
+          return await this.analyzeProjectIntelligently(args);
+        case 'generate_smart_deployment_config':
+          return await this.generateSmartDeploymentConfig(args);
+        case 'setup_intelligent_deployment':
+          return await this.setupIntelligentDeployment(args);
+        case 'optimize_infrastructure_costs':
+          return await this.optimizeInfrastructureCosts(args);
+        case 'detect_security_requirements':
+          return await this.detectSecurityRequirements(args);
+        case 'list_lightsail_instances':
+          return await this.listLightsailInstances(args);
+        case 'check_deployment_status':
+          return await this.checkDeploymentStatus(args);
+        case 'validate_deployment_config':
+          return await this.validateDeploymentConfig(args);
+        // AI-Powered Tools
+        case 'ai_analyze_project':
+          return await this.aiAnalyzeProject(args);
+        case 'ai_troubleshoot':
+          return await this.aiTroubleshoot(args);
+        case 'ai_ask_expert':
+          return await this.aiAskExpert(args);
+        case 'ai_review_config':
+          return await this.aiReviewConfig(args);
+        case 'ai_explain_code':
+          return await this.aiExplainCode(args);
+        case 'ai_generate_config':
+          return await this.aiGenerateConfig(args);
+        // Troubleshooting Tools
+        case 'list_troubleshooting_scripts':
+          return await this.listTroubleshootingScripts(args);
+        case 'run_troubleshooting_script':
+          return await this.runTroubleshootingScript(args);
+        case 'diagnose_deployment_issue':
+          return await this.diagnoseDeploymentIssue(args);
+        case 'get_instance_logs':
+          return await this.getInstanceLogs(args);
+        default:
+          return {
+            content: [{ type: 'text', text: `Tool ${toolName} not implemented.` }],
+            isError: true,
+          };
+      }
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error: ${error.message}` }],
+        isError: true,
+      };
+    }
+  }
+
   async setupToolHandlers() {
     const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
     
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [
+    // Store tools array for listTools() method
+    this.tools = [
         {
           name: 'analyze_project_intelligently',
           description: 'Intelligently analyze a project directory or codebase to automatically detect application type, dependencies, database requirements, and infrastructure needs. This tool can scan files, analyze package.json/requirements.txt/composer.json, detect frameworks, and provide comprehensive deployment recommendations.',
@@ -190,7 +534,7 @@ class EnhancedLightsailDeploymentServer {
         },
         {
           name: 'setup_intelligent_deployment',
-          description: 'Complete intelligent deployment setup that combines project analysis and configuration generation. This is the main tool that analyzes your project and sets up everything needed for deployment.',
+          description: 'Complete intelligent deployment setup that ACTUALLY CREATES resources. This tool analyzes your project, writes deployment config files, creates Lightsail instances, sets up IAM roles for GitHub OIDC, and configures GitHub secrets. No manual steps needed!',
           inputSchema: {
             type: 'object',
             properties: {
@@ -240,7 +584,24 @@ class EnhancedLightsailDeploymentServer {
                   username: { type: 'string', description: 'GitHub username' },
                   repository: { type: 'string', description: 'Repository name' },
                   visibility: { type: 'string', enum: ['public', 'private'], default: 'private' }
-                }
+                },
+                description: 'GitHub configuration for OIDC setup and secrets'
+              },
+              aws_credentials: {
+                type: 'object',
+                properties: {
+                  profile: { type: 'string', description: 'AWS profile name (e.g., "lightsail-deploy")' },
+                  access_key_id: { type: 'string', description: 'AWS Access Key ID (alternative to profile)' },
+                  secret_access_key: { type: 'string', description: 'AWS Secret Access Key' },
+                  session_token: { type: 'string', description: 'AWS Session Token (for temporary credentials)' },
+                  region: { type: 'string', description: 'AWS region (default: us-east-1)' }
+                },
+                description: 'AWS credentials for creating resources. Uses AWS_PROFILE env var or default chain if not provided.'
+              },
+              execute_actions: {
+                type: 'boolean',
+                default: true,
+                description: 'Set to true to actually create resources (Lightsail instance, IAM role, write files). Set to false for dry-run analysis only.'
               }
             },
             required: ['app_name']
@@ -685,7 +1046,11 @@ class EnhancedLightsailDeploymentServer {
             required: ['instance_name']
           }
         }
-      ],
+      ];
+
+    // Set up ListToolsRequestSchema handler using stored tools
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: this.tools,
     }));
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1065,7 +1430,9 @@ The configuration has been optimized for your specific application type and requ
       project_files, 
       app_name, 
       deployment_preferences = {}, 
-      github_config = {} 
+      github_config = {},
+      aws_credentials = null,
+      execute_actions = true  // Actually perform operations via setup script
     } = args;
 
     if (!app_name) {
@@ -1075,8 +1442,15 @@ The configuration has been optimized for your specific application type and requ
       };
     }
 
+    const results = {
+      analysis: null,
+      setupScriptOutput: null,
+      errors: []
+    };
+
     try {
       // Step 1: Analyze project
+      console.log('📊 Step 1: Analyzing project...');
       const analysisResult = await this.analyzeProjectIntelligently({
         project_path,
         project_files,
@@ -1099,75 +1473,411 @@ The configuration has been optimized for your specific application type and requ
       }
 
       const analysis = JSON.parse(analysisMatch[1]);
+      results.analysis = analysis;
 
-      // Step 2: Generate configuration
-      const configResult = await this.generateSmartDeploymentConfig({
-        analysis_result: analysis,
-        app_name,
-        instance_name: `${analysis.detected_type}-${app_name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-        aws_region: deployment_preferences.aws_region || 'us-east-1'
-      });
+      const appType = analysis.detected_type || 'nodejs';
+      const instanceName = deployment_preferences.instance_name || `${appType}-${app_name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+      const awsRegion = deployment_preferences.aws_region || 'us-east-1';
+      const bundleId = analysis.infrastructure_needs?.bundle_size || 'micro_3_0';
 
-      if (configResult.isError) {
-        return configResult;
+      // Determine project path for file writing
+      const targetPath = project_path || process.cwd();
+
+      if (execute_actions) {
+        // Use setup-complete-deployment.sh script with AUTO_MODE
+        console.log('🚀 Step 2: Running setup-complete-deployment.sh with AUTO_MODE...');
+        
+        // Build environment variables for the setup script
+        const githubRepo = github_config.repository 
+          ? (github_config.username ? `${github_config.username}/${github_config.repository}` : github_config.repository)
+          : '';
+        
+        // Database configuration
+        const hasDatabase = analysis.databases && analysis.databases.length > 0;
+        const dbType = hasDatabase ? analysis.databases[0].type : 'none';
+        
+        const envVars = {
+          AUTO_MODE: 'true',
+          APP_TYPE: appType,
+          APP_NAME: app_name,
+          INSTANCE_NAME: instanceName,
+          AWS_REGION: awsRegion,
+          BUNDLE_ID: bundleId,
+          BLUEPRINT_ID: 'ubuntu_22_04',
+          DATABASE_TYPE: dbType,
+          DB_NAME: deployment_preferences.db_name || 'app_db',
+          GITHUB_REPO: githubRepo,
+          REPO_VISIBILITY: github_config.visibility || 'public',
+          HEALTH_CHECK_ENDPOINT: deployment_preferences.health_check_endpoint || '/health',
+          VERIFICATION_ENDPOINT: deployment_preferences.verification_endpoint || '/',
+          API_ONLY_APP: deployment_preferences.api_only_app ? 'true' : 'false'
+        };
+        
+        // Add bucket config if needed
+        if (analysis.storage_needs?.needs_bucket || deployment_preferences.bucket_name) {
+          envVars.ENABLE_BUCKET = 'true';
+          envVars.BUCKET_NAME = deployment_preferences.bucket_name || `${app_name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-bucket`;
+          envVars.BUCKET_ACCESS = deployment_preferences.bucket_access || 'read_write';
+        }
+        
+        // Build the command with environment variables
+        const envString = Object.entries(envVars)
+          .map(([k, v]) => `${k}="${v}"`)
+          .join(' ');
+        
+        // Get the script path relative to the MCP server
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const scriptPath = path.resolve(__dirname, '..', 'setup-complete-deployment.sh');
+        
+        try {
+          // Change to the project directory and run the setup script
+          const command = `cd "${targetPath}" && ${envString} bash "${scriptPath}"`;
+          console.log(`Running: ${command}`);
+          
+          const output = execSync(command, {
+            encoding: 'utf8',
+            timeout: 600000, // 10 minute timeout
+            maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          
+          results.setupScriptOutput = {
+            success: true,
+            output: output
+          };
+        } catch (e) {
+          results.setupScriptOutput = {
+            success: false,
+            error: e.message,
+            stdout: e.stdout,
+            stderr: e.stderr
+          };
+          results.errors.push({ step: 'setupScript', error: e.message });
+        }
       }
 
-      // Generate environment variables for the setup script
-      const envVars = this.generateEnvVarsForSetup(analysis, app_name, deployment_preferences, github_config);
+      // Build response
+      const hasErrors = results.errors.length > 0;
 
-      // Return simplified response - just tell AI to run the setup script
       return {
         content: [{
           type: 'text',
-          text: `# 🎉 Project Analysis Complete
+          text: `# ${hasErrors ? '⚠️' : '🎉'} Deployment Setup ${hasErrors ? 'Completed with Warnings' : 'Complete'}
 
 ## Summary
-- **App Type**: ${analysis.detected_type}
-- **Instance Size**: ${analysis.infrastructure_needs?.bundle_size || 'micro_3_0'}
-- **Estimated Cost**: $${analysis.estimated_costs?.monthly_min || 3.50}-$${analysis.estimated_costs?.monthly_max || 10}/month
-- **Database**: ${analysis.databases?.length > 0 ? analysis.databases[0].type : 'None'}
-- **Storage Bucket**: ${analysis.storage_needs?.needs_bucket ? 'Yes' : 'No'}
+- **App Name**: ${app_name}
+- **App Type**: ${appType}
+- **Instance Name**: ${instanceName}
+- **Instance Size**: ${bundleId}
+- **Region**: ${awsRegion}
+- **Estimated Cost**: ${analysis.estimated_costs?.monthly_min || 3.50}-${analysis.estimated_costs?.monthly_max || 10}/month
 
-## 🚀 Run Setup Script
+## Actions Performed
 
-### Step 1: Download the setup script (if not present)
+### 1. Project Analysis ✅
+- Detected type: ${appType}
+- Frameworks: ${analysis.frameworks?.map(f => f.name).join(', ') || 'None detected'}
+- Database: ${analysis.databases?.length > 0 ? analysis.databases[0].type : 'None'}
+
+### 2. Setup Script ${results.setupScriptOutput?.success ? '✅' : '❌'}
+${results.setupScriptOutput?.success 
+  ? `The setup-complete-deployment.sh script ran successfully!
+  
+This script handles:
+- Creating Lightsail instance (via GitHub Actions)
+- Setting up IAM roles for GitHub OIDC
+- Configuring GitHub secrets
+- Creating deployment workflow
+
+**Script Output (last 50 lines):**
+\`\`\`
+${results.setupScriptOutput.output?.split('\n').slice(-50).join('\n') || 'No output'}
+\`\`\``
+  : `- Error: ${results.errors.find(e => e.step === 'setupScript')?.error || 'Not executed'}
+${results.setupScriptOutput?.stderr ? `\n**Error Output:**\n\`\`\`\n${results.setupScriptOutput.stderr}\n\`\`\`` : ''}`}
+
+## Next Steps
+
+${hasErrors ? `### ⚠️ Fix Errors First
+${results.errors.map(e => `- **${e.step}**: ${e.error}`).join('\n')}
+
+` : ''}### Monitor Deployment
+1. Check GitHub Actions: Go to your repository's Actions tab
+2. The workflow will automatically:
+   - Create the Lightsail instance
+   - Deploy your application
+   - Run health checks
+
+### Verify Deployment
+Once the GitHub Action completes, your app will be available at the instance's public IP.
 
 \`\`\`bash
-# Download setup-complete-deployment.sh if you don't have it
-curl -sSL -o setup-complete-deployment.sh https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh
-chmod +x setup-complete-deployment.sh
-\`\`\`
-
-### Step 2: Set environment variables and run
-
-\`\`\`bash
-${envVars}
-./setup-complete-deployment.sh
-\`\`\`
-
-### Alternative: One-liner (downloads and runs automatically)
-
-\`\`\`bash
-${envVars}
-curl -sSL https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main/setup-complete-deployment.sh | bash
-\`\`\`
-
-## What the script does:
-1. ✅ Creates the Lightsail instance
-2. ✅ Generates deployment configuration (deployment-${analysis.detected_type}.config.yml)
-3. ✅ Creates GitHub Actions workflow (.github/workflows/deploy-${analysis.detected_type}.yml)
-4. ✅ Sets up IAM role for GitHub OIDC authentication
-5. ✅ Configures the GitHub repository with required secrets
-
-No manual file creation needed - the script handles everything!`
+# Check instance status
+aws lightsail get-instance --instance-name ${instanceName} --region ${awsRegion}
+\`\`\``
         }]
       };
     } catch (error) {
       return {
-        content: [{ type: 'text', text: `❌ Setup failed: ${error.message}` }],
+        content: [{ type: 'text', text: `❌ Setup failed: ${error.message}\n\nStack: ${error.stack}` }],
         isError: true
       };
     }
+  }
+
+  /**
+   * Generate deployment configuration YAML
+   */
+  generateDeploymentConfigYaml(analysis, appName, deploymentPreferences) {
+    const appType = analysis.detected_type || 'nodejs';
+    const instanceName = `${appType}-${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const awsRegion = deploymentPreferences.aws_region || 'us-east-1';
+    const bundleId = analysis.infrastructure_needs?.bundle_size || 'micro_3_0';
+    
+    // Database configuration
+    const hasDatabase = analysis.databases && analysis.databases.length > 0;
+    const dbType = hasDatabase ? analysis.databases[0].type : 'none';
+    const dbName = deploymentPreferences.db_name || 'app_db';
+    
+    // Bucket configuration
+    const needsBucket = analysis.storage_needs?.needs_bucket || false;
+    const bucketName = deploymentPreferences.bucket_name || `${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-bucket`;
+
+    let config = `# ${appName} Deployment Configuration
+# Generated by MCP Server
+
+aws:
+  region: ${awsRegion}
+
+lightsail:
+  instance_name: ${instanceName}
+  static_ip: ""
+  bundle_id: "${bundleId}"
+  blueprint_id: "ubuntu_22_04"
+`;
+
+    if (needsBucket) {
+      config += `
+  bucket:
+    enabled: true
+    name: "${bucketName}"
+    access_level: "read_write"
+    bundle_id: "small_1_0"
+`;
+    }
+
+    config += `
+application:
+  name: ${appName.toLowerCase()}
+  version: "1.0.0"
+  type: ${appType}
+  
+  package_files:
+    - "./"
+  
+  package_fallback: true
+  
+  environment_variables:
+    APP_ENV: production
+    NODE_ENV: production
+`;
+
+    if (dbType !== 'none') {
+      config += `    DB_TYPE: ${dbType}
+    DB_HOST: localhost
+    DB_NAME: ${dbName}
+    DB_USER: app_user
+    DB_PASSWORD: CHANGE_ME_secure_password_123
+`;
+    }
+
+    // Add type-specific config
+    if (appType === 'nodejs') {
+      const port = analysis.port || 3000;
+      config += `    PORT: "${port}"
+`;
+    }
+
+    config += `
+dependencies:
+`;
+
+    // Database dependencies
+    if (dbType === 'mysql') {
+      config += `  mysql:
+    enabled: true
+    external: false
+    config:
+      version: "8.0"
+      root_password: "CHANGE_ME_root_password_123"
+      create_database: "${dbName}"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+`;
+    } else if (dbType === 'postgresql') {
+      config += `  postgresql:
+    enabled: true
+    external: false
+    config:
+      version: "13"
+      postgres_password: "CHANGE_ME_postgres_password_123"
+      create_database: "${dbName}"
+      create_user: "app_user"
+      user_password: "CHANGE_ME_secure_password_123"
+`;
+    } else if (dbType === 'mongodb') {
+      config += `  mongodb:
+    enabled: true
+    external: false
+    config:
+      version: "7.0"
+      database: "${dbName}"
+      auth_enabled: false
+      bind_ip: "127.0.0.1"
+      port: 27017
+`;
+    }
+
+    // App-type specific dependencies
+    if (appType === 'nodejs') {
+      config += `
+  nodejs:
+    enabled: true
+    config:
+      version: "18"
+      package_manager: "npm"
+      
+  pm2:
+    enabled: true
+    config:
+      app_name: "${appName.toLowerCase()}"
+      instances: 1
+      exec_mode: "cluster"
+`;
+    } else if (appType === 'python') {
+      config += `
+  python:
+    enabled: true
+    config:
+      version: "3.9"
+      pip_packages:
+        - flask
+        - gunicorn
+        
+  gunicorn:
+    enabled: true
+    config:
+      app_module: "app:app"
+      workers: 2
+      bind: "0.0.0.0:5000"
+`;
+    }
+
+    config += `
+  git:
+    enabled: true
+    config:
+      install_lfs: false
+  
+  firewall:
+    enabled: true
+    config:
+      allowed_ports:
+        - "22"
+        - "80"
+        - "443"
+      deny_all_other: true
+
+deployment:
+  timeouts:
+    ssh_connection: 120
+    command_execution: 600
+    health_check: 180
+  
+  retries:
+    max_attempts: 3
+    ssh_connection: 5
+  
+  steps:
+    pre_deployment:
+      common:
+        enabled: true
+        update_packages: true
+        create_directories: true
+        backup_enabled: true
+    
+    post_deployment:
+      common:
+        enabled: true
+        verify_extraction: true
+        create_env_file: true
+        cleanup_temp_files: true
+    
+    verification:
+      enabled: true
+      health_check: true
+      external_connectivity: true
+      endpoints_to_test:
+        - "/"
+        - "/api/health"
+
+github_actions:
+  triggers:
+    push_branches:
+      - main
+      - master
+    workflow_dispatch: true
+`;
+
+    return config;
+  }
+
+  /**
+   * Generate GitHub workflow YAML
+   */
+  generateGitHubWorkflowYaml(analysis, appName, instanceName, awsRegion) {
+    const appType = analysis.detected_type || 'nodejs';
+    
+    return `# GitHub Actions Workflow for ${appName}
+# Generated by MCP Server
+# Deploys to AWS Lightsail using OIDC authentication
+
+name: Deploy ${appName} to Lightsail
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: \${{ secrets.AWS_ROLE_ARN }}
+          aws-region: \${{ secrets.AWS_REGION }}
+      
+      - name: Deploy to Lightsail
+        uses: naveenraj44125-creator/lamp-stack-lightsail/.github/workflows/reusable-deploy.yml@main
+        with:
+          instance_name: \${{ secrets.LIGHTSAIL_INSTANCE_NAME }}
+          aws_region: \${{ secrets.AWS_REGION }}
+          app_type: ${appType}
+          config_file: deployment-${appType}.config.yml
+`;
   }
 
   generateEnvVarsForSetup(analysis, appName, deploymentPreferences, githubConfig) {
@@ -3193,6 +3903,43 @@ if (STDIO_MODE) {
       },
       timestamp: new Date().toISOString() 
     });
+  });
+
+  // Direct HTTP endpoint for tool calls (for testing)
+  app.post('/call-tool', authenticate, async (req, res) => {
+    try {
+      const { tool_name, arguments: args } = req.body;
+      
+      if (!tool_name) {
+        return res.status(400).json({ error: 'tool_name is required' });
+      }
+
+      console.log(`📞 Direct tool call: ${tool_name}`);
+      const server = new EnhancedLightsailDeploymentServer();
+      await server.initialize();
+      
+      // Call the tool handler directly
+      const result = await server.handleToolCall(tool_name, args || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Tool call error:', error);
+      res.status(500).json({ 
+        error: error.message,
+        stack: error.stack 
+      });
+    }
+  });
+
+  // List available tools
+  app.get('/tools', authenticate, async (req, res) => {
+    try {
+      const server = new EnhancedLightsailDeploymentServer();
+      await server.initialize();
+      const tools = await server.listTools();
+      res.json(tools);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // MCP Server endpoint - SSE transport
