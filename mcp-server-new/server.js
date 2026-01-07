@@ -1487,6 +1487,20 @@ The configuration has been optimized for your specific application type and requ
         // Use setup-complete-deployment.sh script with AUTO_MODE
         console.log('🚀 Step 2: Running setup-complete-deployment.sh with AUTO_MODE...');
         
+        // Validate GitHub username - reject obvious placeholders
+        const placeholderPatterns = [
+          'your-github-username', 'your-username', 'yourusername', 
+          'github-username', 'username', 'your_username', '<username>',
+          'example-user', 'example_user', 'user-name'
+        ];
+        
+        if (github_config.username && placeholderPatterns.some(p => 
+          github_config.username.toLowerCase().includes(p.toLowerCase())
+        )) {
+          console.log('⚠️  Detected placeholder GitHub username, will auto-detect from gh CLI');
+          github_config.username = null; // Let the script auto-detect
+        }
+        
         // Build environment variables for the setup script
         const githubRepo = github_config.repository 
           ? (github_config.username ? `${github_config.username}/${github_config.repository}` : github_config.repository)
