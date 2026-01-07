@@ -3731,7 +3731,7 @@ Or set \`auto_fix: true\` to automatically run fix scripts.`}
     } = args;
 
     try {
-      // First, get instance IP using get-instance-access-details API
+      // First, get instance IP
       let instanceIp = null;
       
       try {
@@ -3780,27 +3780,48 @@ Cannot retrieve logs without SSH access.`
 
       const command = logCommands[log_type] || logCommands.application;
 
-      // Use get-instance-access-details to get SSH credentials
-      // Note: This is the recommended approach instead of using default keypair
+      // Use get-instance-access-details to get SSH credentials (includes both key AND certificate)
       let logs = '';
       
       try {
-        // Try to get temporary SSH access
+        // Get temporary SSH access with BOTH private key and certificate
         const accessCommand = `aws lightsail get-instance-access-details --instance-name "${instance_name}" --region ${aws_region} --output json`;
         const accessResult = execSync(accessCommand, { encoding: 'utf8', timeout: 30000 });
         const accessData = JSON.parse(accessResult).accessDetails;
         
-        if (accessData && accessData.privateKey) {
-          // Write temporary key
-          const tempKeyPath = `/tmp/lightsail-temp-${Date.now()}.pem`;
+        if (accessData && accessData.privateKey && accessData.certKey) {
+          // Write temporary private key
+          const tempKeyPath = `/tmp/lightsail-key-${Date.now()}.pem`;
+          fs.writeFileSync(tempKeyPath, accessData.privateKey, { mode: 0o600 });
+          
+          // Write temporary certificate (CRITICAL - this was missing!)
+          const tempCertPath = `${tempKeyPath}-cert.pub`;
+          // Format certificate properly - split and add newline
+          const certParts = accessData.certKey.split(' ', 2);
+          const formattedCert = certParts.length >= 2 
+            ? `${certParts[0]} ${certParts[1]}\n` 
+            : accessData.certKey + '\n';
+          fs.writeFileSync(tempCertPath, formattedCert, { mode: 0o600 });
+          
+          try {
+            // Use BOTH key and certificate for SSH (like troubleshooting tools do)
+            const sshCommand = `ssh -i "${tempKeyPath}" -o "CertificateFile=${tempCertPath}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=30 -o IdentitiesOnly=yes -o BatchMode=yes ${accessData.username}@${instanceIp} "${command}"`;
+            logs = execSync(sshCommand, { encoding: 'utf8', timeout: 60000 });
+          } finally {
+            // Clean up temp files
+            try { fs.unlinkSync(tempKeyPath); } catch (e) {}
+            try { fs.unlinkSync(tempCertPath); } catch (e) {}
+          }
+        } else if (accessData && accessData.privateKey) {
+          // Fallback: try with just private key (older instances)
+          const tempKeyPath = `/tmp/lightsail-key-${Date.now()}.pem`;
           fs.writeFileSync(tempKeyPath, accessData.privateKey, { mode: 0o600 });
           
           try {
-            const sshCommand = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "${tempKeyPath}" ${accessData.username}@${instanceIp} "${command}"`;
+            const sshCommand = `ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i "${tempKeyPath}" ${accessData.username}@${instanceIp} "${command}"`;
             logs = execSync(sshCommand, { encoding: 'utf8', timeout: 60000 });
           } finally {
-            // Clean up temp key
-            fs.unlinkSync(tempKeyPath);
+            try { fs.unlinkSync(tempKeyPath); } catch (e) {}
           }
         } else {
           logs = `Could not get SSH access. Instance may not support temporary access.\n\nTo get logs manually:\n1. SSH into the instance\n2. Run: ${command}`;
