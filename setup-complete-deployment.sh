@@ -87,9 +87,11 @@ show_app_deployment_warnings() {
     
     # Check for health endpoint in Node.js apps
     if [[ "$app_type" == "nodejs" ]]; then
-        # Check multiple possible server file locations
+        # Check multiple possible server file locations (including server/ subdirectory)
         local server_file=""
-        if [ -f "server/index.js" ]; then
+        if [ -f "server/server.js" ]; then
+            server_file="server/server.js"
+        elif [ -f "server/index.js" ]; then
             server_file="server/index.js"
         elif [ -f "server.js" ]; then
             server_file="server.js"
@@ -149,9 +151,15 @@ show_app_deployment_warnings() {
 
 # Function to detect fullstack React + Node.js application
 detect_fullstack_react() {
-    if [ -f "server.js" ] && [ -d "client" ] && [ -f "client/package.json" ]; then
-        echo "fullstack-react"
-        return 0
+    # Check for various fullstack structures:
+    # 1. server.js + client/ (traditional)
+    # 2. server/server.js + client/ (organized structure)
+    # 3. server/index.js + client/ (organized structure)
+    if [ -d "client" ] && [ -f "client/package.json" ]; then
+        if [ -f "server.js" ] || [ -f "server/server.js" ] || [ -f "server/index.js" ]; then
+            echo "fullstack-react"
+            return 0
+        fi
     fi
     return 1
 }
@@ -160,11 +168,13 @@ detect_fullstack_react() {
 detect_node_port() {
     local server_file=""
     
-    # Check multiple possible server file locations
-    if [ -f "server.js" ]; then
-        server_file="server.js"
+    # Check multiple possible server file locations (including server/ subdirectory)
+    if [ -f "server/server.js" ]; then
+        server_file="server/server.js"
     elif [ -f "server/index.js" ]; then
         server_file="server/index.js"
+    elif [ -f "server.js" ]; then
+        server_file="server.js"
     elif [ -f "app.js" ]; then
         server_file="app.js"
     elif [ -f "index.js" ]; then
@@ -219,16 +229,18 @@ build_react_client_if_needed() {
                 if [[ "$FIX_PACKAGE" == "true" ]]; then
                     echo -e "${BLUE}Updating package.json with deployment scripts...${NC}"
                     
-                    # Determine the server entry point
+                    # Determine the server entry point (check server/ subdirectory first)
                     local server_entry=""
-                    if [ -f "server/index.js" ]; then
-                        server_entry="cd server && npm start"
+                    if [ -f "server/server.js" ]; then
+                        server_entry="cd server && npm install && NODE_ENV=production node server.js"
+                    elif [ -f "server/index.js" ]; then
+                        server_entry="cd server && npm install && NODE_ENV=production node index.js"
                     elif [ -f "server.js" ]; then
                         server_entry="node server.js"
                     elif [ -f "app.js" ]; then
                         server_entry="node app.js"
                     else
-                        server_entry="node server/index.js"
+                        server_entry="cd server && npm install && NODE_ENV=production node server.js"
                     fi
                     
                     # Use node to safely update package.json
@@ -254,11 +266,43 @@ build_react_client_if_needed() {
                     echo -e "${GREEN}✓ Updated package.json with build and start scripts${NC}"
                 fi
             fi
+            
+            # Also check if start script points to non-existent file and fix it
+            local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
+            if echo "$current_start" | grep -q "node app.js" && [[ ! -f "app.js" ]]; then
+                echo -e "${YELLOW}⚠️  Start script points to non-existent app.js, fixing...${NC}"
+                
+                # Determine correct start command
+                local correct_start=""
+                if [ -f "server/server.js" ]; then
+                    correct_start="cd server && npm install && NODE_ENV=production node server.js"
+                elif [ -f "server/index.js" ]; then
+                    correct_start="cd server && npm install && NODE_ENV=production node index.js"
+                elif [ -f "server.js" ]; then
+                    correct_start="node server.js"
+                fi
+                
+                if [ -n "$correct_start" ]; then
+                    node -e "
+                        const fs = require('fs');
+                        const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                        pkg.scripts = pkg.scripts || {};
+                        pkg.scripts.start = '$correct_start';
+                        fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                        console.log('Fixed package.json start script');
+                    " 2>/dev/null || {
+                        echo -e "${RED}❌ Could not auto-fix package.json${NC}"
+                    }
+                    echo -e "${GREEN}✓ Fixed package.json start script${NC}"
+                fi
+            fi
         fi
         
         # Check and fix server file for production static serving
         local server_file=""
-        if [ -f "server/index.js" ]; then
+        if [ -f "server/server.js" ]; then
+            server_file="server/server.js"
+        elif [ -f "server/index.js" ]; then
             server_file="server/index.js"
         elif [ -f "server.js" ]; then
             server_file="server.js"
@@ -1424,9 +1468,17 @@ PHP_EOF
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
             
-            # Detect existing Node.js entry point (server.js, index.js, or app.js)
+            # Detect existing Node.js entry point (including server/ subdirectory)
             local existing_entry_point=""
-            if [[ -f "server.js" ]]; then
+            local server_in_subdir=false
+            
+            if [[ -f "server/server.js" ]]; then
+                existing_entry_point="server/server.js"
+                server_in_subdir=true
+            elif [[ -f "server/index.js" ]]; then
+                existing_entry_point="server/index.js"
+                server_in_subdir=true
+            elif [[ -f "server.js" ]]; then
                 existing_entry_point="server.js"
             elif [[ -f "index.js" ]]; then
                 existing_entry_point="index.js"
@@ -1438,7 +1490,16 @@ PHP_EOF
                 echo -e "${GREEN}  ✓ Detected existing Node.js app with entry point: $existing_entry_point${NC}"
                 echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
                 
-                # Only create package.json if it doesn't exist, and use the detected entry point
+                # Determine the correct start command based on entry point location
+                local start_command=""
+                if [[ "$server_in_subdir" == "true" ]]; then
+                    # For server in subdirectory, need to handle npm install in server dir too
+                    start_command="cd server && npm install && NODE_ENV=production node $(basename $existing_entry_point)"
+                else
+                    start_command="node ${existing_entry_point}"
+                fi
+                
+                # Only create package.json if it doesn't exist
                 if create_file_if_not_exists "package.json"; then
                 cat > "package.json" << EOF
 {
@@ -1447,7 +1508,7 @@ PHP_EOF
   "description": "${app_name} Node.js application deployed via GitHub Actions",
   "main": "${existing_entry_point}",
   "scripts": {
-    "start": "node ${existing_entry_point}",
+    "start": "${start_command}",
     "dev": "nodemon ${existing_entry_point}",
     "test": "echo \\"No tests specified\\" && exit 0"
   },
@@ -1463,6 +1524,28 @@ PHP_EOF
   }
 }
 EOF
+                fi
+                
+                # Check if existing package.json has incorrect start script
+                if [[ -f "package.json" ]] && [[ "$server_in_subdir" == "true" ]]; then
+                    local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
+                    if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
+                        echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
+                        
+                        # Use node to safely update package.json
+                        node -e "
+                            const fs = require('fs');
+                            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                            pkg.scripts = pkg.scripts || {};
+                            pkg.scripts.start = '${start_command}';
+                            pkg.main = '${existing_entry_point}';
+                            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                            console.log('Fixed package.json start script');
+                        " 2>/dev/null || {
+                            echo -e "${RED}  ❌ Could not auto-fix package.json - please update start script manually${NC}"
+                        }
+                        echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
+                    fi
                 fi
             else
                 # No existing entry point found - create template files
