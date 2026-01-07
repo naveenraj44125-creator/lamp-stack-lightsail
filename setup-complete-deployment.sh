@@ -1423,8 +1423,51 @@ PHP_EOF
         "nodejs")
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
-            if create_file_if_not_exists "package.json"; then
-            cat > "package.json" << EOF
+            
+            # Detect existing Node.js entry point (server.js, index.js, or app.js)
+            local existing_entry_point=""
+            if [[ -f "server.js" ]]; then
+                existing_entry_point="server.js"
+            elif [[ -f "index.js" ]]; then
+                existing_entry_point="index.js"
+            elif [[ -f "app.js" ]]; then
+                existing_entry_point="app.js"
+            fi
+            
+            if [[ -n "$existing_entry_point" ]]; then
+                echo -e "${GREEN}  ✓ Detected existing Node.js app with entry point: $existing_entry_point${NC}"
+                echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
+                
+                # Only create package.json if it doesn't exist, and use the detected entry point
+                if create_file_if_not_exists "package.json"; then
+                cat > "package.json" << EOF
+{
+  "name": "${app_name_lower}",
+  "version": "1.0.0",
+  "description": "${app_name} Node.js application deployed via GitHub Actions",
+  "main": "${existing_entry_point}",
+  "scripts": {
+    "start": "node ${existing_entry_point}",
+    "dev": "nodemon ${existing_entry_point}",
+    "test": "echo \\"No tests specified\\" && exit 0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+EOF
+                fi
+            else
+                # No existing entry point found - create template files
+                if create_file_if_not_exists "package.json"; then
+                cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
@@ -1447,10 +1490,10 @@ PHP_EOF
   }
 }
 EOF
-            fi
+                fi
             
-            if create_file_if_not_exists "app.js"; then
-            cat > "app.js" << EOF
+                if create_file_if_not_exists "app.js"; then
+                cat > "app.js" << EOF
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -1531,6 +1574,7 @@ app.listen(PORT, () => {
     console.log(\`📍 Environment: \${process.env.NODE_ENV || 'development'}\`);
 });
 EOF
+                fi
             fi
             ;;
         
