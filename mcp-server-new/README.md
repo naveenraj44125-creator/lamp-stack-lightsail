@@ -407,6 +407,73 @@ After configuring, ask Cline:
 - "Analyze this project for deployment"
 - "What troubleshooting scripts are available?"
 
+### 💬 Sample Prompts for Each Tool
+
+Use these natural language prompts in Cline to invoke each MCP tool:
+
+#### Core Tools (8)
+
+| Tool | Sample Prompts |
+|------|----------------|
+| `analyze_project_intelligently` | "Analyze my project at /path/to/app for deployment"<br>"What type of application is this and what does it need to deploy?"<br>"Scan this Node.js project and tell me the dependencies and database requirements" |
+| `generate_smart_deployment_config` | "Generate a deployment config for my-app based on the analysis"<br>"Create a deployment.config.yml for this Express app"<br>"Generate optimized Lightsail config for production deployment" |
+| `setup_intelligent_deployment` | "Deploy my app at /path/to/app to Lightsail with GitHub Actions"<br>"Set up complete deployment for my-api with GitHub username naveenraj44125-creator"<br>"One-click deploy this project to AWS Lightsail" |
+| `optimize_infrastructure_costs` | "Optimize the infrastructure costs for my deployment"<br>"What's the cheapest Lightsail setup for my small Node.js API?"<br>"Analyze my config and suggest cost savings" |
+| `detect_security_requirements` | "What security settings does my app need?"<br>"Analyze security requirements for this project with GDPR compliance"<br>"Generate firewall rules and SSL config for my deployment" |
+| `list_lightsail_instances` | "List all my Lightsail instances"<br>"Show me running instances in us-west-2"<br>"What Lightsail servers do I have?" |
+| `check_deployment_status` | "Check if my-app is healthy"<br>"What's the status of nodejs-demo-app instance?"<br>"Is my deployment at /api/health responding?" |
+| `validate_deployment_config` | "Validate my deployment config file"<br>"Check if deployment-nodejs.config.yml is correct"<br>"Are there any issues with my deployment configuration?" |
+
+#### AI-Powered Tools (6)
+
+| Tool | Sample Prompts |
+|------|----------------|
+| `ai_analyze_project` | "Use AI to analyze my project files for deployment"<br>"Have Claude look at my codebase and recommend deployment settings"<br>"AI analysis of this Flask app - what infrastructure does it need?" |
+| `ai_troubleshoot` | "AI help: my app shows ECONNREFUSED 127.0.0.1:27017"<br>"Troubleshoot this error: 502 Bad Gateway on my Node.js app"<br>"Why is my deployment failing with this error log?" |
+| `ai_ask_expert` | "How do I set up SSL for my Lightsail instance?"<br>"What's the best way to handle environment variables in deployment?"<br>"Expert advice: should I use RDS or local database for my small app?" |
+| `ai_review_config` | "Review my deployment config for security issues"<br>"AI check this config for optimization opportunities"<br>"Is my deployment.config.yml following best practices?" |
+| `ai_explain_code` | "Explain this server.js from a deployment perspective"<br>"What ports and env vars does this code need?"<br>"AI explain what infrastructure this code requires" |
+| `ai_generate_config` | "AI generate a complete deployment config for my analyzed project"<br>"Create production-ready config based on this analysis"<br>"Generate optimal Lightsail configuration using AI" |
+
+#### Troubleshooting Tools (4)
+
+| Tool | Sample Prompts |
+|------|----------------|
+| `list_troubleshooting_scripts` | "What troubleshooting scripts are available?"<br>"Show me Node.js debugging scripts"<br>"List all nginx troubleshooting tools" |
+| `run_troubleshooting_script` | "Run debug-nodejs.py on my-app instance"<br>"Execute the nginx fix script on web-server"<br>"Run fix-lamp.py to repair my PHP deployment" |
+| `diagnose_deployment_issue` | "Diagnose why my-app is returning 502 errors"<br>"Figure out what's wrong with my Node.js deployment"<br>"Auto-diagnose and fix the deployment issue on my-api" |
+| `get_instance_logs` | "Get logs from my-app instance"<br>"Show me the last 100 lines of nginx logs"<br>"Fetch PM2 logs from nodejs-server" |
+
+#### Complete Workflow Prompts
+
+**Full Deployment (Recommended):**
+```
+Deploy my Node.js app at ./my-project to Lightsail. 
+My GitHub username is myuser and I want the repo called my-app.
+Use production settings with standard budget.
+```
+
+**Troubleshooting Workflow:**
+```
+My app my-api is showing 502 Bad Gateway errors.
+It's a Node.js Express app. Please diagnose the issue 
+and automatically fix it if possible.
+```
+
+**Cost Optimization:**
+```
+Analyze my current deployment config and suggest ways 
+to reduce costs while maintaining good performance 
+for a low-traffic API.
+```
+
+**Security Review:**
+```
+Review my deployment for security issues. 
+The app handles user data and needs GDPR compliance.
+Generate appropriate security configurations.
+```
+
 For detailed integration guide, see: **[CLINE-INTEGRATION-GUIDE.md](./CLINE-INTEGRATION-GUIDE.md)**
 
 ---
