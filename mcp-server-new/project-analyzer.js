@@ -371,6 +371,28 @@ export class ProjectAnalyzer {
       typeScores[type] += framework.confidence;
     }
     
+    // IMPORTANT: For full-stack apps, backend takes priority over frontend
+    // If we detect both a backend (nodejs, python, lamp) AND a frontend (react),
+    // the app should be deployed as the backend type (which will serve the built frontend)
+    const backendTypes = ['nodejs', 'python', 'lamp', 'docker'];
+    const frontendTypes = ['react'];
+    
+    const hasBackend = backendTypes.some(t => typeScores[t] > 0);
+    const hasFrontend = frontendTypes.some(t => typeScores[t] > 0);
+    
+    // If both backend and frontend detected, boost backend score
+    // This ensures full-stack apps deploy as backend (Node.js serves built React)
+    if (hasBackend && hasFrontend) {
+      for (const backendType of backendTypes) {
+        if (typeScores[backendType]) {
+          typeScores[backendType] += 0.5; // Boost backend priority
+        }
+      }
+      // Mark as full-stack for reference
+      analysis.is_fullstack = true;
+      analysis.frontend_framework = analysis.frameworks.find(f => frontendTypes.includes(f.type))?.name;
+    }
+    
     // Find highest scoring type
     let maxScore = 0;
     let detectedType = 'unknown';
