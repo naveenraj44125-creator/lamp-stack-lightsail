@@ -3385,8 +3385,11 @@ GITIGNORE
                     done
                 fi
                 
-                # Get repository name (default to app name in lowercase)
-                DEFAULT_REPO_NAME=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+                # Get repository name (default to current directory name in lowercase)
+                DEFAULT_REPO_NAME=$(basename "$(pwd)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+                if [[ -z "$DEFAULT_REPO_NAME" ]] || [[ "$DEFAULT_REPO_NAME" == "." ]]; then
+                    DEFAULT_REPO_NAME="my-app"
+                fi
                 REPO_NAME=$(get_input "Enter repository name" "$DEFAULT_REPO_NAME")
                 
                 # Construct full repository path
