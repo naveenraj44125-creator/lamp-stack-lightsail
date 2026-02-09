@@ -523,10 +523,10 @@ analyze_project_for_recommendations() {
         analyzer_script="../mcp-server-new/project-analyzer.js"
     fi
     
-    # Run inline analysis using Node.js
-    echo -e "${BLUE}Scanning project files...${NC}"
+    # Show thinking indicator
+    echo -ne "${YELLOW}⏳ Scanning project files"
     
-    # Create a temporary analysis script
+    # Run inline analysis using Node.js
     local analysis_result=$(node -e "
 const fs = require('fs');
 const path = require('path');
@@ -693,8 +693,12 @@ console.log(JSON.stringify(analysis));
         console.log(Math.round((data.confidence || 0) * 100));
     " 2>/dev/null)
     
+    # Clear the thinking indicator
+    echo -e "\r${GREEN}✓ Scanning complete!${NC}                    "
+    
     # Display analysis results
     if [ "$RECOMMENDED_APP_TYPE" != "unknown" ] && [ -n "$RECOMMENDED_APP_TYPE" ]; then
+        echo ""
         echo -e "${GREEN}✓ Project Analysis Complete!${NC}"
         echo ""
         echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
@@ -2592,10 +2596,18 @@ get_input() {
     fi
     echo -n ": "
     read -r value
-    if [[ -n "$value" ]]; then
+    
+    # Use default if no value entered
+    if [[ -z "$value" ]]; then
+        value="$default"
+        if [[ -n "$value" ]]; then
+            echo -e "${GREEN}✓ Using default: $value${NC}" >&2
+        fi
+    else
         echo -e "${GREEN}✓ Set: $value${NC}" >&2
     fi
-    echo "${value:-$default}"
+    
+    echo "$value"
 }
 
 # Function to get yes/no input (enhanced styling)
