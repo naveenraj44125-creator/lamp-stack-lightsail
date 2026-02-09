@@ -3718,6 +3718,7 @@ USAGE:
     $0 [OPTIONS]
 
 OPTIONS:
+    --interactive, -i   Run in interactive mode with AI recommendations (default)
     --auto              Run in automatic mode (uses defaults, no prompts)
     --aws-region REGION Set AWS region (default: us-east-1)
     --app-version VER   Set application version (default: 1.0.0)
@@ -3743,8 +3744,11 @@ PREREQUISITES:
     - Active GitHub repository with proper permissions
 
 EXAMPLES:
-    # Interactive mode (default)
+    # Interactive mode with AI recommendations (default)
     $0
+    
+    # Explicit interactive mode
+    $0 --interactive
 
     # Automatic mode with defaults
     AUTO_MODE=true $0
@@ -3775,6 +3779,10 @@ parse_args() {
         case $1 in
             --auto)
                 AUTO_MODE=true
+                shift
+                ;;
+            --interactive|-i)
+                AUTO_MODE=false
                 shift
                 ;;
             --aws-region)
