@@ -2589,12 +2589,12 @@ get_input() {
         return
     fi
     
-    echo ""
-    echo -ne "${YELLOW}➤ $prompt${NC}"
+    echo "" >&2
+    echo -ne "${YELLOW}➤ $prompt${NC}" >&2
     if [[ -n "$default" ]]; then
-        echo -ne " [${GREEN}$default${NC}]"
+        echo -ne " [${GREEN}$default${NC}]" >&2
     fi
-    echo -n ": "
+    echo -n ": " >&2
     read -r value
     
     # Use default if no value entered
