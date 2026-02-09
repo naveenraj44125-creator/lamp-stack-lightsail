@@ -3809,6 +3809,8 @@ parse_args() {
                 ;;
             --interactive|-i)
                 AUTO_MODE=false
+                # Clear environment variables that would trigger fully automated mode
+                unset APP_TYPE APP_NAME INSTANCE_NAME GITHUB_REPO
                 shift
                 ;;
             --aws-region)
