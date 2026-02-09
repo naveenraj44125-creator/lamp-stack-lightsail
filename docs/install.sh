@@ -3572,11 +3572,22 @@ GITIGNORE
         echo -e "${BLUE}  📁 STEP 5: Storage Configuration${NC}"
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
+        echo -e "${YELLOW}Lightsail buckets provide S3-compatible object storage for your app.${NC}"
+        echo ""
+        echo -e "Common use cases:"
+        echo -e "  ${GREEN}✓${NC} User file uploads (images, documents, videos)"
+        echo -e "  ${GREEN}✓${NC} Static assets (CSS, JS, images)"
+        echo -e "  ${GREEN}✓${NC} Backups and logs"
+        echo -e "  ${GREEN}✓${NC} Media storage for content-heavy apps"
+        echo ""
+        echo -e "${BLUE}Pricing:${NC} Small bucket (25GB, 25GB transfer) = \$1/month"
+        echo ""
         
         # Show AI recommendation for bucket if detected
         local bucket_default="false"
         if [ "$RECOMMENDED_BUCKET" == "true" ]; then
-            echo -e "${YELLOW}★ AI detected file upload patterns - bucket recommended${NC}"
+            echo -e "${YELLOW}★ AI detected file upload patterns in your code - bucket recommended${NC}"
+            echo ""
             bucket_default="true"
         fi
         
@@ -3586,10 +3597,22 @@ GITIGNORE
         BUCKET_BUNDLE="small_1_0"
         
         if [[ "$ENABLE_BUCKET" == "true" ]]; then
+            echo ""
+            echo -e "${BLUE}Bucket Configuration:${NC}"
             BUCKET_NAME=$(get_input "Enter bucket name" "${APP_TYPE}-bucket-$(date +%s)")
+            
+            echo ""
+            echo -e "${BLUE}Access Level:${NC}"
+            echo -e "  ${GREEN}read_only${NC}  - App can only read files (for serving static content)"
+            echo -e "  ${GREEN}read_write${NC} - App can upload and read files (for user uploads)"
             BUCKET_ACCESSES=("read_only" "read_write")
             BUCKET_ACCESS=$(select_option "Choose bucket access level:" "2" "${BUCKET_ACCESSES[@]}")
             
+            echo ""
+            echo -e "${BLUE}Bucket Size:${NC}"
+            echo -e "  ${GREEN}small_1_0${NC}  - 25GB storage, 25GB transfer/month - \$1/mo"
+            echo -e "  ${GREEN}medium_1_0${NC} - 100GB storage, 100GB transfer/month - \$3/mo"
+            echo -e "  ${GREEN}large_1_0${NC}  - 250GB storage, 250GB transfer/month - \$5/mo"
             BUCKET_BUNDLES=("small_1_0" "medium_1_0" "large_1_0")
             BUCKET_BUNDLE=$(select_option "Choose bucket size:" "1" "${BUCKET_BUNDLES[@]}")
         fi
