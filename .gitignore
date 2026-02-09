@@ -145,3 +145,9 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Kiro specs
+.kiro/specs/lightsail-bug-bash-multi-agent/
+
+# Bug bash directory
+lightsail-bug-bash/
