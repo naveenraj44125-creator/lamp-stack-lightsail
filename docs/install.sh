@@ -2585,7 +2585,12 @@ get_input() {
         return
     fi
     
-    echo -ne "${YELLOW}$prompt${NC} [${GREEN}$default${NC}]: "
+    echo ""
+    echo -ne "${YELLOW}➤ $prompt${NC}"
+    if [[ -n "$default" ]]; then
+        echo -ne " [${GREEN}$default${NC}]"
+    fi
+    echo -n ": "
     read -r value
     if [[ -n "$value" ]]; then
         echo -e "${GREEN}✓ Set: $value${NC}" >&2
@@ -3342,6 +3347,10 @@ GITIGNORE
                 echo -e "${YELLOW}⚠️  No GitHub repository found in git remote${NC}"
                 echo "We need to create a new GitHub repository for your deployment."
                 echo ""
+                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo -e "${BLUE}  📦 GitHub Repository Setup${NC}"
+                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo ""
                 
                 # Try to get GitHub username from gh CLI first
                 DEFAULT_GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null || echo "")
@@ -3356,9 +3365,10 @@ GITIGNORE
                     GITHUB_USERNAME="$DEFAULT_GITHUB_USERNAME"
                 else
                     # Get GitHub username interactively
+                    echo -e "${YELLOW}Please provide your GitHub username to create the repository.${NC}"
                     GITHUB_USERNAME=$(get_input "Enter your GitHub username" "$DEFAULT_GITHUB_USERNAME")
                     while [[ -z "$GITHUB_USERNAME" ]]; do
-                        echo -e "${RED}GitHub username is required${NC}"
+                        echo -e "${RED}❌ GitHub username is required${NC}"
                         GITHUB_USERNAME=$(get_input "Enter your GitHub username" "")
                     done
                 fi
