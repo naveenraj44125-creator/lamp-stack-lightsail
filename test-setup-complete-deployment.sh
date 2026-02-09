@@ -45,7 +45,7 @@ if [[ ! -f "$SOURCE_DIR/setup-complete-deployment.sh" ]]; then
     exit 1
 fi
 
-SCRIPT_DIR="$SOURCE_DIR"
+SCRIPT_DIR="$(cd "$SOURCE_DIR" && pwd)"
 
 # Source AWS credentials if available
 CURRENT_SCRIPT_DIR="$(dirname "$(realpath "$0")")"

@@ -12,6 +12,14 @@ AUTO_MODE=${AUTO_MODE:-false}
 AWS_REGION=${AWS_REGION:-us-east-1}
 APP_VERSION=${APP_VERSION:-1.0.0}
 
+# MCP Server integration - stores AI recommendations
+MCP_RECOMMENDATIONS=""
+RECOMMENDED_APP_TYPE=""
+RECOMMENDED_DATABASE=""
+RECOMMENDED_BUNDLE=""
+RECOMMENDED_BUCKET="false"
+ANALYSIS_CONFIDENCE=0
+
 # Fully automated mode environment variables
 APP_TYPE=${APP_TYPE:-}
 APP_NAME=${APP_NAME:-}
@@ -392,18 +400,27 @@ check_prerequisites() {
     echo -e "${BLUE}Checking prerequisites...${NC}"
     
     local missing_tools=()
+    local install_instructions=()
     
     # Check for required tools
     if ! command -v git &> /dev/null; then
         missing_tools+=("git")
+        install_instructions+=("  git: brew install git (macOS) or apt install git (Linux)")
     fi
     
     if ! command -v gh &> /dev/null; then
         missing_tools+=("gh (GitHub CLI)")
+        install_instructions+=("  gh:  brew install gh (macOS) or see https://cli.github.com/")
     fi
     
     if ! command -v aws &> /dev/null; then
         missing_tools+=("aws (AWS CLI)")
+        install_instructions+=("  aws: brew install awscli (macOS) or see https://aws.amazon.com/cli/")
+    fi
+    
+    if ! command -v python3 &> /dev/null; then
+        missing_tools+=("python3")
+        install_instructions+=("  python3: brew install python3 (macOS) or apt install python3 (Linux)")
     fi
     
     if [ ${#missing_tools[@]} -ne 0 ]; then
@@ -412,14 +429,39 @@ check_prerequisites() {
             echo "  - $tool"
         done
         echo ""
-        echo "Please install the missing tools and try again."
+        echo -e "${YELLOW}Installation instructions:${NC}"
+        for instruction in "${install_instructions[@]}"; do
+            echo "$instruction"
+        done
+        echo ""
         exit 1
+    fi
+    
+    # Check for PyYAML (required for deployment workflows)
+    if ! python3 -c "import yaml" &> /dev/null; then
+        echo -e "${YELLOW}⚠️  PyYAML not installed (required for deployment)${NC}"
+        echo -e "${BLUE}Installing PyYAML...${NC}"
+        if pip3 install PyYAML &> /dev/null; then
+            echo -e "${GREEN}✓ PyYAML installed successfully${NC}"
+        else
+            echo -e "${RED}❌ Failed to install PyYAML${NC}"
+            echo "Please run manually: pip3 install PyYAML"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✓ PyYAML is installed${NC}"
     fi
     
     # Check GitHub CLI authentication
     if ! gh auth status &> /dev/null; then
         echo -e "${RED}❌ GitHub CLI not authenticated${NC}"
-        echo "Please run: gh auth login"
+        echo ""
+        echo -e "${YELLOW}Please authenticate with GitHub CLI:${NC}"
+        echo "  1. Run: gh auth login"
+        echo "  2. Select: GitHub.com"
+        echo "  3. Select: HTTPS"
+        echo "  4. Authenticate with your browser"
+        echo ""
         exit 1
     fi
     
@@ -440,11 +482,249 @@ check_prerequisites() {
     # Check AWS CLI configuration
     if ! aws sts get-caller-identity &> /dev/null; then
         echo -e "${RED}❌ AWS CLI not configured${NC}"
-        echo "Please run: aws configure"
+        echo ""
+        echo -e "${YELLOW}Please configure AWS CLI:${NC}"
+        echo "  Run: aws configure"
+        echo "  Enter your AWS Access Key ID, Secret Access Key, and region"
+        echo ""
         exit 1
     fi
     
     echo -e "${GREEN}✓ All prerequisites met${NC}"
+}
+
+# Function to analyze project using MCP server's project analyzer
+# This provides intelligent recommendations for deployment configuration
+analyze_project_for_recommendations() {
+    local project_path="${1:-.}"
+    
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  🔍 Analyzing Your Project...${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Check if Node.js is available for running the analyzer
+    if ! command -v node &> /dev/null; then
+        echo -e "${YELLOW}⚠ Node.js not found - skipping AI recommendations${NC}"
+        return 1
+    fi
+    
+    # Check if the MCP server project analyzer exists
+    local analyzer_script=""
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # Look for the analyzer in common locations
+    if [ -f "${script_dir}/mcp-server-new/project-analyzer.js" ]; then
+        analyzer_script="${script_dir}/mcp-server-new/project-analyzer.js"
+    elif [ -f "./mcp-server-new/project-analyzer.js" ]; then
+        analyzer_script="./mcp-server-new/project-analyzer.js"
+    elif [ -f "../mcp-server-new/project-analyzer.js" ]; then
+        analyzer_script="../mcp-server-new/project-analyzer.js"
+    fi
+    
+    # Run inline analysis using Node.js
+    echo -e "${BLUE}Scanning project files...${NC}"
+    
+    # Create a temporary analysis script
+    local analysis_result=$(node -e "
+const fs = require('fs');
+const path = require('path');
+
+// Simplified project analyzer (inline version)
+const patterns = {
+    frameworks: {
+        'express': { files: ['package.json'], content: ['\"express\"'], type: 'nodejs' },
+        'fastify': { files: ['package.json'], content: ['\"fastify\"'], type: 'nodejs' },
+        'koa': { files: ['package.json'], content: ['\"koa\"'], type: 'nodejs' },
+        'flask': { files: ['requirements.txt', 'app.py'], content: ['Flask', 'from flask'], type: 'python' },
+        'django': { files: ['requirements.txt', 'manage.py'], content: ['Django', 'django'], type: 'python' },
+        'laravel': { files: ['composer.json'], content: ['laravel/framework'], type: 'lamp' },
+        'symfony': { files: ['composer.json'], content: ['symfony/'], type: 'lamp' },
+        'react': { files: ['package.json'], content: ['\"react\"'], type: 'react' },
+        'vue': { files: ['package.json'], content: ['\"vue\"'], type: 'react' },
+        'angular': { files: ['package.json'], content: ['\"@angular/'], type: 'react' },
+        'next': { files: ['package.json'], content: ['\"next\"'], type: 'react' },
+        'nuxt': { files: ['package.json'], content: ['\"nuxt\"'], type: 'react' }
+    },
+    databases: {
+        'mysql': { files: ['package.json', 'requirements.txt', 'composer.json'], content: ['mysql', 'mysql2', 'PyMySQL', 'mysqlclient'], type: 'mysql' },
+        'postgresql': { files: ['package.json', 'requirements.txt', 'composer.json'], content: ['pg', 'postgres', 'psycopg2', 'postgresql'], type: 'postgresql' },
+        'mongodb': { files: ['package.json', 'requirements.txt'], content: ['mongodb', 'mongoose', 'pymongo'], type: 'mongodb' }
+    },
+    storage: {
+        'file_uploads': { content: ['multer', 'upload', 'FileField', 'move_uploaded_file', 'FormData'] },
+        'image_processing': { content: ['sharp', 'jimp', 'Pillow', 'PIL', 'imagemagick'] }
+    }
+};
+
+const analysis = {
+    detected_type: 'unknown',
+    confidence: 0,
+    frameworks: [],
+    databases: [],
+    storage_needs: { needs_bucket: false },
+    infrastructure_needs: { bundle_size: 'micro_3_0' }
+};
+
+// Scan important files
+const filesToCheck = ['package.json', 'requirements.txt', 'composer.json', 'Dockerfile', 'docker-compose.yml', 'app.py', 'manage.py'];
+const projectPath = '${project_path}';
+
+for (const filename of filesToCheck) {
+    const filepath = path.join(projectPath, filename);
+    if (fs.existsSync(filepath)) {
+        try {
+            const content = fs.readFileSync(filepath, 'utf8');
+            
+            // Framework detection
+            for (const [framework, pattern] of Object.entries(patterns.frameworks)) {
+                if (pattern.files.includes(filename)) {
+                    if (pattern.content.some(c => content.includes(c))) {
+                        analysis.frameworks.push({ name: framework, type: pattern.type, confidence: 0.8 });
+                    }
+                }
+            }
+            
+            // Database detection
+            for (const [db, pattern] of Object.entries(patterns.databases)) {
+                if (pattern.files.includes(filename)) {
+                    if (pattern.content.some(c => content.toLowerCase().includes(c.toLowerCase()))) {
+                        analysis.databases.push({ name: db, type: pattern.type, confidence: 0.7 });
+                    }
+                }
+            }
+            
+            // Storage detection
+            for (const [feature, pattern] of Object.entries(patterns.storage)) {
+                if (pattern.content.some(c => content.toLowerCase().includes(c.toLowerCase()))) {
+                    analysis.storage_needs.needs_bucket = true;
+                }
+            }
+        } catch (e) {}
+    }
+}
+
+// Check for Docker
+if (fs.existsSync(path.join(projectPath, 'Dockerfile')) || fs.existsSync(path.join(projectPath, 'docker-compose.yml'))) {
+    analysis.frameworks.push({ name: 'docker', type: 'docker', confidence: 0.9 });
+}
+
+// Check for fullstack (client + server)
+if (fs.existsSync(path.join(projectPath, 'client')) && fs.existsSync(path.join(projectPath, 'client/package.json'))) {
+    analysis.is_fullstack = true;
+}
+
+// Determine application type
+const typeScores = {};
+for (const framework of analysis.frameworks) {
+    const type = framework.type;
+    if (!typeScores[type]) typeScores[type] = 0;
+    typeScores[type] += framework.confidence;
+}
+
+// Backend takes priority for fullstack apps
+const backendTypes = ['nodejs', 'python', 'lamp', 'docker'];
+const frontendTypes = ['react'];
+const hasBackend = backendTypes.some(t => typeScores[t] > 0);
+const hasFrontend = frontendTypes.some(t => typeScores[t] > 0);
+
+if (hasBackend && hasFrontend) {
+    for (const backendType of backendTypes) {
+        if (typeScores[backendType]) typeScores[backendType] += 0.5;
+    }
+}
+
+let maxScore = 0;
+let detectedType = 'unknown';
+for (const [type, score] of Object.entries(typeScores)) {
+    if (score > maxScore) {
+        maxScore = score;
+        detectedType = type;
+    }
+}
+
+analysis.detected_type = detectedType;
+analysis.confidence = Math.min(maxScore, 1.0);
+
+// Determine bundle size
+if (detectedType === 'docker') {
+    analysis.infrastructure_needs.bundle_size = 'medium_3_0';
+} else if (analysis.databases.length > 1 || analysis.storage_needs.needs_bucket) {
+    analysis.infrastructure_needs.bundle_size = 'small_3_0';
+}
+
+// Output as JSON
+console.log(JSON.stringify(analysis));
+" 2>/dev/null)
+    
+    if [ -z "$analysis_result" ] || [ "$analysis_result" == "null" ]; then
+        echo -e "${YELLOW}⚠ Could not analyze project - using defaults${NC}"
+        return 1
+    fi
+    
+    # Parse the analysis result
+    MCP_RECOMMENDATIONS="$analysis_result"
+    
+    # Extract recommendations using node
+    RECOMMENDED_APP_TYPE=$(echo "$analysis_result" | node -e "
+        const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+        console.log(data.detected_type || 'unknown');
+    " 2>/dev/null)
+    
+    RECOMMENDED_DATABASE=$(echo "$analysis_result" | node -e "
+        const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+        const db = data.databases && data.databases[0];
+        console.log(db ? db.type : 'none');
+    " 2>/dev/null)
+    
+    RECOMMENDED_BUNDLE=$(echo "$analysis_result" | node -e "
+        const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+        console.log(data.infrastructure_needs?.bundle_size || 'micro_3_0');
+    " 2>/dev/null)
+    
+    RECOMMENDED_BUCKET=$(echo "$analysis_result" | node -e "
+        const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+        console.log(data.storage_needs?.needs_bucket ? 'true' : 'false');
+    " 2>/dev/null)
+    
+    ANALYSIS_CONFIDENCE=$(echo "$analysis_result" | node -e "
+        const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+        console.log(Math.round((data.confidence || 0) * 100));
+    " 2>/dev/null)
+    
+    # Display analysis results
+    if [ "$RECOMMENDED_APP_TYPE" != "unknown" ] && [ -n "$RECOMMENDED_APP_TYPE" ]; then
+        echo -e "${GREEN}✓ Project Analysis Complete!${NC}"
+        echo ""
+        echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${BLUE}│${NC} ${YELLOW}🤖 AI Recommendations (${ANALYSIS_CONFIDENCE}% confidence)${NC}"
+        echo -e "${BLUE}├─────────────────────────────────────────────────────────────┤${NC}"
+        
+        # Show detected frameworks
+        local frameworks=$(echo "$analysis_result" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const names = (data.frameworks || []).map(f => f.name).join(', ');
+            console.log(names || 'None detected');
+        " 2>/dev/null)
+        printf "${BLUE}│${NC}   Detected Frameworks: ${GREEN}%-35s${NC} ${BLUE}│${NC}\n" "$frameworks"
+        printf "${BLUE}│${NC}   Recommended App Type: ${GREEN}%-34s${NC} ${BLUE}│${NC}\n" "$RECOMMENDED_APP_TYPE"
+        printf "${BLUE}│${NC}   Recommended Database: ${GREEN}%-34s${NC} ${BLUE}│${NC}\n" "$RECOMMENDED_DATABASE"
+        printf "${BLUE}│${NC}   Recommended Instance: ${GREEN}%-34s${NC} ${BLUE}│${NC}\n" "$RECOMMENDED_BUNDLE"
+        
+        if [ "$RECOMMENDED_BUCKET" == "true" ]; then
+            printf "${BLUE}│${NC}   Storage Bucket: ${GREEN}%-40s${NC} ${BLUE}│${NC}\n" "Recommended (file uploads detected)"
+        fi
+        
+        echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}"
+        echo ""
+        echo -e "${YELLOW}★ Recommended options will be highlighted in the menus below${NC}"
+        echo ""
+        return 0
+    else
+        echo -e "${YELLOW}⚠ Could not determine project type - please select manually${NC}"
+        return 1
+    fi
 }
 
 # Function to check if we're in a git repository (checks for .git in current directory, not parent)
@@ -1011,6 +1291,10 @@ EOF
         - "/api/health"
 EOF
             fi
+            # Python/Flask apps typically run on port 5000
+            cat >> "deployment-${app_type}.config.yml" << EOF
+      port: 5000  # Flask applications run on port 5000
+EOF
             ;;
         "lamp")
             if [[ -z "$VERIFICATION_ENDPOINT" && "$API_ONLY_APP" != "true" ]]; then
@@ -1018,6 +1302,28 @@ EOF
         - "/api/test.php"
 EOF
             fi
+            # LAMP apps run on port 80 (Apache)
+            cat >> "deployment-${app_type}.config.yml" << EOF
+      port: 80  # Apache serves on port 80
+EOF
+            ;;
+        "nginx")
+            # Nginx apps run on port 80
+            cat >> "deployment-${app_type}.config.yml" << EOF
+      port: 80  # Nginx serves on port 80
+EOF
+            ;;
+        "react")
+            # React apps are served via nginx on port 80
+            cat >> "deployment-${app_type}.config.yml" << EOF
+      port: 80  # React build served via nginx on port 80
+EOF
+            ;;
+        "docker")
+            # Docker apps typically expose port 80
+            cat >> "deployment-${app_type}.config.yml" << EOF
+      port: 80  # Docker container exposes port 80
+EOF
             ;;
     esac
 
@@ -2268,7 +2574,7 @@ EOF
     echo -e "${GREEN}✓ Created ${app_type} application files in root directory${NC}"
 }
 
-# Function to get user input with default value
+# Function to get user input with default value (enhanced styling)
 get_input() {
     local prompt="$1"
     local default="$2"
@@ -2279,69 +2585,248 @@ get_input() {
         return
     fi
     
-    read -p "$prompt [$default]: " value
+    echo -ne "${YELLOW}$prompt${NC} [${GREEN}$default${NC}]: "
+    read -r value
+    if [[ -n "$value" ]]; then
+        echo -e "${GREEN}✓ Set: $value${NC}" >&2
+    fi
     echo "${value:-$default}"
 }
 
-# Function to get yes/no input
+# Function to get yes/no input (enhanced styling)
 get_yes_no() {
     local prompt="$1"
     local default="$2"
     local value
+    local default_display
     
     if [[ "$AUTO_MODE" == "true" ]]; then
         echo "$default"
         return
     fi
     
+    # Format default display
+    if [[ "$default" == "true" ]]; then
+        default_display="${GREEN}Y${NC}/n"
+    else
+        default_display="y/${GREEN}N${NC}"
+    fi
+    
     while true; do
-        read -p "$prompt (y/n) [$default]: " value
+        echo -ne "${YELLOW}$prompt${NC} ($default_display): "
+        read -r value
         value="${value:-$default}"
         case $value in
-            [Yy]* ) echo "true"; break;;
-            [Nn]* ) echo "false"; break;;
-            * ) echo "Please answer yes or no.";;
+            [Yy]* | true ) 
+                echo -e "${GREEN}✓ Yes${NC}" >&2
+                echo "true"
+                break
+                ;;
+            [Nn]* | false ) 
+                echo -e "${BLUE}✓ No${NC}" >&2
+                echo "false"
+                break
+                ;;
+            * ) 
+                echo -e "${RED}Please answer yes (y) or no (n).${NC}"
+                ;;
         esac
     done
 }
 
-# Function to select from options
+# Function to select from options with enhanced dropdown-style menu
+# Now includes AI recommendation highlighting
 select_option() {
     local prompt="$1"
     local default="$2"
-    shift 2
+    local recommendation_type="${3:-}"  # Optional: app_type, database, bundle, bucket
+    shift 3 2>/dev/null || shift 2
     local options=("$@")
     
     if [[ "$AUTO_MODE" == "true" ]]; then
-        echo "$default"
+        # Return the actual option value at the default index (1-based)
+        # Convert default index to 0-based and return the option
+        local default_index=$((default - 1))
+        if [ "$default_index" -ge 0 ] && [ "$default_index" -lt "${#options[@]}" ]; then
+            echo "${options[$default_index]}"
+        else
+            echo "${options[0]}"
+        fi
         return
     fi
+    
+    # Determine the AI-recommended option based on type
+    local ai_recommended=""
+    case "$recommendation_type" in
+        "app_type")
+            ai_recommended="$RECOMMENDED_APP_TYPE"
+            ;;
+        "database")
+            ai_recommended="$RECOMMENDED_DATABASE"
+            ;;
+        "bundle")
+            ai_recommended="$RECOMMENDED_BUNDLE"
+            ;;
+    esac
     
     # Use /dev/tty for direct terminal interaction
     exec 3</dev/tty
     
-    # Display menu to terminal
+    # Display enhanced menu to terminal
     echo "" > /dev/tty
-    echo "$prompt" > /dev/tty
+    echo -e "${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}" > /dev/tty
+    echo -e "${BLUE}│${NC} ${YELLOW}$prompt${NC}" > /dev/tty
+    echo -e "${BLUE}├─────────────────────────────────────────────────────────────┤${NC}" > /dev/tty
+    
     for i in "${!options[@]}"; do
-        echo "  $((i+1)). ${options[i]}" > /dev/tty
+        local option="${options[i]}"
+        local marker="  "
+        local color=""
+        local ai_marker=""
+        
+        # Check if this is the AI-recommended option
+        if [ -n "$ai_recommended" ] && [ "$option" == "$ai_recommended" ]; then
+            ai_marker=" ${YELLOW}★ AI${NC}"
+            # Update default to AI recommendation
+            default=$((i+1))
+        fi
+        
+        # Mark default option (which may now be the AI recommendation)
+        if [ "$((i+1))" -eq "$default" ]; then
+            marker="→ "
+            color="${GREEN}"
+        fi
+        
+        # Get description for known options
+        local desc=""
+        desc=$(get_option_description "$option")
+        
+        if [ -n "$desc" ]; then
+            if [ -n "$ai_marker" ]; then
+                printf "${BLUE}│${NC} %s${color}%2d. %-12s${NC} │ %-27s${ai_marker} ${BLUE}│${NC}\n" "$marker" "$((i+1))" "$option" "$desc" > /dev/tty
+            else
+                printf "${BLUE}│${NC} %s${color}%2d. %-12s${NC} │ %-35s ${BLUE}│${NC}\n" "$marker" "$((i+1))" "$option" "$desc" > /dev/tty
+            fi
+        else
+            if [ -n "$ai_marker" ]; then
+                printf "${BLUE}│${NC} %s${color}%2d. %-44s${NC}${ai_marker} ${BLUE}│${NC}\n" "$marker" "$((i+1))" "$option" > /dev/tty
+            else
+                printf "${BLUE}│${NC} %s${color}%2d. %-52s${NC} ${BLUE}│${NC}\n" "$marker" "$((i+1))" "$option" > /dev/tty
+            fi
+        fi
     done
+    
+    echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}" > /dev/tty
     echo "" > /dev/tty
     
     while true; do
-        echo -n "Select option [1-${#options[@]}] [$default]: " > /dev/tty
+        echo -ne "${YELLOW}Select option [1-${#options[@]}]${NC} (default: ${GREEN}$default${NC}): " > /dev/tty
         read -u 3 choice
         choice="${choice:-$default}"
         
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
-            echo "${options[$((choice-1))]}"
+            local selected="${options[$((choice-1))]}"
+            echo -e "${GREEN}✓ Selected: $selected${NC}" > /dev/tty
+            echo "$selected"
             break
         else
-            echo "Invalid choice. Please select 1-${#options[@]}." > /dev/tty
+            echo -e "${RED}Invalid choice. Please select 1-${#options[@]}.${NC}" > /dev/tty
         fi
     done
     
     exec 3<&-
+}
+
+# Function to get description for known options
+get_option_description() {
+    local option="$1"
+    
+    case "$option" in
+        # Application types
+        "lamp")
+            echo "Linux, Apache, MySQL, PHP stack"
+            ;;
+        "nodejs")
+            echo "Node.js with Express.js"
+            ;;
+        "python")
+            echo "Python with Flask framework"
+            ;;
+        "react")
+            echo "React single-page application"
+            ;;
+        "docker")
+            echo "Multi-container Docker app"
+            ;;
+        "nginx")
+            echo "Static site with Nginx server"
+            ;;
+        
+        # Database types
+        "mysql")
+            echo "MySQL relational database"
+            ;;
+        "postgresql")
+            echo "PostgreSQL advanced database"
+            ;;
+        "mongodb")
+            echo "MongoDB NoSQL database (local)"
+            ;;
+        "none")
+            echo "No database required"
+            ;;
+        
+        # Instance bundles
+        "nano_3_0")
+            echo "512MB RAM, 0.25 vCPU - \$3.50/mo"
+            ;;
+        "micro_3_0")
+            echo "1GB RAM, 0.5 vCPU - \$5/mo"
+            ;;
+        "small_3_0")
+            echo "2GB RAM, 1 vCPU - \$10/mo"
+            ;;
+        "medium_3_0")
+            echo "4GB RAM, 2 vCPU - \$20/mo"
+            ;;
+        "large_3_0")
+            echo "8GB RAM, 2 vCPU - \$40/mo"
+            ;;
+        
+        # OS blueprints
+        "ubuntu_22_04")
+            echo "Ubuntu 22.04 LTS (Recommended)"
+            ;;
+        "ubuntu_20_04")
+            echo "Ubuntu 20.04 LTS"
+            ;;
+        "amazon_linux_2023")
+            echo "Amazon Linux 2023"
+            ;;
+        
+        # Bucket access levels
+        "read_only")
+            echo "Read-only access to bucket"
+            ;;
+        "read_write")
+            echo "Full read/write access"
+            ;;
+        
+        # Bucket bundles
+        "small_1_0")
+            echo "5GB storage - \$1/mo"
+            ;;
+        "medium_1_0")
+            echo "100GB storage - \$3/mo"
+            ;;
+        "large_1_0")
+            echo "250GB storage - \$5/mo"
+            ;;
+        
+        *)
+            echo ""
+            ;;
+    esac
 }
 
 # Function to setup GitHub OIDC if needed
@@ -2637,36 +3122,52 @@ show_final_instructions() {
     local github_repo="$4"
     
     echo ""
-    echo -e "${GREEN}🎉 Setup Complete! ${NC}"
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}                                                               ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}   ${GREEN}🎉 Setup Complete!${NC}                                          ${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}                                                               ${GREEN}║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}Your ${app_name} deployment is ready!${NC}"
+    echo -e "${BLUE}Your ${YELLOW}${app_name}${BLUE} deployment is ready!${NC}"
     echo ""
-    echo "📁 Files created:"
-    echo "  - deployment-${app_type}.config.yml"
-    echo "  - .github/workflows/deploy-${app_type}.yml"
-    echo "  - ${app_type} application files in root directory"
+    echo -e "${BLUE}┌─────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BLUE}│${NC} ${YELLOW}� Files Created:${NC}                                              ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   • deployment-${app_type}.config.yml                              ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   • .github/workflows/deploy-${app_type}.yml                       ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   • ${app_type} application files                                  ${BLUE}│${NC}"
+    echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${BLUE}│${NC} ${YELLOW}🚀 Next Steps:${NC}                                                 ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   1. Review deployment-${app_type}.config.yml                      ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   2. Update default passwords in the config                    ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   3. Push changes: ${GREEN}git push origin main${NC}                       ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   4. Monitor: ${GREEN}https://github.com/${github_repo}/actions${NC}        ${BLUE}│${NC}"
+    echo -e "${BLUE}├─────────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${BLUE}│${NC} ${YELLOW}🌐 After Deployment:${NC}                                           ${BLUE}│${NC}"
+    echo -e "${BLUE}│${NC}   Your app: ${GREEN}http://${instance_name}.lightsail.aws.com/${NC}         ${BLUE}│${NC}"
+    echo -e "${BLUE}└─────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
-    echo "🚀 Next steps:"
-    echo "  1. Review and customize the configuration files"
-    echo "  2. Update default passwords in deployment-${app_type}.config.yml"
-    echo "  3. Push changes to trigger deployment: git push origin main"
-    echo "  4. Monitor deployment at: https://github.com/${github_repo}/actions"
-    echo ""
-    echo "🌐 After deployment:"
-    echo "  - Your app will be available at: http://${instance_name}.lightsail.aws.com/"
-    echo "  - Check GitHub Actions for deployment status and IP address"
-    echo ""
-    echo -e "${YELLOW}⚠️  Important:${NC}"
-    echo "  - Change default passwords in the config file before deploying"
-    echo "  - Ensure AWS_ROLE_ARN is set in GitHub repository secrets/variables"
-    echo "  - Review security settings and firewall configuration"
+    echo -e "${YELLOW}⚠️  Important Reminders:${NC}"
+    echo "   • Change default passwords before deploying to production"
+    echo "   • Ensure AWS_ROLE_ARN is set in GitHub repository secrets"
+    echo "   • Review security settings and firewall configuration"
     echo ""
 }
 
 # Main execution function
 main() {
-    echo -e "${BLUE}🚀 Complete Deployment Setup Script${NC}"
-    echo -e "${BLUE}====================================${NC}"
+    # Clear screen for fresh start (only in interactive mode)
+    if [[ "$AUTO_MODE" != "true" ]]; then
+        clear 2>/dev/null || true
+    fi
+    
+    echo ""
+    echo -e "${BLUE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║${NC}                                                               ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}   ${GREEN}🚀 AWS Lightsail Complete Deployment Setup${NC}                 ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                                                               ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}   ${YELLOW}Automated deployment via GitHub Actions${NC}                    ${BLUE}║${NC}"
+    echo -e "${BLUE}║${NC}                                                               ${BLUE}║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
     # Check if we're in fully automated mode (all required env vars set) - check early!
@@ -2904,12 +3405,24 @@ GITIGNORE
         fi
         echo -e "${GREEN}✓ Using APP_TYPE: $APP_TYPE${NC}"
     else
+        # Run project analysis for AI recommendations (interactive mode only)
+        analyze_project_for_recommendations "."
+        
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  📦 STEP 1: Application Type${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         APP_TYPES=("lamp" "nodejs" "python" "react" "docker" "nginx")
-        APP_TYPE=$(select_option "Choose application type:" "1" "${APP_TYPES[@]}")
+        APP_TYPE=$(select_option "Choose your application type:" "1" "app_type" "${APP_TYPES[@]}")
     fi
     
-    # Application name
+    # Application name and instance configuration
     if [[ "$FULLY_AUTOMATED" != "true" ]]; then
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  🏷️  STEP 2: Application Details${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
         APP_NAME=$(get_input "Enter application name" "$(to_uppercase "${APP_TYPE:0:1}")${APP_TYPE:1} Application")
     fi
     
@@ -2932,12 +3445,16 @@ GITIGNORE
         fi
         echo -e "${GREEN}✓ Using BUNDLE_ID: $BUNDLE_ID${NC}"
     else
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  💻 STEP 3: Instance Configuration${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         if [[ "$APP_TYPE" == "docker" ]]; then
             BUNDLES=("small_3_0" "medium_3_0" "large_3_0")
-            BUNDLE_ID=$(select_option "Choose bundle (Docker needs minimum 2GB):" "2" "${BUNDLES[@]}")
+            BUNDLE_ID=$(select_option "Choose instance size (Docker needs min 2GB):" "2" "bundle" "${BUNDLES[@]}")
         else
             BUNDLES=("nano_3_0" "micro_3_0" "small_3_0" "medium_3_0")
-            BUNDLE_ID=$(select_option "Choose bundle:" "2" "${BUNDLES[@]}")
+            BUNDLE_ID=$(select_option "Choose instance size:" "2" "bundle" "${BUNDLES[@]}")
         fi
     fi
     
@@ -2951,7 +3468,7 @@ GITIGNORE
         echo -e "${GREEN}✓ Using BLUEPRINT_ID: $BLUEPRINT_ID${NC}"
     else
         BLUEPRINTS=("ubuntu_22_04" "ubuntu_20_04" "amazon_linux_2023")
-        BLUEPRINT_ID=$(select_option "Choose OS:" "1" "${BLUEPRINTS[@]}")
+        BLUEPRINT_ID=$(select_option "Choose operating system:" "1" "${BLUEPRINTS[@]}")
     fi
     
     # Database configuration
@@ -2977,6 +3494,10 @@ GITIGNORE
         fi
     else
         # Interactive mode
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  🗄️  STEP 4: Database Configuration${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         DB_TYPE="none"
         DB_EXTERNAL="false"
         DB_RDS_NAME=""
@@ -2984,7 +3505,7 @@ GITIGNORE
         
         # Database configuration (available for all application types)
         DB_TYPES=("mysql" "postgresql" "mongodb" "none")
-        DB_TYPE=$(select_option "Choose database type:" "4" "${DB_TYPES[@]}")
+        DB_TYPE=$(select_option "Choose database type:" "4" "database" "${DB_TYPES[@]}")
         
         if [[ "$DB_TYPE" != "none" ]]; then
             # MongoDB only supports local installation
@@ -3020,7 +3541,20 @@ GITIGNORE
         echo -e "${GREEN}✓ Using ENABLE_BUCKET: $ENABLE_BUCKET${NC}"
     else
         # Interactive mode
-        ENABLE_BUCKET=$(get_yes_no "Enable Lightsail bucket?" "false")
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  📁 STEP 5: Storage Configuration${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        
+        # Show AI recommendation for bucket if detected
+        local bucket_default="false"
+        if [ "$RECOMMENDED_BUCKET" == "true" ]; then
+            echo -e "${YELLOW}★ AI detected file upload patterns - bucket recommended${NC}"
+            bucket_default="true"
+        fi
+        
+        ENABLE_BUCKET=$(get_yes_no "Enable Lightsail bucket for file storage?" "$bucket_default")
         BUCKET_NAME=""
         BUCKET_ACCESS="read_write"
         BUCKET_BUNDLE="small_1_0"
@@ -3032,6 +3566,38 @@ GITIGNORE
             
             BUCKET_BUNDLES=("small_1_0" "medium_1_0" "large_1_0")
             BUCKET_BUNDLE=$(select_option "Choose bucket size:" "1" "${BUCKET_BUNDLES[@]}")
+        fi
+    fi
+    
+    # Verification endpoint configuration
+    if [[ "$FULLY_AUTOMATED" == "true" ]]; then
+        # Use environment variables (VERIFICATION_ENDPOINT, HEALTH_CHECK_ENDPOINT, API_ONLY_APP)
+        if [[ -n "$VERIFICATION_ENDPOINT" ]]; then
+            echo -e "${GREEN}✓ Using custom verification endpoint: $VERIFICATION_ENDPOINT${NC}"
+        elif [[ "$API_ONLY_APP" == "true" ]]; then
+            echo -e "${GREEN}✓ API-only app mode enabled${NC}"
+        fi
+    else
+        # Interactive mode - ask about verification endpoint
+        echo ""
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}  🔍 STEP 6: Health Check Configuration${NC}"
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${YELLOW}The deployment will test an endpoint to verify your app is running.${NC}"
+        echo -e "${YELLOW}Default is '/' but API-only apps may need a different endpoint.${NC}"
+        echo ""
+        
+        CUSTOM_ENDPOINT=$(get_yes_no "Customize verification endpoint?" "false")
+        if [[ "$CUSTOM_ENDPOINT" == "true" ]]; then
+            VERIFICATION_ENDPOINT=$(get_input "Enter verification endpoint path" "/api/health")
+            echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
+            
+            # Ask about expected content
+            EXPECTED_CONTENT=$(get_input "Enter expected content in response (leave empty for any)" "")
+            if [[ -n "$EXPECTED_CONTENT" ]]; then
+                echo -e "${GREEN}✓ Will check for content: $EXPECTED_CONTENT${NC}"
+            fi
         fi
     fi
     
