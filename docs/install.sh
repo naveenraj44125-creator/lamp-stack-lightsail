@@ -3390,6 +3390,7 @@ GITIGNORE
                 if [[ -z "$DEFAULT_REPO_NAME" ]] || [[ "$DEFAULT_REPO_NAME" == "." ]]; then
                     DEFAULT_REPO_NAME="my-app"
                 fi
+                echo -e "${BLUE}Suggested repository name: ${GREEN}$DEFAULT_REPO_NAME${NC}" >&2
                 REPO_NAME=$(get_input "Enter repository name" "$DEFAULT_REPO_NAME")
                 
                 # Construct full repository path
