@@ -69,6 +69,12 @@ analyze_project_for_recommendations() {
             detected_databases+=("mongodb")
             RECOMMENDED_DATABASE="none"  # MongoDB not directly supported
         fi
+        
+        # Check for file upload/storage libraries (Node.js)
+        if echo "$pkg_content" | grep -qi '"multer"\|"formidable"\|"busboy"\|"aws-sdk"\|"@aws-sdk/client-s3"\|"sharp"\|"jimp"'; then
+            needs_storage=true
+            RECOMMENDED_BUCKET="true"
+        fi
     fi
     
     # Check for Python
@@ -94,13 +100,13 @@ analyze_project_for_recommendations() {
             RECOMMENDED_DATABASE="postgresql"
         fi
         
-        if echo "$req_content" | grep -qi "mysql\|pymysql"; then
+        if echo "$req_content" | grep -qi "mysql\|pymysql\|mysqlclient"; then
             detected_databases+=("mysql")
             RECOMMENDED_DATABASE="mysql"
         fi
         
-        # Check for file upload libraries
-        if echo "$req_content" | grep -qi "pillow\|boto3"; then
+        # Check for file upload/storage libraries (Python)
+        if echo "$req_content" | grep -qi "pillow\|boto3\|flask-uploads\|django-storages\|werkzeug"; then
             needs_storage=true
             RECOMMENDED_BUCKET="true"
         fi
@@ -119,6 +125,25 @@ analyze_project_for_recommendations() {
             RECOMMENDED_APP_TYPE="lamp"
             ANALYSIS_CONFIDENCE=70
         fi
+        
+        # Check for database in PHP
+        if echo "$composer_content" | grep -qi "doctrine/dbal\|illuminate/database"; then
+            # Laravel typically uses MySQL
+            detected_databases+=("mysql")
+            RECOMMENDED_DATABASE="mysql"
+        fi
+        
+        # Check for file upload libraries (PHP)
+        if echo "$composer_content" | grep -qi "intervention/image\|league/flysystem\|aws/aws-sdk-php"; then
+            needs_storage=true
+            RECOMMENDED_BUCKET="true"
+        fi
+        
+        # Check for common PHP upload patterns in code
+        if [[ -f "index.php" ]] && grep -qi "move_uploaded_file\|\$_FILES" index.php 2>/dev/null; then
+            needs_storage=true
+            RECOMMENDED_BUCKET="true"
+        fi
     fi
     
     # Check for Docker
@@ -127,6 +152,27 @@ analyze_project_for_recommendations() {
         RECOMMENDED_APP_TYPE="docker"
         ANALYSIS_CONFIDENCE=90
         RECOMMENDED_BUNDLE="medium_3_0"
+        
+        # Check docker-compose for database services
+        if [[ -f "docker-compose.yml" ]]; then
+            local compose_content=$(cat docker-compose.yml 2>/dev/null)
+            
+            if echo "$compose_content" | grep -qi "image:.*mysql\|mysql:"; then
+                detected_databases+=("mysql")
+                RECOMMENDED_DATABASE="mysql"
+            fi
+            
+            if echo "$compose_content" | grep -qi "image:.*postgres\|postgres:"; then
+                detected_databases+=("postgresql")
+                RECOMMENDED_DATABASE="postgresql"
+            fi
+            
+            # Check for volume mounts (indicates file storage needs)
+            if echo "$compose_content" | grep -qi "volumes:\|/uploads\|/media\|/storage"; then
+                needs_storage=true
+                RECOMMENDED_BUCKET="true"
+            fi
+        fi
     fi
     
     # Determine bundle size based on complexity
