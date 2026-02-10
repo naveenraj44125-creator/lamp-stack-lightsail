@@ -2630,7 +2630,7 @@ get_yes_no() {
     fi
     
     while true; do
-        echo -ne "${YELLOW}$prompt${NC} ($default_display): "
+        echo -ne "${YELLOW}$prompt${NC} ($default_display): " >&2
         read -r value
         value="${value:-$default}"
         case $value in
@@ -2645,7 +2645,7 @@ get_yes_no() {
                 break
                 ;;
             * ) 
-                echo -e "${RED}Please answer yes (y) or no (n).${NC}"
+                echo -e "${RED}Please answer yes (y) or no (n).${NC}" >&2
                 ;;
         esac
     done
