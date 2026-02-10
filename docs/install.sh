@@ -13,7 +13,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 REPO_URL="https://raw.githubusercontent.com/naveenraj44125-creator/lamp-stack-lightsail/main"
-TEMP_DIR=$(mktemp -d)
+
+# Save the user's current directory
+USER_DIR="$(pwd)"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   AWS Lightsail Deployment Setup                          ║${NC}"
@@ -26,19 +28,19 @@ if [[ "$1" == "--interactive" ]]; then
     INTERACTIVE_MODE=true
 fi
 
-# Download setup.sh
+# Download setup.sh to current directory
 echo -e "${BLUE}Downloading setup script...${NC}"
-if curl -fsSL "${REPO_URL}/setup.sh" -o "${TEMP_DIR}/setup.sh"; then
-    chmod +x "${TEMP_DIR}/setup.sh"
+if curl -fsSL "${REPO_URL}/setup.sh" -o "setup.sh"; then
+    chmod +x "setup.sh"
     echo -e "${GREEN}✓ Setup script downloaded${NC}"
 else
     echo -e "${RED}❌ Failed to download setup script${NC}"
     exit 1
 fi
 
-# Download setup modules
+# Download setup modules to current directory
 echo -e "${BLUE}Downloading setup modules...${NC}"
-mkdir -p "${TEMP_DIR}/setup"
+mkdir -p "setup"
 
 MODULES=(
     "00-variables.sh"
@@ -53,7 +55,7 @@ MODULES=(
 )
 
 for module in "${MODULES[@]}"; do
-    if curl -fsSL "${REPO_URL}/setup/${module}" -o "${TEMP_DIR}/setup/${module}"; then
+    if curl -fsSL "${REPO_URL}/setup/${module}" -o "setup/${module}"; then
         echo -e "${GREEN}  ✓ ${module}${NC}"
     else
         echo -e "${RED}  ❌ Failed to download ${module}${NC}"
@@ -65,9 +67,7 @@ echo ""
 echo -e "${GREEN}✓ All modules downloaded successfully${NC}"
 echo ""
 
-# Run setup script
-cd "${TEMP_DIR}"
-
+# Run setup script from current directory (where user's project files are)
 if [[ "$INTERACTIVE_MODE" == "true" ]]; then
     echo -e "${BLUE}Running setup in interactive mode...${NC}"
     echo ""
@@ -77,10 +77,6 @@ else
     echo ""
     bash setup.sh "$@"
 fi
-
-# Cleanup
-cd -
-rm -rf "${TEMP_DIR}"
 
 echo ""
 echo -e "${GREEN}Setup complete!${NC}"
