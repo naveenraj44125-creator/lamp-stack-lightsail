@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# End-to-End Integration Test for setup-complete-deployment.sh
+# End-to-End Integration Test for modular setup.sh
 # Creates a real GitHub repo, deploys via GitHub Actions, verifies, then cleans up
 #
 # Usage:
@@ -40,8 +40,8 @@ if [[ -z "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$SOURCE_DIR/setup-complete-deployment.sh" ]]; then
-    echo -e "${RED}Error: setup-complete-deployment.sh not found in $SOURCE_DIR${NC}"
+if [[ ! -f "$SOURCE_DIR/setup.sh" ]]; then
+    echo -e "${RED}Error: setup.sh not found in $SOURCE_DIR${NC}"
     exit 1
 fi
 
@@ -91,7 +91,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   E2E Test: setup-complete-deployment.sh                   ║${NC}"
+echo -e "${BLUE}║   E2E Test: Modular setup.sh                               ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -126,7 +126,7 @@ echo -e "${GREEN}✓ AWS Account: $AWS_ACCOUNT_ID${NC}"
 echo ""
 
 # Step 2: Create temp directory and run setup script
-echo -e "${BLUE}Step 2: Running setup-complete-deployment.sh...${NC}"
+echo -e "${BLUE}Step 2: Running modular setup.sh...${NC}"
 
 TEST_DIR="$SOURCE_DIR/test-project-$(date +%s)"
 mkdir -p "$TEST_DIR"
@@ -151,15 +151,15 @@ export REPO_VISIBILITY=private
 
 # Source the setup script (disable exit on error temporarily)
 set +e
-source "$SCRIPT_DIR/setup-complete-deployment.sh"
+source "$SCRIPT_DIR/setup.sh"
 set -e
 
 # Manually call the functions we need (since main() would try interactive mode)
 create_deployment_config "nodejs" "Test Node App" "test-node-instance" "us-east-1" "ubuntu_22_04" "micro_3_0" "none" "false" "" "app_db" "" "" "" "false"
 create_github_workflow "nodejs" "Test Node App" "us-east-1"
-create_example_app "nodejs" "Test Node App"
+# create_example_app "nodejs" "Test Node App"  # Not needed - we create custom app below
 
-# Override with a better-looking Node.js app for testing
+# Create a better-looking Node.js app for testing
 cat > "app.js" << 'NODEJS_APP_EOF'
 const express = require('express');
 const cors = require('cors');
@@ -436,6 +436,27 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 NODEJS_APP_EOF
+
+# Create package.json
+cat > "package.json" << 'PACKAGE_JSON_EOF'
+{
+  "name": "test-node-app",
+  "version": "1.0.0",
+  "description": "Test Node.js application for deployment",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+PACKAGE_JSON_EOF
 
 echo -e "${GREEN}✓ Configuration files created${NC}"
 

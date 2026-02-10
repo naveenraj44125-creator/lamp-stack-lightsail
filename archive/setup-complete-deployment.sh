@@ -1917,6 +1917,7 @@ EOF
                             echo -e "${RED}  ❌ Could not auto-fix package.json - please update start script manually${NC}"
                         }
                         echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
+                        fi
                     fi
                     
                     # Return early - skip template creation

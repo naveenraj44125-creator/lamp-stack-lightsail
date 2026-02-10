@@ -52,7 +52,7 @@ curl -X POST http://localhost:3001/call-tool \
 Create a new repository with automated deployment:
 
 ```bash
-./setup-complete-deployment.sh
+./setup.sh
 ```
 
 #### For Existing Projects
@@ -118,7 +118,7 @@ Let's walk through deploying a LAMP stack application from scratch.
 ### Step 1: Create New Repository
 
 ```bash
-./setup-new-repo.sh
+./setup.sh
 ```
 
 The interactive wizard will ask:
@@ -497,7 +497,8 @@ dependencies:
 ```
 lamp-stack-lightsail/
 ├── 🔧 Setup Scripts
-│   ├── setup-new-repo.sh              # Create new repository with deployment
+│   ├── setup.sh                       # Main setup script (modular)
+│   ├── setup/                         # Modular setup components
 │   ├── integrate-lightsail-actions.sh # Add to existing repository
 │   └── setup-github-oidc.sh           # Manual OIDC setup (if needed)
 │
@@ -749,7 +750,7 @@ $s3->putObject([
 
 ### Automatic Setup
 
-Both `setup-new-repo.sh` and `integrate-lightsail-actions.sh` automatically:
+The `setup.sh` script automatically:
 
 1. **Create OIDC Provider** (if doesn't exist)
    ```
@@ -829,10 +830,10 @@ sudo tail -f /var/log/apache2/error.log
 - Check access level (read_only vs read_write)
 - Ensure AWS CLI is installed on instance
 
-## 📊 Comparison: setup-new-repo.sh vs integrate-lightsail-actions.sh
+## 📊 Setup Script Comparison
 
-| Feature | setup-new-repo.sh | integrate-lightsail-actions.sh |
-|---------|-------------------|--------------------------------|
+| Feature | setup.sh | integrate-lightsail-actions.sh |
+|---------|----------|--------------------------------|
 | **Use Case** | Create new repository | Add to existing repository |
 | **Git Init** | ✅ Creates new repo | ❌ Uses existing |
 | **GitHub Repo** | ✅ Creates on GitHub | ❌ Uses existing |
@@ -1017,7 +1018,7 @@ This system successfully deploys:
 - ✅ Multi-service applications with Docker
 - ✅ Containerized apps with S3 integration
 
-Ready to deploy? Run `./setup-new-repo.sh` or `./integrate-lightsail-actions.sh` now! 🚀
+Ready to deploy? Run `./setup.sh` or `./integrate-lightsail-actions.sh` now! 🚀
 
 ---
 

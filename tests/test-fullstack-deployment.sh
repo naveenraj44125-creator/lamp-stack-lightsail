@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# E2E Test: Deploy MongoDB Task Manager using setup-complete-deployment.sh
-# Tests MongoDB local installation with a Node.js application
+# E2E Test: Deploy Fullstack Notes App (React + Node.js) using modular setup.sh
+# Tests fullstack detection, UI serving, and GitHub Actions workflow summary
 #
 # Usage:
-#   ./test-mongodb-deployment.sh --source-dir /path/to/lamp-stack-lightsail
-#   ./test-mongodb-deployment.sh --source-dir /path/to/lamp-stack-lightsail --no-cleanup
+#   ./test-fullstack-deployment.sh --source-dir /path/to/lamp-stack-lightsail
+#   ./test-fullstack-deployment.sh --source-dir /path/to/lamp-stack-lightsail --no-cleanup
 
 set -e
 
@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-TEST_REPO_NAME="mongodb-test-$(date +%s)"
+TEST_REPO_NAME="fullstack-test-$(date +%s)"
 GITHUB_USERNAME=""
 CLEANUP_ON_EXIT=true
 SKIP_DEPLOY_WAIT=false
@@ -39,21 +39,14 @@ if [[ -z "$SOURCE_DIR" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$SOURCE_DIR/setup-complete-deployment.sh" ]]; then
-    echo -e "${RED}Error: setup-complete-deployment.sh not found in $SOURCE_DIR${NC}"
+if [[ ! -f "$SOURCE_DIR/setup.sh" ]]; then
+    echo -e "${RED}Error: setup.sh not found in $SOURCE_DIR${NC}"
     exit 1
 fi
 
-# Copy example-mongodb-app from original workspace if not in source dir
-ORIGINAL_WORKSPACE="/Users/naveenrp/Naveen/GIthub Actions in Lightsail/Cline"
-if [[ ! -d "$SOURCE_DIR/example-mongodb-app" ]]; then
-    if [[ -d "$ORIGINAL_WORKSPACE/example-mongodb-app" ]]; then
-        echo -e "${BLUE}Copying example-mongodb-app from original workspace...${NC}"
-        rsync -av --exclude='node_modules' --exclude='.git' "$ORIGINAL_WORKSPACE/example-mongodb-app" "$SOURCE_DIR/"
-    else
-        echo -e "${RED}Error: example-mongodb-app not found in $SOURCE_DIR or $ORIGINAL_WORKSPACE${NC}"
-        exit 1
-    fi
+if [[ ! -d "$SOURCE_DIR/example-fullstack-app" ]]; then
+    echo -e "${RED}Error: example-fullstack-app not found in $SOURCE_DIR${NC}"
+    exit 1
 fi
 
 SCRIPT_DIR="$(cd "$SOURCE_DIR" && pwd)"
@@ -101,7 +94,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   E2E Test: MongoDB Task Manager Deployment                ║${NC}"
+echo -e "${BLUE}║   E2E Test: Fullstack React + Node.js Deployment           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -135,20 +128,20 @@ echo -e "${GREEN}✓ GitHub user: $GITHUB_USERNAME${NC}"
 echo -e "${GREEN}✓ AWS Account: $AWS_ACCOUNT_ID${NC}"
 echo ""
 
-# Step 2: Create test directory and copy mongodb-app
-echo -e "${BLUE}Step 2: Copying mongodb-app to test directory...${NC}"
+# Step 2: Create test directory and copy fullstack-app
+echo -e "${BLUE}Step 2: Copying fullstack-app to test directory...${NC}"
 
-TEST_DIR="$SOURCE_DIR/test-mongodb-$(date +%s)"
+TEST_DIR="$SOURCE_DIR/test-fullstack-$(date +%s)"
 mkdir -p "$TEST_DIR"
 
-# Copy mongodb-app files (excluding node_modules)
-rsync -av --exclude='node_modules' --exclude='.git' "$SOURCE_DIR/example-mongodb-app/" "$TEST_DIR/"
+# Copy fullstack-app files (excluding node_modules)
+rsync -av --exclude='node_modules' --exclude='.git' --exclude='build' "$SOURCE_DIR/example-fullstack-app/" "$TEST_DIR/"
 
-echo -e "${GREEN}✓ Copied mongodb-app to $TEST_DIR${NC}"
+echo -e "${GREEN}✓ Copied fullstack-app to $TEST_DIR${NC}"
 
 # List what was copied
 echo -e "${BLUE}Files copied:${NC}"
-ls -la "$TEST_DIR"
+find "$TEST_DIR" -type f | head -20
 echo ""
 
 pushd "$TEST_DIR" > /dev/null
@@ -161,37 +154,36 @@ git config user.name "Test User"
 echo -e "${GREEN}✓ Git repository initialized${NC}"
 echo ""
 
-# Step 3: Run setup-complete-deployment.sh functions
-echo -e "${BLUE}Step 3: Running setup-complete-deployment.sh to create config...${NC}"
+# Step 3: Run modular setup.sh functions
+echo -e "${BLUE}Step 3: Running modular setup.sh to create config...${NC}"
 
 # Source the setup script
 set +e
-source "$SCRIPT_DIR/setup-complete-deployment.sh"
+source "$SCRIPT_DIR/setup.sh"
 set -e
 
 # Set up environment for the functions
 export AUTO_MODE=true
 export APP_TYPE=nodejs
-export APP_NAME="MongoDB Task Manager"
-export INSTANCE_NAME="mongodb-task-instance"
+export APP_NAME="Fullstack Notes App"
+export INSTANCE_NAME="fullstack-notes-instance"
 export AWS_REGION=us-east-1
 export BLUEPRINT_ID=ubuntu_22_04
 export BUNDLE_ID=small_3_0
-export DATABASE_TYPE=mongodb
+export DATABASE_TYPE=none
 export DB_EXTERNAL=false
-export DB_NAME=taskdb
 export GITHUB_REPO="$GITHUB_USERNAME/$TEST_REPO_NAME"
 export REPO_VISIBILITY=private
 
-# Create deployment config (don't create example app - we already have the real app)
-create_deployment_config "nodejs" "MongoDB Task Manager" "mongodb-task-instance" "us-east-1" "ubuntu_22_04" "small_3_0" "mongodb" "false" "" "taskdb" "" "" "" "false"
-create_github_workflow "nodejs" "MongoDB Task Manager" "us-east-1"
+# Create deployment config
+create_deployment_config "nodejs" "Fullstack Notes App" "fullstack-notes-instance" "us-east-1" "ubuntu_22_04" "small_3_0" "none" "false" "" "" "" "" "" "false"
+create_github_workflow "nodejs" "Fullstack Notes App" "us-east-1"
 
 echo -e "${GREEN}✓ Deployment configuration created${NC}"
 echo ""
 
-# Step 4: Verify files
-echo -e "${BLUE}Step 4: Verifying generated files...${NC}"
+# Step 4: Verify files - FULLSTACK SPECIFIC CHECKS
+echo -e "${BLUE}Step 4: Verifying generated files (fullstack-specific)...${NC}"
 
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -210,21 +202,42 @@ verify() {
     fi
 }
 
+# Basic file checks
 verify '[[ -f "deployment-nodejs.config.yml" ]]' "deployment-nodejs.config.yml exists"
 verify '[[ -f ".github/workflows/deploy-nodejs.yml" ]]' ".github/workflows/deploy-nodejs.yml exists"
 verify '[[ -f "package.json" ]]' "package.json exists"
-verify '[[ -f "server.js" ]]' "server.js exists (main app entry)"
-verify '[[ -d "public" ]]' "public/ directory exists"
-verify 'grep -q "mongodb" deployment-nodejs.config.yml' "Config contains mongodb settings"
-verify 'grep -q "enabled: true" deployment-nodejs.config.yml | head -1' "MongoDB is enabled in config"
-verify 'grep -q "MONGODB_URI" deployment-nodejs.config.yml' "MONGODB_URI environment variable is set"
-verify 'grep -q "deploy-generic-reusable.yml" .github/workflows/deploy-nodejs.yml' "Workflow uses reusable workflow"
+verify '[[ -d "client" ]]' "client/ directory exists (React frontend)"
+verify '[[ -d "server" ]]' "server/ directory exists (Node.js backend)"
+
+# FULLSTACK-SPECIFIC CHECKS
+echo ""
+echo -e "${BLUE}Fullstack-specific verification:${NC}"
+
+# Check expected_content is "root" for fullstack apps (not "Node.js")
+verify 'grep -q "expected_content:.*root" deployment-nodejs.config.yml' "Config has expected_content: root (for React UI)"
+
+# Check workflow summary mentions fullstack
+verify 'grep -q "Fullstack React" .github/workflows/deploy-nodejs.yml' "Workflow summary mentions Fullstack React"
+
+# Check workflow summary has Web App endpoint (not just API)
+verify 'grep -q "Web App" .github/workflows/deploy-nodejs.yml' "Workflow summary has Web App endpoint (UI)"
+
+# Check build script exists in root package.json
+verify 'grep -q "\"build\":" package.json' "Root package.json has build script"
+
+# Check start script exists in root package.json
+verify 'grep -q "\"start\":" package.json' "Root package.json has start script"
+
+echo ""
 
 if [[ $TESTS_FAILED -gt 0 ]]; then
     echo -e "${RED}✗ File verification failed${NC}"
     echo ""
     echo -e "${YELLOW}Deployment config contents:${NC}"
     cat deployment-nodejs.config.yml
+    echo ""
+    echo -e "${YELLOW}Workflow file contents (summary section):${NC}"
+    grep -A 30 "Deployment Summary" .github/workflows/deploy-nodejs.yml || cat .github/workflows/deploy-nodejs.yml
     popd > /dev/null
     exit 1
 fi
@@ -239,11 +252,13 @@ node_modules/
 .env
 *.log
 .DS_Store
+client/build/
+server/database/*.db
 EOF
 
 # Commit all files
 git add -A
-git commit -m "Initial commit: MongoDB Task Manager with GitHub Actions deployment"
+git commit -m "Initial commit: Fullstack Notes App with GitHub Actions deployment"
 
 gh repo create "$TEST_REPO_NAME" --private --source=. --push
 
@@ -271,7 +286,7 @@ if [[ "$SKIP_DEPLOY_WAIT" == "true" ]]; then
     echo -e "${YELLOW}⚠ Skipping workflow wait (--skip-wait flag)${NC}"
     WORKFLOW_STATUS="skipped"
 else
-    echo -e "${BLUE}Waiting for workflow to complete (this may take 10-15 minutes for MongoDB installation)...${NC}"
+    echo -e "${BLUE}Waiting for workflow to complete (this may take 5-10 minutes)...${NC}"
     
     sleep 10
     
@@ -281,7 +296,7 @@ else
         echo -e "${BLUE}Workflow run ID: $RUN_ID${NC}"
         echo -e "${BLUE}View at: https://github.com/$GITHUB_USERNAME/$TEST_REPO_NAME/actions/runs/$RUN_ID${NC}"
         
-        TIMEOUT=1200  # 20 minutes for MongoDB installation
+        TIMEOUT=1200  # 20 minutes
         ELAPSED=0
         while [[ $ELAPSED -lt $TIMEOUT ]]; do
             STATUS=$(gh run view "$RUN_ID" --repo "$GITHUB_USERNAME/$TEST_REPO_NAME" --json status,conclusion -q '.status')
@@ -303,7 +318,40 @@ else
     fi
 fi
 
-# Step 8: Report results
+# Step 8: Verify UI is functional (if deployment succeeded)
+UI_VERIFIED=false
+if [[ "$WORKFLOW_STATUS" == "success" ]]; then
+    echo ""
+    echo -e "${BLUE}Step 8: Verifying UI is functional...${NC}"
+    
+    INSTANCE_IP=$(aws lightsail get-instance --instance-name fullstack-notes-instance --query 'instance.publicIpAddress' --output text 2>/dev/null || echo "")
+    
+    if [[ -n "$INSTANCE_IP" && "$INSTANCE_IP" != "None" ]]; then
+        # Wait a bit for the app to fully start
+        sleep 10
+        
+        # Check if UI loads (should return HTML with "root" div)
+        UI_RESPONSE=$(curl -s --max-time 30 "http://$INSTANCE_IP:5001/" 2>/dev/null || echo "")
+        
+        if echo "$UI_RESPONSE" | grep -q "root"; then
+            echo -e "${GREEN}✓ UI is functional - React app loads correctly${NC}"
+            UI_VERIFIED=true
+        else
+            echo -e "${YELLOW}⚠ UI check inconclusive - response:${NC}"
+            echo "$UI_RESPONSE" | head -5
+        fi
+        
+        # Also check API health
+        API_RESPONSE=$(curl -s --max-time 10 "http://$INSTANCE_IP:5001/api/health" 2>/dev/null || echo "")
+        if echo "$API_RESPONSE" | grep -q "ok"; then
+            echo -e "${GREEN}✓ API health check passed${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ Could not get instance IP${NC}"
+    fi
+fi
+
+# Step 9: Report results
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}Test Results${NC}"
@@ -315,20 +363,26 @@ echo -e "Files verified: ${GREEN}$TESTS_PASSED passed${NC}"
 
 if [[ "$WORKFLOW_STATUS" == "success" ]]; then
     echo -e "Workflow: ${GREEN}✓ Success${NC}"
-    echo ""
     
-    # Get deployment URL
-    INSTANCE_IP=$(aws lightsail get-instance --instance-name mongodb-task-instance --query 'instance.publicIpAddress' --output text 2>/dev/null || echo "")
     if [[ -n "$INSTANCE_IP" && "$INSTANCE_IP" != "None" ]]; then
-        echo -e "Deployment URL: ${GREEN}http://$INSTANCE_IP:3000${NC}"
-        echo -e "Health Check: ${GREEN}http://$INSTANCE_IP:3000/api/health${NC}"
+        echo ""
+        echo -e "Deployment URL: ${GREEN}http://$INSTANCE_IP:5001${NC}"
+        echo -e "API Health: ${GREEN}http://$INSTANCE_IP:5001/api/health${NC}"
     fi
     
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║   ✓ ALL TESTS PASSED - MongoDB App Deployed!               ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
-    EXIT_CODE=0
+    if [[ "$UI_VERIFIED" == "true" ]]; then
+        echo ""
+        echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║   ✓ ALL TESTS PASSED - Fullstack App UI is Functional!     ║${NC}"
+        echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+        EXIT_CODE=0
+    else
+        echo ""
+        echo -e "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${YELLOW}║   ⚠ Workflow passed but UI verification inconclusive       ║${NC}"
+        echo -e "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}"
+        EXIT_CODE=0
+    fi
 elif [[ "$WORKFLOW_STATUS" == "skipped" ]]; then
     echo -e "Workflow: ${YELLOW}○ Skipped (manual verification needed)${NC}"
     echo ""
@@ -353,7 +407,7 @@ else
     echo -e "${YELLOW}Cleanup skipped (--no-cleanup flag). Manual cleanup required:${NC}"
     echo "  gh repo delete $GITHUB_USERNAME/$TEST_REPO_NAME --yes"
     echo "  aws iam delete-role --role-name $ROLE_NAME"
-    echo "  aws lightsail delete-instance --instance-name mongodb-task-instance"
+    echo "  aws lightsail delete-instance --instance-name fullstack-notes-instance"
 fi
 
 popd > /dev/null

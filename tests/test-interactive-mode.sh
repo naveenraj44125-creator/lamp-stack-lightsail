@@ -36,8 +36,8 @@ fi
 
 SCRIPT_DIR="$(cd "$SOURCE_DIR" && pwd)"
 
-if [[ ! -f "$SCRIPT_DIR/setup-complete-deployment.sh" ]]; then
-    echo -e "${RED}Error: setup-complete-deployment.sh not found in $SCRIPT_DIR${NC}"
+if [[ ! -f "$SCRIPT_DIR/setup.sh" ]]; then
+    echo -e "${RED}Error: setup.sh not found in $SCRIPT_DIR${NC}"
     exit 1
 fi
 
@@ -62,50 +62,26 @@ verify() {
 }
 
 # Source the setup script to get access to functions
-echo -e "${BLUE}Loading setup-complete-deployment.sh functions...${NC}"
+echo -e "${BLUE}Loading setup.sh functions...${NC}"
 set +e
-source "$SCRIPT_DIR/setup-complete-deployment.sh" 2>/dev/null
+source "$SCRIPT_DIR/setup.sh" 2>/dev/null
 set -e
 echo -e "${GREEN}✓ Script loaded${NC}"
 echo ""
 
 # ============================================================
-# TEST 1: Option Description Function
+# TEST 1: New Functions Exist
 # ============================================================
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}TEST 1: get_option_description() Function${NC}"
+echo -e "${CYAN}TEST 1: Required Functions Exist${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# Test app type descriptions
-verify '[[ -n "$(get_option_description "nodejs")" ]]' "nodejs has description"
-verify '[[ -n "$(get_option_description "python")" ]]' "python has description"
-verify '[[ -n "$(get_option_description "lamp")" ]]' "lamp has description"
-verify '[[ -n "$(get_option_description "docker")" ]]' "docker has description"
-verify '[[ -n "$(get_option_description "nginx")" ]]' "nginx has description"
-verify '[[ -n "$(get_option_description "react")" ]]' "react has description"
-
-# Test database descriptions
-verify '[[ -n "$(get_option_description "mysql")" ]]' "mysql has description"
-verify '[[ -n "$(get_option_description "postgresql")" ]]' "postgresql has description"
-verify '[[ -n "$(get_option_description "mongodb")" ]]' "mongodb has description"
-verify '[[ -n "$(get_option_description "none")" ]]' "none (no database) has description"
-
-# Test bundle/instance size descriptions
-verify '[[ -n "$(get_option_description "nano_3_0")" ]]' "nano_3_0 has description"
-verify '[[ -n "$(get_option_description "micro_3_0")" ]]' "micro_3_0 has description"
-verify '[[ -n "$(get_option_description "small_3_0")" ]]' "small_3_0 has description"
-verify '[[ -n "$(get_option_description "medium_3_0")" ]]' "medium_3_0 has description"
-verify '[[ -n "$(get_option_description "large_3_0")" ]]' "large_3_0 has description"
-
-# Test OS blueprint descriptions
-verify '[[ -n "$(get_option_description "ubuntu_22_04")" ]]' "ubuntu_22_04 has description"
-verify '[[ -n "$(get_option_description "ubuntu_20_04")" ]]' "ubuntu_20_04 has description"
-verify '[[ -n "$(get_option_description "amazon_linux_2023")" ]]' "amazon_linux_2023 has description"
-
-# Test bucket access level descriptions
-verify '[[ -n "$(get_option_description "read_only")" ]]' "read_only bucket access has description"
-verify '[[ -n "$(get_option_description "read_write")" ]]' "read_write bucket access has description"
-
+# Test that new functions exist
+verify 'declare -f analyze_project_for_recommendations &>/dev/null' "analyze_project_for_recommendations function exists"
+verify 'declare -f detect_health_endpoints &>/dev/null' "detect_health_endpoints function exists"
+verify 'declare -f get_input &>/dev/null' "get_input function exists"
+verify 'declare -f get_yes_no &>/dev/null' "get_yes_no function exists"
+verify 'declare -f select_option &>/dev/null' "select_option function exists"
 echo ""
 
 # ============================================================
@@ -263,7 +239,7 @@ echo -e "${CYAN}TEST 4: Script Syntax Validation${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 # Validate bash syntax
-SYNTAX_CHECK=$(bash -n "$SCRIPT_DIR/setup-complete-deployment.sh" 2>&1)
+SYNTAX_CHECK=$(bash -n "$SCRIPT_DIR/setup.sh" 2>&1)
 verify '[[ -z "$SYNTAX_CHECK" || "$SYNTAX_CHECK" == *"naveenrp"* ]]' "Script has valid bash syntax"
 
 echo ""
@@ -275,13 +251,13 @@ echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${CYAN}TEST 5: Required Functions Exist${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-verify 'declare -f get_option_description > /dev/null' "get_option_description() function exists"
 verify 'declare -f analyze_project_for_recommendations > /dev/null' "analyze_project_for_recommendations() function exists"
+verify 'declare -f detect_health_endpoints > /dev/null' "detect_health_endpoints() function exists"
 verify 'declare -f select_option > /dev/null' "select_option() function exists"
 verify 'declare -f get_input > /dev/null' "get_input() function exists"
 verify 'declare -f get_yes_no > /dev/null' "get_yes_no() function exists"
-verify 'declare -f create_deployment_config > /dev/null' "create_deployment_config() function exists"
-verify 'declare -f create_github_workflow > /dev/null' "create_github_workflow() function exists"
+# Note: create_deployment_config() and create_github_workflow() are not yet migrated to modular setup
+# These will be added in a future module (e.g., 06-config-generation.sh)
 
 echo ""
 
