@@ -120,6 +120,17 @@ parse_args() {
 
 # Main execution function
 main() {
+    # Capture working directory at script start
+    SCRIPT_START_DIR="$(pwd)"
+    export SCRIPT_START_DIR
+    
+    # Validate working directory is writable
+    if [[ ! -w "$SCRIPT_START_DIR" ]]; then
+        echo -e "${RED}❌ Error: Working directory is not writable: $SCRIPT_START_DIR${NC}"
+        echo -e "${YELLOW}Please run the script from a writable directory or fix permissions${NC}"
+        exit 1
+    fi
+    
     # Clear screen for fresh start (only in interactive mode)
     if [[ "$AUTO_MODE" != "true" ]]; then
         clear 2>/dev/null || true
@@ -435,13 +446,13 @@ GITIGNORE
     # Operating system
     if [[ "$FULLY_AUTOMATED" == "true" ]]; then
         # Validate blueprint
-        if [[ ! "$BLUEPRINT_ID" =~ ^(ubuntu-22-04|ubuntu-20-04|amazon-linux-2023)$ ]]; then
-            echo -e "${RED}❌ Invalid BLUEPRINT_ID: $BLUEPRINT_ID. Must be one of: ubuntu-22-04, ubuntu-20-04, amazon-linux-2023${NC}"
+        if [[ ! "$BLUEPRINT_ID" =~ ^(ubuntu_22_04|ubuntu_24_04|amazon_linux_2023)$ ]]; then
+            echo -e "${RED}❌ Invalid BLUEPRINT_ID: $BLUEPRINT_ID. Must be one of: ubuntu_22_04, ubuntu_24_04, amazon_linux_2023${NC}"
             exit 1
         fi
         echo -e "${GREEN}✓ Using BLUEPRINT_ID: $BLUEPRINT_ID${NC}"
     else
-        BLUEPRINTS=("ubuntu-22-04" "ubuntu-20-04" "amazon-linux-2023")
+        BLUEPRINTS=("ubuntu_22_04" "ubuntu_24_04" "amazon_linux_2023")
         BLUEPRINT_ID=$(select_option "Choose operating system:" "1" "${BLUEPRINTS[@]}")
     fi
     

@@ -14,6 +14,42 @@
 # - Showing deployment warnings
 ################################################################################
 
+# Function to analyze project using MCP server
+# Returns 0 on success, 1 on failure (graceful degradation)
+analyze_project_with_mcp() {
+    local project_path="${1:-.}"
+    
+    # Check if mcp command is available
+    if ! command -v mcp &> /dev/null; then
+        return 1
+    fi
+    
+    # Call MCP server with timeout (30 seconds)
+    local mcp_result=""
+    mcp_result=$(timeout 30 mcp analyze-project --path "$project_path" 2>/dev/null)
+    
+    if [[ $? -eq 0 && -n "$mcp_result" ]]; then
+        # Check if jq is available for JSON parsing
+        if ! command -v jq &> /dev/null; then
+            return 1
+        fi
+        
+        # Parse JSON response
+        RECOMMENDED_APP_TYPE=$(echo "$mcp_result" | jq -r '.app_type // ""' 2>/dev/null)
+        RECOMMENDED_DATABASE=$(echo "$mcp_result" | jq -r '.database // "none"' 2>/dev/null)
+        RECOMMENDED_BUNDLE=$(echo "$mcp_result" | jq -r '.bundle // "micro_3_0"' 2>/dev/null)
+        RECOMMENDED_BUCKET=$(echo "$mcp_result" | jq -r '.needs_storage // "false"' 2>/dev/null)
+        ANALYSIS_CONFIDENCE=$(echo "$mcp_result" | jq -r '.confidence // 0' 2>/dev/null)
+        
+        # Validate parsed values
+        if [[ -n "$RECOMMENDED_APP_TYPE" && "$RECOMMENDED_APP_TYPE" != "null" ]]; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
 # Function to analyze project using MCP server's project analyzer
 # This provides intelligent recommendations for deployment configuration
 analyze_project_for_recommendations() {
@@ -31,6 +67,43 @@ analyze_project_for_recommendations() {
     RECOMMENDED_BUNDLE="micro_3_0"
     RECOMMENDED_BUCKET="false"
     ANALYSIS_CONFIDENCE=0
+    
+    # Try MCP server first
+    if analyze_project_with_mcp "$project_path"; then
+        echo -e "${GREEN}✓ AI analysis complete!${NC}"
+        echo ""
+        
+        # Display MCP recommendations
+        if [[ -n "$RECOMMENDED_APP_TYPE" ]]; then
+            echo -e "${GREEN}✓ Project Analysis Complete!${NC}"
+            echo ""
+            echo -e "┌─────────────────────────────────────────────────────────────┐"
+            echo -e "│ ${CYAN}🤖 AI Recommendations${NC} (${ANALYSIS_CONFIDENCE}% confidence)"
+            echo -e "├─────────────────────────────────────────────────────────────┤"
+            echo -e "│   ${BLUE}Recommended App Type:${NC} ${RECOMMENDED_APP_TYPE}                             │"
+            
+            if [[ -n "$RECOMMENDED_DATABASE" && "$RECOMMENDED_DATABASE" != "none" ]]; then
+                echo -e "│   ${BLUE}Recommended Database:${NC} ${RECOMMENDED_DATABASE}                         │"
+            fi
+            
+            echo -e "│   ${BLUE}Recommended Instance:${NC} ${RECOMMENDED_BUNDLE}                          │"
+            
+            if [[ "$RECOMMENDED_BUCKET" == "true" ]]; then
+                echo -e "│   ${BLUE}Storage Bucket:${NC} Recommended (file uploads detected)      │"
+            fi
+            
+            echo -e "└─────────────────────────────────────────────────────────────┘"
+            echo ""
+            echo -e "${YELLOW}★ Recommended options will be highlighted in the menus below${NC}"
+            echo ""
+        fi
+        
+        return 0
+    fi
+    
+    # Fall back to file-based detection if MCP unavailable
+    echo -e "${YELLOW}ℹ MCP server unavailable, using file-based detection...${NC}"
+    echo ""
     
     local detected_frameworks=()
     local detected_databases=()

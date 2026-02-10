@@ -47,6 +47,12 @@ create_deployment_config() {
     
     echo -e "${BLUE}Creating deployment configuration for $app_type...${NC}"
     
+    # Ensure we're in the working directory
+    cd "$SCRIPT_START_DIR" || {
+        echo -e "${RED}❌ Error: Cannot access working directory: $SCRIPT_START_DIR${NC}"
+        exit 1
+    }
+    
     # Base configuration that matches our existing examples
     cat > "deployment-${app_type}.config.yml" << EOF
 # ${app_name} Deployment Configuration
@@ -649,7 +655,14 @@ EOF
 EOF
     fi
 
-    echo -e "${GREEN}✓ Created deployment-${app_type}.config.yml${NC}"
+    # Verify file was created successfully
+    if [[ ! -f "deployment-${app_type}.config.yml" ]]; then
+        echo -e "${RED}❌ Error: Failed to create deployment-${app_type}.config.yml${NC}"
+        echo -e "${YELLOW}Expected location: $(realpath "$SCRIPT_START_DIR")/deployment-${app_type}.config.yml${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Created: $(realpath "deployment-${app_type}.config.yml")${NC}"
     
     # Show deployment warnings and checks
     show_app_deployment_warnings "$app_type"
@@ -663,6 +676,12 @@ create_github_workflow() {
     local aws_region="$3"
     
     echo -e "${BLUE}Creating GitHub Actions workflow...${NC}"
+    
+    # Ensure we're in the working directory
+    cd "$SCRIPT_START_DIR" || {
+        echo -e "${RED}❌ Error: Cannot access working directory: $SCRIPT_START_DIR${NC}"
+        exit 1
+    }
     
     mkdir -p .github/workflows
     
@@ -836,7 +855,14 @@ EOF
           fi
 EOF
 
-    echo -e "${GREEN}✓ Created .github/workflows/deploy-${app_type}.yml${NC}"
+    # Verify file was created successfully
+    if [[ ! -f ".github/workflows/deploy-${app_type}.yml" ]]; then
+        echo -e "${RED}❌ Error: Failed to create .github/workflows/deploy-${app_type}.yml${NC}"
+        echo -e "${YELLOW}Expected location: $(realpath "$SCRIPT_START_DIR")/.github/workflows/deploy-${app_type}.yml${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Created: $(realpath ".github/workflows/deploy-${app_type}.yml")${NC}"
 }
 
 

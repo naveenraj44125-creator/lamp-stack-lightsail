@@ -249,13 +249,13 @@ get_option_description() {
             ;;
         
         # OS blueprints
-        "ubuntu-22-04")
+        "ubuntu_22_04")
             echo "Ubuntu 22.04 LTS (Recommended)"
             ;;
-        "ubuntu-20-04")
-            echo "Ubuntu 20.04 LTS"
+        "ubuntu_24_04")
+            echo "Ubuntu 24.04 LTS (Newest)"
             ;;
-        "amazon-linux-2023")
+        "amazon_linux_2023")
             echo "Amazon Linux 2023"
             ;;
         
