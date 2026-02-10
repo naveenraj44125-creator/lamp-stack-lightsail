@@ -731,6 +731,62 @@ console.log(JSON.stringify(analysis));
     fi
 }
 
+# Function to detect health check endpoints in existing code
+detect_health_endpoints() {
+    local app_type="$1"
+    local detected_endpoints=()
+    
+    case $app_type in
+        "nodejs")
+            # Check multiple possible server file locations
+            local server_files=()
+            [[ -f "server/server.js" ]] && server_files+=("server/server.js")
+            [[ -f "server/index.js" ]] && server_files+=("server/index.js")
+            [[ -f "server.js" ]] && server_files+=("server.js")
+            [[ -f "app.js" ]] && server_files+=("app.js")
+            [[ -f "index.js" ]] && server_files+=("index.js")
+            [[ -f "src/index.ts" ]] && server_files+=("src/index.ts")
+            [[ -f "src/server.ts" ]] && server_files+=("src/server.ts")
+            
+            for file in "${server_files[@]}"; do
+                # Look for common health endpoint patterns
+                if grep -qE "\.get\(['\"]/(api/)?health['\"]|\.get\(['\"]/(api/)?status['\"]|\.get\(['\"]/(api/)?ping['\"]" "$file" 2>/dev/null; then
+                    # Extract the actual endpoint path
+                    local endpoint=$(grep -oE "\.get\(['\"]/(api/)?(health|status|ping)['\"]" "$file" 2>/dev/null | head -1 | sed "s/.*['\"]//;s/['\"].*//" )
+                    [[ -n "$endpoint" ]] && detected_endpoints+=("$endpoint")
+                fi
+            done
+            ;;
+        "python")
+            local python_files=("app.py" "main.py" "server.py" "src/app.py" "src/main.py")
+            for file in "${python_files[@]}"; do
+                [[ ! -f "$file" ]] && continue
+                if grep -qE "@app\.route\(['\"]/(api/)?(health|status|ping)['\"]" "$file" 2>/dev/null; then
+                    local endpoint=$(grep -oE "@app\.route\(['\"]/(api/)?(health|status|ping)['\"]" "$file" 2>/dev/null | head -1 | sed "s/.*['\"]//;s/['\"].*//" )
+                    [[ -n "$endpoint" ]] && detected_endpoints+=("$endpoint")
+                fi
+            done
+            ;;
+        "lamp")
+            # Check for PHP health endpoints
+            if [[ -f "api/health.php" ]]; then
+                detected_endpoints+=("/api/health.php")
+            elif [[ -f "health.php" ]]; then
+                detected_endpoints+=("/health.php")
+            elif [[ -f "api/status.php" ]]; then
+                detected_endpoints+=("/api/status.php")
+            fi
+            ;;
+    esac
+    
+    # Return the first detected endpoint, or empty if none found
+    if [[ ${#detected_endpoints[@]} -gt 0 ]]; then
+        echo "${detected_endpoints[0]}"
+        return 0
+    fi
+    return 1
+}
+
 # Function to check if we're in a git repository (checks for .git in current directory, not parent)
 check_git_repo() {
     # Check if .git exists in current directory (not inherited from parent)
@@ -1798,20 +1854,26 @@ PHP_EOF
             
             if [[ -n "$existing_entry_point" ]]; then
                 echo -e "${GREEN}  ✓ Detected existing Node.js app with entry point: $existing_entry_point${NC}"
-                echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
+                echo ""
                 
-                # Determine the correct start command based on entry point location
-                local start_command=""
-                if [[ "$server_in_subdir" == "true" ]]; then
-                    # For server in subdirectory, need to handle npm install in server dir too
-                    start_command="cd server && npm install && NODE_ENV=production node $(basename $existing_entry_point)"
-                else
-                    start_command="node ${existing_entry_point}"
-                fi
+                # Ask user if they want to create template files
+                CREATE_TEMPLATES=$(get_yes_no "Create template app.js file anyway?" "false")
                 
-                # Only create package.json if it doesn't exist
-                if create_file_if_not_exists "package.json"; then
-                cat > "package.json" << EOF
+                if [[ "$CREATE_TEMPLATES" == "false" ]]; then
+                    echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
+                    
+                    # Determine the correct start command based on entry point location
+                    local start_command=""
+                    if [[ "$server_in_subdir" == "true" ]]; then
+                        # For server in subdirectory, need to handle npm install in server dir too
+                        start_command="cd server && npm install && NODE_ENV=production node $(basename $existing_entry_point)"
+                    else
+                        start_command="node ${existing_entry_point}"
+                    fi
+                    
+                    # Only create package.json if it doesn't exist
+                    if create_file_if_not_exists "package.json"; then
+                    cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
@@ -1834,20 +1896,20 @@ PHP_EOF
   }
 }
 EOF
-                fi
-                
-                # Check if existing package.json has incorrect start script
-                if [[ -f "package.json" ]] && [[ "$server_in_subdir" == "true" ]]; then
-                    local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
-                    if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
-                        echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
-                        
-                        # Use node to safely update package.json
-                        node -e "
-                            const fs = require('fs');
-                            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-                            pkg.scripts = pkg.scripts || {};
-                            pkg.scripts.start = '${start_command}';
+                    fi
+                    
+                    # Check if existing package.json has incorrect start script
+                    if [[ -f "package.json" ]] && [[ "$server_in_subdir" == "true" ]]; then
+                        local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
+                        if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
+                            echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
+                            
+                            # Use node to safely update package.json
+                            node -e "
+                                const fs = require('fs');
+                                const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                                pkg.scripts = pkg.scripts || {};
+                                pkg.scripts.start = '${start_command}';
                             pkg.main = '${existing_entry_point}';
                             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
                             console.log('Fixed package.json start script');
@@ -1856,8 +1918,17 @@ EOF
                         }
                         echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
                     fi
+                    
+                    # Return early - skip template creation
+                    return 0
                 fi
-            else
+                
+                # User chose to create templates despite existing app
+                echo -e "${BLUE}  Creating template files...${NC}"
+            fi
+            
+            # Create template files (either no existing app, or user requested templates)
+            if [[ -z "$existing_entry_point" ]] || [[ "$CREATE_TEMPLATES" == "true" ]]; then
                 # No existing entry point found - create template files
                 if create_file_if_not_exists "package.json"; then
                 cat > "package.json" << EOF
@@ -3634,18 +3705,35 @@ GITIGNORE
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
         echo -e "${YELLOW}The deployment will test an endpoint to verify your app is running.${NC}"
-        echo -e "${YELLOW}Default is '/' but API-only apps may need a different endpoint.${NC}"
         echo ""
         
-        CUSTOM_ENDPOINT=$(get_yes_no "Customize verification endpoint?" "false")
-        if [[ "$CUSTOM_ENDPOINT" == "true" ]]; then
-            VERIFICATION_ENDPOINT=$(get_input "Enter verification endpoint path" "/api/health")
-            echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
-            
-            # Ask about expected content
-            EXPECTED_CONTENT=$(get_input "Enter expected content in response (leave empty for any)" "")
-            if [[ -n "$EXPECTED_CONTENT" ]]; then
-                echo -e "${GREEN}✓ Will check for content: $EXPECTED_CONTENT${NC}"
+        # Try to auto-detect health endpoint
+        DETECTED_HEALTH_ENDPOINT=$(detect_health_endpoints "$APP_TYPE")
+        
+        if [[ -n "$DETECTED_HEALTH_ENDPOINT" ]]; then
+            echo -e "${GREEN}✓ Detected health endpoint in your code: ${DETECTED_HEALTH_ENDPOINT}${NC}"
+            echo ""
+            USE_DETECTED=$(get_yes_no "Use detected endpoint for health checks?" "true")
+            if [[ "$USE_DETECTED" == "true" ]]; then
+                VERIFICATION_ENDPOINT="$DETECTED_HEALTH_ENDPOINT"
+                echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
+            else
+                VERIFICATION_ENDPOINT=$(get_input "Enter verification endpoint path" "/")
+                echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
+            fi
+        else
+            echo -e "${YELLOW}Default is '/' but API-only apps may need a different endpoint.${NC}"
+            echo ""
+            CUSTOM_ENDPOINT=$(get_yes_no "Customize verification endpoint?" "false")
+            if [[ "$CUSTOM_ENDPOINT" == "true" ]]; then
+                VERIFICATION_ENDPOINT=$(get_input "Enter verification endpoint path" "/api/health")
+                echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
+                
+                # Ask about expected content
+                EXPECTED_CONTENT=$(get_input "Enter expected content in response (leave empty for any)" "")
+                if [[ -n "$EXPECTED_CONTENT" ]]; then
+                    echo -e "${GREEN}✓ Will check for content: $EXPECTED_CONTENT${NC}"
+                fi
             fi
         fi
     fi
