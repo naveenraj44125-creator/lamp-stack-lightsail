@@ -595,21 +595,20 @@ GITIGNORE
         echo -e "${YELLOW}The deployment will test an endpoint to verify your app is running.${NC}"
         echo ""
         
-        # Try to auto-detect health endpoint
-        DETECTED_HEALTH_ENDPOINT=$(detect_health_endpoints "$APP_TYPE")
-        
-        if [[ -n "$DETECTED_HEALTH_ENDPOINT" ]]; then
-            echo -e "${GREEN}✓ Detected health endpoint in your code: ${DETECTED_HEALTH_ENDPOINT}${NC}"
+        # Use recommended health endpoint from analysis if available
+        if [[ -n "$RECOMMENDED_HEALTH_ENDPOINT" ]]; then
+            echo -e "${GREEN}★ AI detected health endpoint in your code: ${RECOMMENDED_HEALTH_ENDPOINT}${NC}"
             echo ""
             USE_DETECTED=$(get_yes_no "Use detected endpoint for health checks?" "true")
             if [[ "$USE_DETECTED" == "true" ]]; then
-                VERIFICATION_ENDPOINT="$DETECTED_HEALTH_ENDPOINT"
+                VERIFICATION_ENDPOINT="$RECOMMENDED_HEALTH_ENDPOINT"
                 echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
             else
                 VERIFICATION_ENDPOINT=$(get_input "Enter verification endpoint path" "/")
                 echo -e "${GREEN}✓ Will verify deployment using: $VERIFICATION_ENDPOINT${NC}"
             fi
         else
+            echo -e "${YELLOW}No health endpoint detected in your code.${NC}"
             echo -e "${YELLOW}Default is '/' but API-only apps may need a different endpoint.${NC}"
             echo ""
             CUSTOM_ENDPOINT=$(get_yes_no "Customize verification endpoint?" "false")

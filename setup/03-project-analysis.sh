@@ -30,11 +30,13 @@ analyze_project_for_recommendations() {
     RECOMMENDED_DATABASE="none"
     RECOMMENDED_BUNDLE="micro_3_0"
     RECOMMENDED_BUCKET="false"
+    RECOMMENDED_HEALTH_ENDPOINT=""
     ANALYSIS_CONFIDENCE=0
     
     local detected_frameworks=()
     local detected_databases=()
     local needs_storage=false
+    local detected_health_endpoints=()
     
     # Detect application type
     if [[ -f "package.json" ]]; then
@@ -180,6 +182,74 @@ analyze_project_for_recommendations() {
         RECOMMENDED_BUNDLE="small_3_0"
     fi
     
+    # Detect health endpoints based on app type
+    if [[ -n "$RECOMMENDED_APP_TYPE" ]]; then
+        # Node.js health endpoint detection
+        if [[ "$RECOMMENDED_APP_TYPE" == "nodejs" || "$RECOMMENDED_APP_TYPE" == "react" ]]; then
+            local server_files=("server/server.js" "server/index.js" "server.js" "app.js" "index.js" "src/server.js" "src/index.js" "src/app.js")
+            for file in "${server_files[@]}"; do
+                if [[ -f "$file" ]]; then
+                    # Look for health endpoint patterns
+                    if grep -q "'/health'\|'/api/health'\|'/healthcheck'\|'/status'\|'/ping'" "$file" 2>/dev/null; then
+                        local endpoint=$(grep -o "'/[^']*health[^']*'\|'/[^']*status[^']*'\|'/ping'" "$file" | head -1 | tr -d "'")
+                        if [[ -n "$endpoint" ]]; then
+                            detected_health_endpoints+=("$endpoint")
+                            RECOMMENDED_HEALTH_ENDPOINT="$endpoint"
+                            break
+                        fi
+                    fi
+                fi
+            done
+        fi
+        
+        # Python health endpoint detection
+        if [[ "$RECOMMENDED_APP_TYPE" == "python" ]]; then
+            local python_files=("app.py" "main.py" "server.py" "src/app.py" "src/main.py")
+            for file in "${python_files[@]}"; do
+                if [[ -f "$file" ]]; then
+                    if grep -q "'/health'\|'/api/health'\|'/healthcheck'\|'/status'\|'/ping'" "$file" 2>/dev/null; then
+                        local endpoint=$(grep -o "'/[^']*health[^']*'\|'/[^']*status[^']*'\|'/ping'" "$file" | head -1 | tr -d "'")
+                        if [[ -n "$endpoint" ]]; then
+                            detected_health_endpoints+=("$endpoint")
+                            RECOMMENDED_HEALTH_ENDPOINT="$endpoint"
+                            break
+                        fi
+                    fi
+                fi
+            done
+        fi
+        
+        # PHP health endpoint detection
+        if [[ "$RECOMMENDED_APP_TYPE" == "lamp" ]]; then
+            if [[ -f "health.php" ]]; then
+                detected_health_endpoints+=("/health.php")
+                RECOMMENDED_HEALTH_ENDPOINT="/health.php"
+            elif [[ -f "api/health.php" ]]; then
+                detected_health_endpoints+=("/api/health.php")
+                RECOMMENDED_HEALTH_ENDPOINT="/api/health.php"
+            elif [[ -f "status.php" ]]; then
+                detected_health_endpoints+=("/status.php")
+                RECOMMENDED_HEALTH_ENDPOINT="/status.php"
+            fi
+        fi
+        
+        # Docker health endpoint detection (check Dockerfile for HEALTHCHECK)
+        if [[ "$RECOMMENDED_APP_TYPE" == "docker" && -f "Dockerfile" ]]; then
+            if grep -q "HEALTHCHECK" Dockerfile 2>/dev/null; then
+                # Extract just the path from curl command
+                local endpoint=$(grep "HEALTHCHECK" Dockerfile | grep -o "curl.*http[s]*://[^/]*/[^\"' ]*" | sed 's/.*http[s]*:\/\/[^\/]*\(\/[^"'\'' ]*\).*/\1/' | head -1)
+                if [[ -z "$endpoint" ]]; then
+                    # Try simpler pattern for just the path
+                    endpoint=$(grep "HEALTHCHECK" Dockerfile | grep -o "\/[a-zA-Z0-9_/-]*" | head -1)
+                fi
+                if [[ -n "$endpoint" ]]; then
+                    detected_health_endpoints+=("$endpoint")
+                    RECOMMENDED_HEALTH_ENDPOINT="$endpoint"
+                fi
+            fi
+        fi
+    fi
+    
     echo -e "${GREEN}✓ Analysis complete!${NC}"
     echo ""
     
@@ -203,6 +273,10 @@ analyze_project_for_recommendations() {
         
         if [[ "$RECOMMENDED_BUCKET" == "true" ]]; then
             echo -e "│   ${BLUE}Storage:${NC} Recommended (file uploads detected)      │"
+        fi
+        
+        if [[ -n "$RECOMMENDED_HEALTH_ENDPOINT" ]]; then
+            echo -e "│   ${BLUE}Health Endpoint:${NC} ${RECOMMENDED_HEALTH_ENDPOINT}                    │"
         fi
         
         echo -e "└─────────────────────────────────────────────────────────────┘"
