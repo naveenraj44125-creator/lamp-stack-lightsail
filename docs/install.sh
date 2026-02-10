@@ -48,6 +48,8 @@ MODULES=(
     "04-github.sh"
     "05-aws.sh"
     "06-config-generation.sh"
+    "07-deployment.sh"
+    "08-interactive.sh"
 )
 
 for module in "${MODULES[@]}"; do

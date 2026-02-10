@@ -1,5 +1,22 @@
 #!/bin/bash
 
+################################################################################
+# Module: 00-variables.sh
+# Purpose: Define all environment variables and default configuration values
+#          for the AWS Lightsail deployment setup script.
+#
+# Dependencies: None (foundation module)
+#
+# Exports:
+#   - Color variables: RED, GREEN, YELLOW, BLUE, NC
+#   - Configuration: AUTO_MODE, AWS_REGION, APP_VERSION
+#   - MCP recommendations: RECOMMENDED_APP_TYPE, RECOMMENDED_DATABASE, etc.
+#   - Fully automated mode variables: APP_TYPE, APP_NAME, INSTANCE_NAME, etc.
+#   - Verification variables: VERIFICATION_ENDPOINT, HEALTH_CHECK_ENDPOINT, etc.
+#
+# Usage: This module should be sourced first before any other modules.
+################################################################################
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -1,47 +1,32 @@
 #!/bin/bash
 
-# Config Generation Module
-# Generates deployment configuration files and GitHub Actions workflows
-
-# Function to show application-specific warnings for common deployment issues
-show_app_deployment_warnings() {
-    local app_type="$1"
-    
-    echo ""
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}⚠️  IMPORTANT: Pre-Deployment Checklist${NC}"
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    
-    # Common warnings for all app types
-    echo -e "${BLUE}1. Health Check Endpoint:${NC}"
-    echo -e "   Your app needs a PUBLIC endpoint (no auth) for health checks."
-    echo -e "   The deployment will fail if the health endpoint returns 401/403."
-    echo -e "   ${GREEN}Recommended:${NC} Add GET /api/health returning {\"status\": \"ok\"}"
-    echo ""
-    
-    # Node.js specific warnings
-    if [[ "$app_type" == "nodejs" ]]; then
-        echo -e "${BLUE}2. Frontend Serving (Node.js):${NC}"
-        echo -e "   If you have a React/Vue/Angular frontend in /client:"
-        echo -e "   - Add 'npm run build' script to build the frontend"
-        echo -e "   - Server must serve static files: app.use(express.static('client/build'))"
-        echo -e "   - Add catch-all route for SPA: app.get('*', (req,res) => res.sendFile(...))"
-        echo ""
-        
-        echo -e "${BLUE}3. Build Script:${NC}"
-        echo -e "   Ensure package.json has a 'build' script if frontend needs building"
-        echo -e "   ${GREEN}Example:${NC} \"build\": \"cd client && npm install && npm run build\""
-        echo ""
-        
-        echo -e "${BLUE}4. Start Script:${NC}"
-        echo -e "   Root package.json needs a 'start' script for production"
-        echo -e "   ${GREEN}Example:${NC} \"start\": \"cd server && npm start\" or \"start\": \"node app.js\""
-        echo ""
-    fi
-    
-    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-}
+################################################################################
+# Config Generation Module (06-config-generation.sh)
+################################################################################
+#
+# Purpose: Generate deployment configuration files, GitHub Actions workflows,
+#          and example application files for various application types
+#
+# Dependencies:
+#   - 00-variables.sh (color codes, configuration variables)
+#   - 01-utils.sh (to_lowercase, to_uppercase utility functions)
+#   - 03-project-analysis.sh (detect_node_port, detect_fullstack_react,
+#                             show_app_deployment_warnings)
+#
+# Functions:
+#   - create_deployment_config()  : Generate deployment-{type}.config.yml (~500 lines)
+#   - create_github_workflow()    : Generate GitHub Actions workflow files
+#   - create_example_app()        : Generate example application files (~800 lines)
+#
+# App Types Supported:
+#   - lamp (Linux, Apache, MySQL, PHP)
+#   - nodejs (Node.js with Express)
+#   - python (Python with Flask)
+#   - react (React SPA)
+#   - docker (Docker Compose)
+#   - nginx (Static site with Nginx)
+#
+################################################################################
 
 # Function to create deployment configuration based on existing examples
 create_deployment_config() {
@@ -670,6 +655,7 @@ EOF
     show_app_deployment_warnings "$app_type"
 }
 
+
 # Function to create GitHub Actions workflow that matches existing examples
 create_github_workflow() {
     local app_type="$1"
@@ -851,4 +837,929 @@ EOF
 EOF
 
     echo -e "${GREEN}✓ Created .github/workflows/deploy-${app_type}.yml${NC}"
+}
+
+
+# Function to create example application that matches existing examples
+create_example_app() {
+    local app_type="$1"
+    local app_name="$2"
+    
+    echo -e "${BLUE}Creating example ${app_type} application in root directory...${NC}"
+    echo -e "${YELLOW}Note: Existing files will NOT be overwritten${NC}"
+    
+    # Helper function to create file only if it doesn't exist
+    create_file_if_not_exists() {
+        local filepath="$1"
+        if [[ -f "$filepath" ]]; then
+            echo -e "${YELLOW}  ⚠ Skipping $filepath (already exists)${NC}"
+            return 1
+        fi
+        return 0
+    }
+    
+    case $app_type in
+        "lamp")
+            # Create PHP application similar to existing examples
+            if create_file_if_not_exists "index.php"; then
+            cat > "index.php" << 'PHP_EOF'
+<?php
+header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAMP Stack Application</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 LAMP Stack Application</h1>
+            <p>Successfully deployed via GitHub Actions</p>
+        </div>
+        
+        <div class="success">
+            ✅ Application is running successfully!
+        </div>
+        
+        <div class="info">
+            <h3>System Information</h3>
+            <p><strong>PHP Version:</strong> <?php echo phpversion(); ?></p>
+            <p><strong>Server:</strong> <?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'; ?></p>
+            <p><strong>Timestamp:</strong> <?php echo date('Y-m-d H:i:s T'); ?></p>
+        </div>
+        
+        <div class="info">
+            <h3>Database Connection</h3>
+            <?php
+            try {
+                $host = $_ENV['DB_HOST'] ?? 'localhost';
+                $dbname = $_ENV['DB_NAME'] ?? 'app_db';
+                $username = $_ENV['DB_USER'] ?? 'app_user';
+                $password = $_ENV['DB_PASSWORD'] ?? '';
+                
+                if ($password) {
+                    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+                    echo "<p>✅ Database connection successful</p>";
+                } else {
+                    echo "<p>⚠️ Database credentials not configured</p>";
+                }
+            } catch (PDOException $e) {
+                echo "<p>⚠️ Database connection failed: " . $e->getMessage() . "</p>";
+            }
+            ?>
+        </div>
+    </div>
+</body>
+</html>
+PHP_EOF
+            fi
+
+            # Create API test endpoint
+            mkdir -p "api"
+            if create_file_if_not_exists "api/test.php"; then
+            cat > "api/test.php" << 'PHP_EOF'
+<?php
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+
+echo json_encode([
+    'status' => 'success',
+    'message' => 'LAMP Stack API is working',
+    'php_version' => phpversion(),
+    'timestamp' => date('c'),
+    'server' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'
+]);
+?>
+PHP_EOF
+            fi
+            ;;
+        
+        "nodejs")
+            # Create Node.js application similar to existing examples
+            local app_name_lower=$(to_lowercase "${app_name}")
+            
+            # Detect existing Node.js entry point (including server/ subdirectory)
+            local existing_entry_point=""
+            local server_in_subdir=false
+            
+            if [[ -f "server/server.js" ]]; then
+                existing_entry_point="server/server.js"
+                server_in_subdir=true
+            elif [[ -f "server/index.js" ]]; then
+                existing_entry_point="server/index.js"
+                server_in_subdir=true
+            elif [[ -f "server.js" ]]; then
+                existing_entry_point="server.js"
+            elif [[ -f "index.js" ]]; then
+                existing_entry_point="index.js"
+            elif [[ -f "app.js" ]]; then
+                existing_entry_point="app.js"
+            fi
+            
+            if [[ -n "$existing_entry_point" ]]; then
+                echo -e "${GREEN}  ✓ Detected existing Node.js app with entry point: $existing_entry_point${NC}"
+                echo ""
+                
+                # Ask user if they want to create template files
+                CREATE_TEMPLATES=$(get_yes_no "Create template app.js file anyway?" "false")
+                
+                if [[ "$CREATE_TEMPLATES" == "false" ]]; then
+                    echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
+                    
+                    # Determine the correct start command based on entry point location
+                    local start_command=""
+                    if [[ "$server_in_subdir" == "true" ]]; then
+                        # For server in subdirectory, need to handle npm install in server dir too
+                        start_command="cd server && npm install && NODE_ENV=production node $(basename $existing_entry_point)"
+                    else
+                        start_command="node ${existing_entry_point}"
+                    fi
+                    
+                    # Only create package.json if it doesn't exist
+                    if create_file_if_not_exists "package.json"; then
+                    cat > "package.json" << EOF
+{
+  "name": "${app_name_lower}",
+  "version": "1.0.0",
+  "description": "${app_name} Node.js application deployed via GitHub Actions",
+  "main": "${existing_entry_point}",
+  "scripts": {
+    "start": "${start_command}",
+    "dev": "nodemon ${existing_entry_point}",
+    "test": "echo \\"No tests specified\\" && exit 0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+EOF
+                    fi
+                    
+                    # Check if existing package.json has incorrect start script
+                    if [[ -f "package.json" ]] && [[ "$server_in_subdir" == "true" ]]; then
+                        local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
+                        if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
+                            echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
+                            
+                            # Use node to safely update package.json
+                            node -e "
+                                const fs = require('fs');
+                                const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                                pkg.scripts = pkg.scripts || {};
+                                pkg.scripts.start = '${start_command}';
+                                pkg.main = '${existing_entry_point}';
+                                fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                                console.log('Fixed package.json start script');
+                            " 2>/dev/null || {
+                                echo -e "${RED}  ❌ Could not auto-fix package.json - please update start script manually${NC}"
+                            }
+                            echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
+                        fi
+                    fi
+                    
+                    # Return early - skip template creation
+                    return 0
+                fi
+                
+                # User chose to create templates despite existing app
+                echo -e "${BLUE}  Creating template files...${NC}"
+            fi
+            
+            # Create template files (either no existing app, or user requested templates)
+            if [[ -z "$existing_entry_point" ]] || [[ "$CREATE_TEMPLATES" == "true" ]]; then
+                # No existing entry point found - create template files
+                if create_file_if_not_exists "package.json"; then
+                cat > "package.json" << EOF
+{
+  "name": "${app_name_lower}",
+  "version": "1.0.0",
+  "description": "${app_name} Node.js application deployed via GitHub Actions",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "echo \\"No tests specified\\" && exit 0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+EOF
+                fi
+            
+                if create_file_if_not_exists "app.js"; then
+                cat > "app.js" << EOF
+const express = require('express');
+const cors = require('cors');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// Routes
+app.get('/', (req, res) => {
+    res.send(\`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${app_name}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .header { text-align: center; color: #333; margin-bottom: 30px; }
+                .info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🚀 ${app_name}</h1>
+                    <p>Node.js Application deployed via GitHub Actions</p>
+                </div>
+                
+                <div class="success">
+                    ✅ Application is running successfully!
+                </div>
+                
+                <div class="info">
+                    <h3>System Information</h3>
+                    <p><strong>Node.js Version:</strong> \${process.version}</p>
+                    <p><strong>Environment:</strong> \${process.env.NODE_ENV || 'development'}</p>
+                    <p><strong>Timestamp:</strong> \${new Date().toISOString()}</p>
+                </div>
+                
+                <div class="info">
+                    <h3>API Endpoints</h3>
+                    <p><a href="/api/health">Health Check</a></p>
+                    <p><a href="/api/info">System Info</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+    \`);
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+app.get('/api/info', (req, res) => {
+    res.json({
+        status: 'success',
+        message: '${app_name} Node.js Application',
+        version: '1.0.0',
+        node_version: process.version,
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(\`🚀 ${app_name} server running on port \${PORT}\`);
+    console.log(\`📍 Environment: \${process.env.NODE_ENV || 'development'}\`);
+});
+EOF
+                fi
+            fi
+            ;;
+        
+        "python")
+            # Create Python Flask application similar to existing examples
+            if create_file_if_not_exists "requirements.txt"; then
+            cat > "requirements.txt" << 'REQ_EOF'
+Flask==3.0.0
+gunicorn==21.2.0
+flask-cors==4.0.0
+REQ_EOF
+            fi
+            
+            if create_file_if_not_exists "app.py"; then
+            cat > "app.py" << EOF
+from flask import Flask, jsonify, render_template_string
+from flask_cors import CORS
+from datetime import datetime
+import os
+
+app = Flask(__name__)
+CORS(app)
+
+# HTML template
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${app_name}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ${app_name}</h1>
+            <p>Python Flask Application deployed via GitHub Actions</p>
+        </div>
+        
+        <div class="success">
+            ✅ Application is running successfully!
+        </div>
+        
+        <div class="info">
+            <h3>System Information</h3>
+            <p><strong>Python Version:</strong> {{ python_version }}</p>
+            <p><strong>Flask Version:</strong> {{ flask_version }}</p>
+            <p><strong>Environment:</strong> {{ environment }}</p>
+            <p><strong>Timestamp:</strong> {{ timestamp }}</p>
+        </div>
+        
+        <div class="info">
+            <h3>API Endpoints</h3>
+            <p><a href="/api/health">Health Check</a></p>
+            <p><a href="/api/info">System Info</a></p>
+        </div>
+    </div>
+</body>
+</html>
+'''
+
+@app.route('/')
+def home():
+    import sys
+    import flask
+    return render_template_string(HTML_TEMPLATE,
+        python_version=sys.version.split()[0],
+        flask_version=flask.__version__,
+        environment=os.environ.get('FLASK_ENV', 'development'),
+        timestamp=datetime.now().isoformat()
+    )
+
+@app.route('/api/health')
+def health():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/api/info')
+def info():
+    import sys
+    return jsonify({
+        'status': 'success',
+        'message': '${app_name} Python Flask Application',
+        'version': '1.0.0',
+        'python_version': sys.version.split()[0],
+        'environment': os.environ.get('FLASK_ENV', 'development'),
+        'timestamp': datetime.now().isoformat()
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug)
+EOF
+            fi
+            ;;
+        
+        "react")
+            # Create React application similar to existing examples
+            local app_name_lower=$(to_lowercase "${app_name}")
+            if create_file_if_not_exists "package.json"; then
+            cat > "package.json" << EOF
+{
+  "name": "${app_name_lower}",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --passWithNoTests",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
+EOF
+            fi
+            
+            mkdir -p "public"
+            mkdir -p "src"
+            
+            if create_file_if_not_exists "public/index.html"; then
+            cat > "public/index.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="${app_name} React Application" />
+    <title>${app_name}</title>
+</head>
+<body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+</body>
+</html>
+EOF
+            fi
+            
+            if create_file_if_not_exists "src/index.js"; then
+            cat > "src/index.js" << 'JS_EOF'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+JS_EOF
+            fi
+            
+            if create_file_if_not_exists "src/App.js"; then
+            cat > "src/App.js" << EOF
+import React, { useState, useEffect } from 'react';
+import './App.css';
+
+function App() {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>🚀 ${app_name}</h1>
+        <p>React Application deployed via GitHub Actions</p>
+        
+        <div className="success-message">
+          ✅ Application is running successfully!
+        </div>
+        
+        <div className="info-section">
+          <h3>System Information</h3>
+          <p><strong>React Version:</strong> {React.version}</p>
+          <p><strong>Environment:</strong> {process.env.NODE_ENV}</p>
+          <p><strong>Build Time:</strong> {process.env.REACT_APP_BUILD_TIME || 'Not set'}</p>
+          <p><strong>Current Time:</strong> {currentTime.toLocaleString()}</p>
+        </div>
+        
+        <div className="info-section">
+          <h3>Features</h3>
+          <ul>
+            <li>Single Page Application (SPA)</li>
+            <li>Production Build Optimization</li>
+            <li>Static File Serving</li>
+            <li>Responsive Design</li>
+          </ul>
+        </div>
+      </header>
+    </div>
+  );
+}
+
+export default App;
+EOF
+            fi
+
+            if create_file_if_not_exists "src/App.css"; then
+            cat > "src/App.css" << 'CSS_EOF'
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 40px;
+  color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+}
+
+.success-message {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 15px;
+  border-radius: 5px;
+  margin: 20px 0;
+  font-size: 16px;
+}
+
+.info-section {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+  max-width: 600px;
+}
+
+.info-section h3 {
+  margin-top: 0;
+  color: #61dafb;
+}
+
+.info-section p, .info-section li {
+  font-size: 14px;
+  text-align: left;
+}
+
+.info-section ul {
+  text-align: left;
+}
+CSS_EOF
+            fi
+
+            if create_file_if_not_exists "src/index.css"; then
+            cat > "src/index.css" << 'CSS_EOF'
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+CSS_EOF
+            fi
+            ;;
+        
+        "nginx")
+            # Create static site similar to existing examples
+            if create_file_if_not_exists "index.html"; then
+            cat > "index.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${app_name}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
+        .feature-card { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ${app_name}</h1>
+            <p>Nginx Static Site deployed via GitHub Actions</p>
+        </div>
+        
+        <div class="success">
+            ✅ Application is running successfully!
+        </div>
+        
+        <div class="info">
+            <h3>System Information</h3>
+            <p><strong>Server:</strong> Nginx</p>
+            <p><strong>Content Type:</strong> Static HTML/CSS/JS</p>
+            <p><strong>Timestamp:</strong> <span id="timestamp"></span></p>
+        </div>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h4>🌐 Static Content</h4>
+                <p>Fast, efficient static file serving with Nginx</p>
+            </div>
+            <div class="feature-card">
+                <h4>📱 Responsive Design</h4>
+                <p>Mobile-friendly responsive layout</p>
+            </div>
+            <div class="feature-card">
+                <h4>⚡ High Performance</h4>
+                <p>Optimized for speed and reliability</p>
+            </div>
+            <div class="feature-card">
+                <h4>🔒 Secure</h4>
+                <p>HTTPS ready with security headers</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        
+        // Update timestamp every second
+        setInterval(() => {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        }, 1000);
+    </script>
+</body>
+</html>
+EOF
+            fi
+            ;;
+        
+        "docker")
+            # Create Docker application similar to existing examples
+            if create_file_if_not_exists "docker-compose.yml"; then
+            cat > "docker-compose.yml" << EOF
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - APP_NAME=${app_name}
+      - APP_ENV=production
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    environment:
+      - APP_NAME=${app_name}
+      - NODE_ENV=production
+    restart: unless-stopped
+    depends_on:
+      - web
+
+networks:
+  default:
+    name: $(to_lowercase "${app_name}")_network
+EOF
+            fi
+            
+            if create_file_if_not_exists "Dockerfile"; then
+            cat > "Dockerfile" << 'DOCKER_EOF'
+FROM nginx:alpine
+
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy static files
+COPY html/ /usr/share/nginx/html/
+
+# Create directory for logs
+RUN mkdir -p /var/log/nginx
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+DOCKER_EOF
+            fi
+
+            if create_file_if_not_exists "Dockerfile.app"; then
+            cat > "Dockerfile.app" << 'DOCKER_EOF'
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY app/ ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Change ownership
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# Expose port
+EXPOSE 3000
+
+# Start application
+CMD ["node", "index.js"]
+DOCKER_EOF
+            fi
+
+            mkdir -p "html"
+            if create_file_if_not_exists "html/index.html"; then
+            cat > "html/index.html" << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${app_name}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .info { background: #e8f4fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .docker-info { background: #0db7ed; color: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ${app_name}</h1>
+            <p>Docker Application deployed via GitHub Actions</p>
+        </div>
+        
+        <div class="success">
+            ✅ Application is running successfully!
+        </div>
+        
+        <div class="docker-info">
+            <h3>🐳 Docker Configuration</h3>
+            <p><strong>Container:</strong> Multi-container setup with Docker Compose</p>
+            <p><strong>Web Server:</strong> Nginx (Alpine Linux)</p>
+            <p><strong>Application:</strong> Node.js backend service</p>
+            <p><strong>Network:</strong> Custom Docker network</p>
+        </div>
+        
+        <div class="info">
+            <h3>System Information</h3>
+            <p><strong>Deployment:</strong> Docker Compose</p>
+            <p><strong>Environment:</strong> Production</p>
+            <p><strong>Timestamp:</strong> <span id="timestamp"></span></p>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        setInterval(() => {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        }, 1000);
+    </script>
+</body>
+</html>
+EOF
+            fi
+
+            if create_file_if_not_exists "nginx.conf"; then
+            cat > "nginx.conf" << 'NGINX_EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    
+    sendfile        on;
+    keepalive_timeout  65;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    
+    server {
+        listen       80;
+        server_name  localhost;
+        
+        location / {
+            root   /usr/share/nginx/html;
+            index  index.html index.htm;
+            try_files $uri $uri/ /index.html;
+        }
+        
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   /usr/share/nginx/html;
+        }
+    }
+}
+NGINX_EOF
+            fi
+
+            mkdir -p "app"
+            local app_name_lower=$(to_lowercase "${app_name}")
+            if create_file_if_not_exists "package.json"; then
+            cat > "package.json" << EOF
+{
+  "name": "${app_name_lower}-backend",
+  "version": "1.0.0",
+  "description": "${app_name} Docker backend service",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+EOF
+            fi
+
+            if create_file_if_not_exists "app/index.js"; then
+            cat > "app/index.js" << EOF
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        service: '${app_name} Backend',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(\`🚀 ${app_name} backend service running on port \${PORT}\`);
+});
+EOF
+            fi
+            ;;
+    esac
+    
+    echo -e "${GREEN}✓ Created ${app_type} application files in root directory${NC}"
 }
