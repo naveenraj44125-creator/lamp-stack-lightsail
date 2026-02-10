@@ -24,7 +24,7 @@ ANALYSIS_CONFIDENCE=0
 APP_TYPE=${APP_TYPE:-}
 APP_NAME=${APP_NAME:-}
 INSTANCE_NAME=${INSTANCE_NAME:-}
-BLUEPRINT_ID=${BLUEPRINT_ID:-ubuntu_22_04}
+BLUEPRINT_ID=${BLUEPRINT_ID:-ubuntu-22-04}
 BUNDLE_ID=${BUNDLE_ID:-micro_3_0}
 DATABASE_TYPE=${DATABASE_TYPE:-none}
 DB_EXTERNAL=${DB_EXTERNAL:-false}
@@ -2811,13 +2811,13 @@ get_option_description() {
             ;;
         
         # OS blueprints
-        "ubuntu_22_04")
+        "ubuntu-22-04")
             echo "Ubuntu 22.04 LTS (Recommended)"
             ;;
-        "ubuntu_20_04")
+        "ubuntu-20-04")
             echo "Ubuntu 20.04 LTS"
             ;;
-        "amazon_linux_2023")
+        "amazon-linux-2023")
             echo "Amazon Linux 2023"
             ;;
         
@@ -3487,13 +3487,13 @@ GITIGNORE
     # Operating system
     if [[ "$FULLY_AUTOMATED" == "true" ]]; then
         # Validate blueprint
-        if [[ ! "$BLUEPRINT_ID" =~ ^(ubuntu_22_04|ubuntu_20_04|amazon_linux_2023)$ ]]; then
-            echo -e "${RED}❌ Invalid BLUEPRINT_ID: $BLUEPRINT_ID. Must be one of: ubuntu_22_04, ubuntu_20_04, amazon_linux_2023${NC}"
+        if [[ ! "$BLUEPRINT_ID" =~ ^(ubuntu-22-04|ubuntu-20-04|amazon-linux-2023)$ ]]; then
+            echo -e "${RED}❌ Invalid BLUEPRINT_ID: $BLUEPRINT_ID. Must be one of: ubuntu-22-04, ubuntu-20-04, amazon-linux-2023${NC}"
             exit 1
         fi
         echo -e "${GREEN}✓ Using BLUEPRINT_ID: $BLUEPRINT_ID${NC}"
     else
-        BLUEPRINTS=("ubuntu_22_04" "ubuntu_20_04" "amazon_linux_2023")
+        BLUEPRINTS=("ubuntu-22-04" "ubuntu-20-04" "amazon-linux-2023")
         BLUEPRINT_ID=$(select_option "Choose operating system:" "1" "${BLUEPRINTS[@]}")
     fi
     
