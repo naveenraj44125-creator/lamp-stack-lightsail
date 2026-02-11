@@ -870,6 +870,7 @@ EOF
 create_example_app() {
     local app_type="$1"
     local app_name="$2"
+    local custom_entry="${3:-}"  # Optional custom entry point from user
     
     echo -e "${BLUE}Creating example ${app_type} application in root directory...${NC}"
     echo -e "${YELLOW}Note: Existing files will NOT be overwritten${NC}"
@@ -888,16 +889,27 @@ create_example_app() {
         "lamp")
             # Create PHP application similar to existing examples
             
-            # Detect existing PHP entry point using the new detection function
-            local detected_entry=$(detect_entry_point "lamp")
+            # Check for custom entry point first, then detect existing
+            local detected_entry=""
+            if [[ -n "$custom_entry" ]]; then
+                detected_entry="$custom_entry"
+                echo -e "${GREEN}  ✓ Using custom entry point: $detected_entry${NC}"
+            else
+                detected_entry=$(detect_entry_point "lamp")
+            fi
             
             if [[ -n "$detected_entry" ]]; then
-                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
-                echo -e "${BLUE}  Skipping template file creation${NC}"
-                echo ""
-                
-                # Return early - skip template creation
-                return 0
+                if [[ -f "$detected_entry" ]]; then
+                    echo -e "${GREEN}  ✓ Entry point exists: $detected_entry${NC}"
+                    echo -e "${BLUE}  Skipping template file creation${NC}"
+                    echo ""
+                    return 0
+                else
+                    echo -e "${YELLOW}  ⚠️  Custom entry point specified but file doesn't exist: $detected_entry${NC}"
+                    echo -e "${BLUE}  You'll need to create this file manually${NC}"
+                    echo ""
+                    return 0
+                fi
             fi
             
             # No existing entry point found - create template files
@@ -988,13 +1000,25 @@ PHP_EOF
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
             
-            # Detect existing Node.js entry point using the new detection function
-            local detected_entry=$(detect_entry_point "nodejs")
+            # Check for custom entry point first, then detect existing
+            local detected_entry=""
+            if [[ -n "$custom_entry" ]]; then
+                detected_entry="$custom_entry"
+                echo -e "${GREEN}  ✓ Using custom entry point: $detected_entry${NC}"
+            else
+                detected_entry=$(detect_entry_point "nodejs")
+            fi
             
             if [[ -n "$detected_entry" ]]; then
-                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
-                echo -e "${BLUE}  Skipping template file creation${NC}"
-                echo ""
+                if [[ -f "$detected_entry" ]]; then
+                    echo -e "${GREEN}  ✓ Entry point exists: $detected_entry${NC}"
+                    echo -e "${BLUE}  Skipping template file creation${NC}"
+                    echo ""
+                else
+                    echo -e "${YELLOW}  ⚠️  Custom entry point specified but file doesn't exist: $detected_entry${NC}"
+                    echo -e "${BLUE}  You'll need to create this file manually${NC}"
+                    echo ""
+                fi
                 
                 # Determine the correct start command based on entry point location
                 local start_command=""
@@ -1173,16 +1197,27 @@ EOF
         "python")
             # Create Python Flask application similar to existing examples
             
-            # Detect existing Python entry point using the new detection function
-            local detected_entry=$(detect_entry_point "python")
+            # Check for custom entry point first, then detect existing
+            local detected_entry=""
+            if [[ -n "$custom_entry" ]]; then
+                detected_entry="$custom_entry"
+                echo -e "${GREEN}  ✓ Using custom entry point: $detected_entry${NC}"
+            else
+                detected_entry=$(detect_entry_point "python")
+            fi
             
             if [[ -n "$detected_entry" ]]; then
-                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
-                echo -e "${BLUE}  Skipping template file creation${NC}"
-                echo ""
-                
-                # Return early - skip template creation
-                return 0
+                if [[ -f "$detected_entry" ]]; then
+                    echo -e "${GREEN}  ✓ Entry point exists: $detected_entry${NC}"
+                    echo -e "${BLUE}  Skipping template file creation${NC}"
+                    echo ""
+                    return 0
+                else
+                    echo -e "${YELLOW}  ⚠️  Custom entry point specified but file doesn't exist: $detected_entry${NC}"
+                    echo -e "${BLUE}  You'll need to create this file manually${NC}"
+                    echo ""
+                    return 0
+                fi
             fi
             
             # No existing entry point found - create template files

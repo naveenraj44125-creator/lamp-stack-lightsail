@@ -399,6 +399,54 @@ GITIGNORE
         echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         APP_TYPES=("lamp" "nodejs" "python" "react" "docker" "nginx")
         APP_TYPE=$(select_option "Choose your application type:" "1" "app_type" "${APP_TYPES[@]}")
+        
+        # Entry point detection and prompt
+        echo ""
+        echo -e "${CYAN}🔍 Detecting existing entry point...${NC}"
+        DETECTED_ENTRY=$(detect_entry_point "$APP_TYPE")
+        
+        if [[ -n "$DETECTED_ENTRY" ]]; then
+            echo -e "${GREEN}✓ Detected existing entry point: ${DETECTED_ENTRY}${NC}"
+            echo -e "${BLUE}  No template file will be created.${NC}"
+            CUSTOM_ENTRY_POINT="$DETECTED_ENTRY"
+        else
+            echo -e "${YELLOW}⚠️  No existing entry point detected${NC}"
+            echo ""
+            
+            # Show default entry point based on app type
+            local default_entry=""
+            case $APP_TYPE in
+                "nodejs")
+                    default_entry="app.js"
+                    echo -e "${BLUE}  Default entry point for Node.js: ${default_entry}${NC}"
+                    echo -e "${BLUE}  Common alternatives: server.js, index.js, src/index.ts${NC}"
+                    ;;
+                "python")
+                    default_entry="app.py"
+                    echo -e "${BLUE}  Default entry point for Python: ${default_entry}${NC}"
+                    echo -e "${BLUE}  Common alternatives: main.py, server.py${NC}"
+                    ;;
+                "lamp")
+                    default_entry="index.php"
+                    echo -e "${BLUE}  Default entry point for PHP: ${default_entry}${NC}"
+                    echo -e "${BLUE}  Common alternatives: app.php, public/index.php${NC}"
+                    ;;
+                *)
+                    default_entry=""
+                    ;;
+            esac
+            
+            if [[ -n "$default_entry" ]]; then
+                echo ""
+                CUSTOM_ENTRY_POINT=$(get_input "Enter custom entry point (or press Enter for default)" "$default_entry")
+                
+                if [[ "$CUSTOM_ENTRY_POINT" == "$default_entry" ]]; then
+                    echo -e "${BLUE}  Using default: ${default_entry} (template will be created)${NC}"
+                else
+                    echo -e "${GREEN}  Using custom entry point: ${CUSTOM_ENTRY_POINT}${NC}"
+                fi
+            fi
+        fi
     fi
     
     # Application name and instance configuration
@@ -664,7 +712,7 @@ GITIGNORE
     create_github_workflow "$APP_TYPE" "$APP_NAME" "$AWS_REGION"
     
     # Create example application
-    create_example_app "$APP_TYPE" "$APP_NAME"
+    create_example_app "$APP_TYPE" "$APP_NAME" "$CUSTOM_ENTRY_POINT"
     
     # Build React client if this is a fullstack Node.js + React app
     build_react_client_if_needed "$APP_TYPE"
