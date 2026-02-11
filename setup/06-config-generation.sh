@@ -887,6 +887,20 @@ create_example_app() {
     case $app_type in
         "lamp")
             # Create PHP application similar to existing examples
+            
+            # Detect existing PHP entry point using the new detection function
+            local detected_entry=$(detect_entry_point "lamp")
+            
+            if [[ -n "$detected_entry" ]]; then
+                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
+                echo -e "${BLUE}  Skipping template file creation${NC}"
+                echo ""
+                
+                # Return early - skip template creation
+                return 0
+            fi
+            
+            # No existing entry point found - create template files
             if create_file_if_not_exists "index.php"; then
             cat > "index.php" << 'PHP_EOF'
 <?php
@@ -974,54 +988,34 @@ PHP_EOF
             # Create Node.js application similar to existing examples
             local app_name_lower=$(to_lowercase "${app_name}")
             
-            # Detect existing Node.js entry point (including server/ subdirectory)
-            local existing_entry_point=""
-            local server_in_subdir=false
+            # Detect existing Node.js entry point using the new detection function
+            local detected_entry=$(detect_entry_point "nodejs")
             
-            if [[ -f "server/server.js" ]]; then
-                existing_entry_point="server/server.js"
-                server_in_subdir=true
-            elif [[ -f "server/index.js" ]]; then
-                existing_entry_point="server/index.js"
-                server_in_subdir=true
-            elif [[ -f "server.js" ]]; then
-                existing_entry_point="server.js"
-            elif [[ -f "index.js" ]]; then
-                existing_entry_point="index.js"
-            elif [[ -f "app.js" ]]; then
-                existing_entry_point="app.js"
-            fi
-            
-            if [[ -n "$existing_entry_point" ]]; then
-                echo -e "${GREEN}  ✓ Detected existing Node.js app with entry point: $existing_entry_point${NC}"
+            if [[ -n "$detected_entry" ]]; then
+                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
+                echo -e "${BLUE}  Skipping template file creation${NC}"
                 echo ""
                 
-                # Ask user if they want to create template files
-                CREATE_TEMPLATES=$(get_yes_no "Create template app.js file anyway?" "false")
+                # Determine the correct start command based on entry point location
+                local start_command=""
+                if [[ "$detected_entry" == server/* ]]; then
+                    # For server in subdirectory, need to handle npm install in server dir too
+                    start_command="cd server && npm install && NODE_ENV=production node $(basename $detected_entry)"
+                else
+                    start_command="node ${detected_entry}"
+                fi
                 
-                if [[ "$CREATE_TEMPLATES" == "false" ]]; then
-                    echo -e "${YELLOW}  ⚠ Skipping template file creation - using existing application${NC}"
-                    
-                    # Determine the correct start command based on entry point location
-                    local start_command=""
-                    if [[ "$server_in_subdir" == "true" ]]; then
-                        # For server in subdirectory, need to handle npm install in server dir too
-                        start_command="cd server && npm install && NODE_ENV=production node $(basename $existing_entry_point)"
-                    else
-                        start_command="node ${existing_entry_point}"
-                    fi
-                    
-                    # Only create package.json if it doesn't exist
-                    if create_file_if_not_exists "package.json"; then
-                    cat > "package.json" << EOF
+                # Only create package.json if it doesn't exist
+                if create_file_if_not_exists "package.json"; then
+                cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
   "description": "${app_name} Node.js application deployed via GitHub Actions",
-  "main": "${existing_entry_point}",
+  "main": "${detected_entry}",
   "scripts": {
     "start": "${start_command}",
-    "dev": "nodemon ${existing_entry_point}",
+    "dev": "nodemon ${detected_entry}",
     "test": "echo \\"No tests specified\\" && exit 0"
   },
   "dependencies": {
@@ -1036,43 +1030,37 @@ PHP_EOF
   }
 }
 EOF
-                    fi
-                    
-                    # Check if existing package.json has incorrect start script
-                    if [[ -f "package.json" ]] && [[ "$server_in_subdir" == "true" ]]; then
-                        local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
-                        if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
-                            echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
-                            
-                            # Use node to safely update package.json
-                            node -e "
-                                const fs = require('fs');
-                                const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-                                pkg.scripts = pkg.scripts || {};
-                                pkg.scripts.start = '${start_command}';
-                                pkg.main = '${existing_entry_point}';
-                                fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-                                console.log('Fixed package.json start script');
-                            " 2>/dev/null || {
-                                echo -e "${RED}  ❌ Could not auto-fix package.json - please update start script manually${NC}"
-                            }
-                            echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
-                        fi
-                    fi
-                    
-                    # Return early - skip template creation
-                    return 0
                 fi
                 
-                # User chose to create templates despite existing app
-                echo -e "${BLUE}  Creating template files...${NC}"
+                # Check if existing package.json has incorrect start script
+                if [[ -f "package.json" ]] && [[ "$detected_entry" == server/* ]]; then
+                    local current_start=$(grep -o '"start"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | head -1)
+                    if echo "$current_start" | grep -q "node app.js\|node index.js" && [[ ! -f "app.js" ]] && [[ ! -f "index.js" ]]; then
+                        echo -e "${YELLOW}  ⚠ Fixing package.json start script for server/ structure${NC}"
+                        
+                        # Use node to safely update package.json
+                        node -e "
+                            const fs = require('fs');
+                            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+                            pkg.scripts = pkg.scripts || {};
+                            pkg.scripts.start = '${start_command}';
+                            pkg.main = '${detected_entry}';
+                            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+                            console.log('Fixed package.json start script');
+                        " 2>/dev/null || {
+                            echo -e "${RED}  ❌ Could not auto-fix package.json - please update start script manually${NC}"
+                        }
+                        echo -e "${GREEN}  ✓ Updated package.json start script${NC}"
+                    fi
+                fi
+                
+                # Return early - skip template creation
+                return 0
             fi
             
-            # Create template files (either no existing app, or user requested templates)
-            if [[ -z "$existing_entry_point" ]] || [[ "$CREATE_TEMPLATES" == "true" ]]; then
-                # No existing entry point found - create template files
-                if create_file_if_not_exists "package.json"; then
-                cat > "package.json" << EOF
+            # No existing entry point found - create template files
+            if create_file_if_not_exists "package.json"; then
+            cat > "package.json" << EOF
 {
   "name": "${app_name_lower}",
   "version": "1.0.0",
@@ -1095,9 +1083,9 @@ EOF
   }
 }
 EOF
-                fi
+            fi
             
-                if create_file_if_not_exists "app.js"; then
+            if create_file_if_not_exists "app.js"; then
                 cat > "app.js" << EOF
 const express = require('express');
 const cors = require('cors');
@@ -1179,12 +1167,25 @@ app.listen(PORT, () => {
     console.log(\`📍 Environment: \${process.env.NODE_ENV || 'development'}\`);
 });
 EOF
-                fi
             fi
             ;;
         
         "python")
             # Create Python Flask application similar to existing examples
+            
+            # Detect existing Python entry point using the new detection function
+            local detected_entry=$(detect_entry_point "python")
+            
+            if [[ -n "$detected_entry" ]]; then
+                echo -e "${GREEN}  ✓ Detected existing entry point: $detected_entry${NC}"
+                echo -e "${BLUE}  Skipping template file creation${NC}"
+                echo ""
+                
+                # Return early - skip template creation
+                return 0
+            fi
+            
+            # No existing entry point found - create template files
             if create_file_if_not_exists "requirements.txt"; then
             cat > "requirements.txt" << 'REQ_EOF'
 Flask==3.0.0

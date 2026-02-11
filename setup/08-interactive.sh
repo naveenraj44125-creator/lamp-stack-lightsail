@@ -513,6 +513,15 @@ GITIGNORE
         if [[ "$ENABLE_BUCKET" == "true" && -z "$BUCKET_NAME" ]]; then
             BUCKET_NAME="${APP_TYPE}-bucket-$(date +%s)"
         fi
+        # Validate bucket name if bucket is enabled
+        if [[ "$ENABLE_BUCKET" == "true" ]]; then
+            if ! validate_bucket_name "$BUCKET_NAME"; then
+                echo -e "${RED}❌ Invalid BUCKET_NAME environment variable${NC}" >&2
+                echo -e "${YELLOW}Set BUCKET_NAME to a valid S3 bucket name${NC}" >&2
+                echo -e "${YELLOW}Example: export BUCKET_NAME=my-app-bucket-2024${NC}" >&2
+                exit 1
+            fi
+        fi
         # Validate bucket access
         if [[ "$ENABLE_BUCKET" == "true" && ! "$BUCKET_ACCESS" =~ ^(read_only|read_write)$ ]]; then
             echo -e "${RED}❌ Invalid BUCKET_ACCESS: $BUCKET_ACCESS. Must be one of: read_only, read_write${NC}"
@@ -558,7 +567,15 @@ GITIGNORE
         if [[ "$ENABLE_BUCKET" == "true" ]]; then
             echo ""
             echo -e "${BLUE}Bucket Configuration:${NC}"
-            BUCKET_NAME=$(get_input "Enter bucket name" "${APP_TYPE}-bucket-$(date +%s)")
+            
+            # Validation loop for bucket name
+            while true; do
+                BUCKET_NAME=$(get_input "Enter bucket name" "${APP_TYPE}-bucket-$(date +%s)")
+                if validate_bucket_name "$BUCKET_NAME"; then
+                    break
+                fi
+                echo ""
+            done
             
             echo ""
             echo -e "${BLUE}Access Level:${NC}"

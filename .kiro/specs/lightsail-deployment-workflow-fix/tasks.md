@@ -111,25 +111,25 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - Update deployment config file
     - _Requirements: 8.1_
   
-  - [~] 5.2 Implement port configuration fix
+  - [ ] 5.2 Implement port configuration fix
     - Implement `fix_port_configuration()` method
     - Detect port from application code (parse server files)
     - Update verification port, firewall rules, and monitoring port
     - _Requirements: 8.2_
   
-  - [~] 5.3 Implement health endpoint addition
+  - [ ] 5.3 Implement health endpoint addition
     - Implement `add_health_endpoint()` method
     - Add default `/api/health` endpoint to application code
     - Handle different application types (Express, Flask, etc.)
     - _Requirements: 8.3_
   
-  - [~] 5.4 Implement firewall rules fix
+  - [ ] 5.4 Implement firewall rules fix
     - Implement `fix_firewall_rules()` method
     - Add application port to allowed_ports list
     - Update deployment config file
     - _Requirements: 8.4_
   
-  - [~] 5.5 Implement apply_all_fixes method
+  - [ ] 5.5 Implement apply_all_fixes method
     - Implement `apply_all_fixes()` method
     - Apply fixes based on diagnosis recommendations
     - Track which fixes succeeded/failed
@@ -147,25 +147,25 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - _Requirements: 8.1, 8.2, 8.4_
 
 - [ ] 6. Implement Configuration Validator
-  - [~] 6.1 Implement YAML validation
+  - [ ] 6.1 Implement YAML validation
     - Create `ConfigValidator` class
     - Implement `validate_yaml_syntax()` method
     - Check for valid YAML structure
     - _Requirements: 7.1_
   
-  - [~] 6.2 Implement blueprint_id validation
+  - [ ] 6.2 Implement blueprint_id validation
     - Implement `validate_blueprint_id()` method
     - Check for underscore format (invalid)
     - Verify hyphen format (valid)
     - _Requirements: 7.1_
   
-  - [~] 6.3 Implement port consistency validation
+  - [ ] 6.3 Implement port consistency validation
     - Implement `validate_port_consistency()` method
     - Check verification port matches application port
     - Check firewall rules include application port
     - _Requirements: 7.2, 7.3_
   
-  - [~] 6.4 Implement health endpoint validation
+  - [ ] 6.4 Implement health endpoint validation
     - Implement `validate_health_endpoint()` method
     - Check if endpoint exists in application code
     - Parse application files for route definitions
@@ -185,18 +185,18 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - Test port consistency checks
     - _Requirements: 7.1, 7.2, 7.3_
 
-- [~] 7. Checkpoint - Ensure fix and validation components work
+- [ ] 7. Checkpoint - Ensure fix and validation components work
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement Integration with Existing Tools
-  - [~] 8.1 Create existing tools wrapper
+  - [ ] 8.1 Create existing tools wrapper
     - Create `ExistingToolsIntegration` class
     - Implement `run_debug_nodejs()` method to call troubleshooting-tools/nodejs/debug-nodejs.py
     - Implement `run_extract_instance_info()` method
     - Implement `run_fix_nodejs()` method
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
   
-  - [~] 8.2 Integrate with diagnostic engine
+  - [ ] 8.2 Integrate with diagnostic engine
     - Call existing tools from `DiagnosticEngine`
     - Use debug-nodejs.py for Node.js diagnostics
     - Use extract-instance-info.py for instance information
@@ -212,27 +212,27 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - _Requirements: 10.1, 10.2_
 
 - [ ] 9. Implement Main Diagnostic Tool
-  - [~] 9.1 Create main WorkflowInvestigator class
+  - [ ] 9.1 Create main WorkflowInvestigator class
     - Create `WorkflowInvestigator` class
     - Implement `__init__()` with repo, run_id, region parameters
     - Initialize all component classes
     - _Requirements: 1.1_
   
-  - [~] 9.2 Implement investigate method
+  - [ ] 9.2 Implement investigate method
     - Implement `investigate()` method as main entry point
     - Call retrieve_logs(), diagnose(), apply_fixes() in sequence
     - Handle errors at each stage
     - Return comprehensive `DiagnosticReport`
     - _Requirements: 2.1_
   
-  - [~] 9.3 Implement report generation
+  - [ ] 9.3 Implement report generation
     - Implement `generate_report()` method
     - Create human-readable report with all diagnostic information
     - Include workflow status, instance state, SSH status, app diagnostics
     - Include recommended fixes and applied fixes
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
   
-  - [~] 9.4 Implement command-line interface
+  - [ ] 9.4 Implement command-line interface
     - Add argparse for command-line arguments
     - Support --repo, --run-id, --region, --apply-fixes flags
     - Add --help documentation
@@ -251,19 +251,19 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - **Validates: Requirements 2.3, 2.4, 2.5**
 
 - [ ] 10. Create usage documentation
-  - [~] 10.1 Create README for the tool
+  - [ ] 10.1 Create README for the tool
     - Document installation steps
     - Document usage examples
     - Document command-line options
     - _Requirements: 1.1_
   
-  - [~] 10.2 Add example workflow investigation
+  - [ ] 10.2 Add example workflow investigation
     - Provide example of investigating a real failure
     - Show sample output
     - Document common failure patterns
     - _Requirements: 2.1_
   
-  - [~] 10.3 Document integration with existing tools
+  - [ ] 10.3 Document integration with existing tools
     - List all existing tools used
     - Explain when each tool is called
     - _Requirements: 10.1, 10.2, 10.3_
@@ -288,7 +288,7 @@ This implementation plan creates a diagnostic tool that investigates GitHub Acti
     - Verify results are captured correctly
     - _Requirements: 4.1, 5.1_
 
-- [~] 12. Final checkpoint - Ensure all tests pass
+- [ ] 12. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

@@ -10,6 +10,7 @@
 # - Detecting fullstack React + Node.js applications
 # - Auto-detecting Node.js ports
 # - Detecting health check endpoints
+# - Detecting existing entry point files
 # - Building React clients
 # - Showing deployment warnings
 ################################################################################
@@ -389,6 +390,68 @@ detect_health_endpoints() {
     if [[ ${#detected_endpoints[@]} -gt 0 ]]; then
         echo "${detected_endpoints[0]}"
     fi
+}
+
+# Function to detect existing entry point files for an application
+# This prevents creating redundant template files when the app already has entry points
+detect_entry_point() {
+    local app_type="$1"
+    local entry_points=()
+    
+    case $app_type in
+        "nodejs")
+            # Node.js entry points in priority order
+            entry_points=(
+                "server.js"
+                "index.js"
+                "main.js"
+                "app.js"
+                "server/server.js"
+                "server/index.js"
+                "src/server.js"
+                "src/index.js"
+                "src/app.js"
+            )
+            ;;
+        
+        "python")
+            # Python entry points in priority order
+            entry_points=(
+                "app.py"
+                "main.py"
+                "server.py"
+                "src/app.py"
+                "src/main.py"
+            )
+            ;;
+        
+        "lamp")
+            # PHP entry points in priority order
+            entry_points=(
+                "index.php"
+                "app.php"
+                "public/index.php"
+            )
+            ;;
+        
+        *)
+            # Unknown app type, return empty
+            echo ""
+            return 0
+            ;;
+    esac
+    
+    # Search for entry points in priority order
+    for entry_point in "${entry_points[@]}"; do
+        if [[ -f "$entry_point" ]]; then
+            echo "$entry_point"
+            return 0
+        fi
+    done
+    
+    # No entry point found
+    echo ""
+    return 0
 }
 
 # Function to build React client if detected
