@@ -584,6 +584,71 @@ jobs:
           echo "ℹ️  No React application found in configured directories"
         fi
 
+    - name: Build Node.js/TypeScript app if needed
+      run: |
+        echo "🔍 Checking for Node.js/TypeScript build requirements..."
+        
+        # Read build_command from deployment config
+        BUILD_COMMAND=$(python3 << 'EOF'
+        import yaml
+        import os
+        
+        try:
+            with open('${{ inputs.config_file }}', 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Check if nodejs dependency is enabled and has build_command
+            nodejs_config = config.get('dependencies', {}).get('nodejs', {})
+            if nodejs_config.get('enabled', False):
+                build_cmd = nodejs_config.get('config', {}).get('build_command', '')
+                if build_cmd:
+                    print(build_cmd)
+        except Exception as e:
+            print(f"# Error reading config: {e}", file=sys.stderr)
+        EOF
+        )
+        
+        if [ -n "$BUILD_COMMAND" ]; then
+          echo "📦 Found build command: $BUILD_COMMAND"
+          
+          # Check if package.json exists in root or configured directories
+          if [ -f "package.json" ]; then
+            echo "📦 Building Node.js/TypeScript application in root directory"
+            npm install
+            $BUILD_COMMAND
+            echo "✅ Build completed successfully"
+          else
+            # Check configured package directories
+            NODEJS_DIR=$(python3 << 'EOF'
+        import yaml
+        import os
+        
+        with open('${{ inputs.config_file }}', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        package_files = config.get('application', {}).get('package_files', [])
+        
+        for package_dir in package_files:
+            if os.path.isdir(package_dir) and os.path.exists(os.path.join(package_dir, 'package.json')):
+                print(package_dir)
+                break
+        EOF
+            )
+            
+            if [ -n "$NODEJS_DIR" ]; then
+              echo "📦 Building Node.js/TypeScript application in: $NODEJS_DIR"
+              cd "$NODEJS_DIR"
+              npm install
+              $BUILD_COMMAND
+              echo "✅ Build completed successfully"
+            else
+              echo "⚠️  Build command specified but no package.json found"
+            fi
+          fi
+        else
+          echo "ℹ️  No build command specified in deployment config"
+        fi
+
     - name: Create deployment package
       run: |
         echo "📦 Creating application package..."
