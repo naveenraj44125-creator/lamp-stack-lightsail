@@ -699,6 +699,7 @@ create_github_workflow() {
             ;;
         "nodejs")
             file_patterns="      - '**/*.js'
+      - '**/*.ts'
       - '**/*.json'
       - '**/*.html'
       - '**/*.css'"
@@ -718,7 +719,8 @@ create_github_workflow() {
             file_patterns="      - 'Dockerfile*'
       - 'docker-compose*.yml'
       - '**/*.php'
-      - '**/*.js'"
+      - '**/*.js'
+      - '**/*.ts'"
             ;;
         "nginx")
             file_patterns="      - '**/*.html'
