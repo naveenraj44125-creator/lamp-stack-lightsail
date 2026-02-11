@@ -288,6 +288,8 @@ EOF
     config:
       version: "18"
       package_manager: "npm"
+      # Build command to compile TypeScript (if applicable)
+      build_command: "npm run build"
       
   pm2:
     enabled: true
