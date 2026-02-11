@@ -725,7 +725,8 @@ create_github_workflow() {
         "nginx")
             file_patterns="      - '**/*.html'
       - '**/*.css'
-      - '**/*.js'"
+      - '**/*.js'
+      - '**/*.ts'"
             ;;
     esac
     
