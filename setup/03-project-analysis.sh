@@ -400,8 +400,35 @@ detect_entry_point() {
     
     case $app_type in
         "nodejs")
-            # Node.js entry points in priority order
+            # Check package.json "main" field first (handles both JS and TS projects)
+            if [[ -f "package.json" ]]; then
+                local main_field=$(grep -o '"main"[[:space:]]*:[[:space:]]*"[^"]*"' package.json 2>/dev/null | sed 's/.*"main"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+                if [[ -n "$main_field" ]]; then
+                    # Check if the main field points to an existing file (even if in dist/)
+                    if [[ -f "$main_field" ]]; then
+                        echo "$main_field"
+                        return 0
+                    fi
+                    # For TypeScript projects, check if source file exists
+                    # e.g., if main is "dist/index.js", check for "src/index.ts"
+                    local ts_source=$(echo "$main_field" | sed 's/^dist\//src\//' | sed 's/\.js$/.ts/')
+                    if [[ -f "$ts_source" ]]; then
+                        echo "$ts_source"
+                        return 0
+                    fi
+                fi
+            fi
+            
+            # Node.js/TypeScript entry points in priority order
+            # Check TypeScript files first, then JavaScript files
             entry_points=(
+                "src/index.ts"
+                "src/server.ts"
+                "src/app.ts"
+                "index.ts"
+                "server.ts"
+                "app.ts"
+                "main.ts"
                 "server.js"
                 "index.js"
                 "main.js"

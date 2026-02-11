@@ -128,6 +128,84 @@ fi
 popd > /dev/null
 echo ""
 
+# Test 9: TypeScript with src/index.ts
+echo "Test 9: TypeScript with src/index.ts"
+mkdir -p "$TEST_DIR/test9/src"
+touch "$TEST_DIR/test9/src/index.ts"
+pushd "$TEST_DIR/test9" > /dev/null
+result=$(detect_entry_point "nodejs")
+if [[ "$result" == "src/index.ts" ]]; then
+    echo "✓ PASSED - Detected: $result"
+else
+    echo "✗ FAILED - Expected 'src/index.ts', got: '$result'"
+fi
+popd > /dev/null
+echo ""
+
+# Test 10: TypeScript with package.json main field pointing to dist/index.js
+echo "Test 10: TypeScript with package.json main field (dist/index.js)"
+mkdir -p "$TEST_DIR/test10/src"
+mkdir -p "$TEST_DIR/test10/dist"
+touch "$TEST_DIR/test10/src/index.ts"
+touch "$TEST_DIR/test10/dist/index.js"
+cat > "$TEST_DIR/test10/package.json" << 'EOF'
+{
+  "name": "test-app",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  }
+}
+EOF
+pushd "$TEST_DIR/test10" > /dev/null
+result=$(detect_entry_point "nodejs")
+if [[ "$result" == "dist/index.js" || "$result" == "src/index.ts" ]]; then
+    echo "✓ PASSED - Detected: $result"
+else
+    echo "✗ FAILED - Expected 'dist/index.js' or 'src/index.ts', got: '$result'"
+fi
+popd > /dev/null
+echo ""
+
+# Test 11: TypeScript with only compiled output (dist/index.js exists, src/index.ts doesn't)
+echo "Test 11: TypeScript with only compiled output (dist/index.js)"
+mkdir -p "$TEST_DIR/test11/dist"
+touch "$TEST_DIR/test11/dist/index.js"
+cat > "$TEST_DIR/test11/package.json" << 'EOF'
+{
+  "name": "test-app",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js"
+  }
+}
+EOF
+pushd "$TEST_DIR/test11" > /dev/null
+result=$(detect_entry_point "nodejs")
+if [[ "$result" == "dist/index.js" ]]; then
+    echo "✓ PASSED - Detected: $result"
+else
+    echo "✗ FAILED - Expected 'dist/index.js', got: '$result'"
+fi
+popd > /dev/null
+echo ""
+
+# Test 12: TypeScript prioritization (should prefer .ts over .js)
+echo "Test 12: TypeScript prioritization (src/index.ts and index.js both exist)"
+mkdir -p "$TEST_DIR/test12/src"
+touch "$TEST_DIR/test12/src/index.ts"
+touch "$TEST_DIR/test12/index.js"
+pushd "$TEST_DIR/test12" > /dev/null
+result=$(detect_entry_point "nodejs")
+if [[ "$result" == "src/index.ts" ]]; then
+    echo "✓ PASSED - Correctly prioritized TypeScript: $result"
+else
+    echo "✗ FAILED - Expected 'src/index.ts', got: '$result'"
+fi
+popd > /dev/null
+echo ""
+
 # Cleanup
 rm -rf "$TEST_DIR"
 echo "Cleaned up test directory"
