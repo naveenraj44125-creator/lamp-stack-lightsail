@@ -597,7 +597,7 @@ GITIGNORE
         
         # Use recommended health endpoint from analysis if available
         if [[ -n "$RECOMMENDED_HEALTH_ENDPOINT" ]]; then
-            echo -e "${GREEN}★ AI detected health endpoint in your code: ${RECOMMENDED_HEALTH_ENDPOINT}${NC}"
+            echo -e "${YELLOW}★ AI detected health endpoint in your code: ${RECOMMENDED_HEALTH_ENDPOINT}${NC}"
             echo ""
             USE_DETECTED=$(get_yes_no "Use detected endpoint for health checks?" "true")
             if [[ "$USE_DETECTED" == "true" ]]; then
