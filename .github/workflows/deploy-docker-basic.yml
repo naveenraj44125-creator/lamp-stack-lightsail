@@ -27,6 +27,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: deploy-docker-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-docker-hub:
     name: Check Docker Hub Credentials
